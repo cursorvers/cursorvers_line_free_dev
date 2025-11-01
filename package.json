@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "typecheck": "echo 'TypeScript check skipped' || true",
-    "test": "echo 'Tests skipped' || true"
+    "test": "echo 'Tests skipped' || true",
+    "codex-agent": "node scripts/codex-agent.js"
   },
   "keywords": [
     "line",

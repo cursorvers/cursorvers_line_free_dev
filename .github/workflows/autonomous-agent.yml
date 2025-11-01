@@ -99,34 +99,44 @@ jobs:
         run: |
           cat > .env << EOF
           GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.LLM_API_KEY }}
+          OPENAI_ENDPOINT=${{ secrets.LLM_ENDPOINT }}
           DEVICE_IDENTIFIER="GitHub Actions Runner"
           ISSUE_NUMBER=${{ needs.check-trigger.outputs.issue_number }}
           REPOSITORY=${{ github.repository }}
           EOF
 
-      - name: Execute CoordinatorAgent
+      - name: Execute Codex Agent (OpenAI-powered)
         id: execute
         run: |
-          echo "🚀 Starting Autonomous Agent execution for Issue #${{ needs.check-trigger.outputs.issue_number }}"
+          echo "🚀 Starting Codex-powered agent execution for Issue #${{ needs.check-trigger.outputs.issue_number }}"
           
-          # Miyabi CLIを直接使用
-          # npx miyabi agent run を実行
-          npx miyabi agent run --issue ${{ needs.check-trigger.outputs.issue_number }} || {
-            echo "⚠️ Miyabi agent execution failed or not configured"
-            echo "📝 Creating placeholder comment instead"
-            gh issue comment ${{ needs.check-trigger.outputs.issue_number }} --body "🤖 Agent execution attempted but Miyabi agents need configuration.
+          # OpenAI APIを使用するCodexエージェントを実行
+          if [ -z "${{ secrets.LLM_API_KEY }}" ]; then
+            echo "⚠️ LLM_API_KEY is not set. Skipping agent execution."
+            gh issue comment ${{ needs.check-trigger.outputs.issue_number }} --body "⚠️ Codex Agent execution skipped: LLM_API_KEY not configured.
 
-**Next Steps:**
-1. Set ANTHROPIC_API_KEY secret if not already set
-2. Ensure Miyabi is properly configured for this project
-3. Check workflow logs for details
+**Setup:**
+\`\`\`bash
+gh secret set LLM_API_KEY --body \"sk-...\"
+gh secret set LLM_ENDPOINT --body \"https://api.openai.com/v1/chat/completions\"
+\`\`\`"
+            exit 0
+          fi
+          
+          # Codexエージェントを実行
+          node scripts/codex-agent.js || {
+            echo "⚠️ Codex agent execution failed"
+            gh issue comment ${{ needs.check-trigger.outputs.issue_number }} --body "❌ Codex Agent execution failed. Check workflow logs for details.
 
 [View Logs →](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_ENDPOINT: ${{ secrets.LLM_ENDPOINT }}
+          ISSUE_NUMBER: ${{ needs.check-trigger.outputs.issue_number }}
+          REPOSITORY: ${{ github.repository }}
         continue-on-error: true
 
       - name: Check for generated code changes
