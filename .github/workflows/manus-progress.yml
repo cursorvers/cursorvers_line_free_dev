@@ -28,46 +28,212 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Parse Progress Event
+      - name: Persist Progress Event
         id: parse
         run: |
-          EVENT='${{ github.event.client_payload }}'
-          echo "event_type=$(echo $EVENT | jq -r '.event_type')" >> $GITHUB_OUTPUT
-          echo "task_id=$(echo $EVENT | jq -r '.task_id')" >> $GITHUB_OUTPUT
-          echo "step_id=$(echo $EVENT | jq -r '.step_id // empty')" >> $GITHUB_OUTPUT
+          mkdir -p tmp
+          cat <<'JSON' > tmp/progress.json
+${{ toJson(github.event.client_payload) }}
+JSON
+          echo "payload_path=tmp/progress.json" >> $GITHUB_OUTPUT
+          echo "event_type=$(jq -r '.event_type' tmp/progress.json)" >> $GITHUB_OUTPUT
+          echo "task_id=$(jq -r '.task_id' tmp/progress.json)" >> $GITHUB_OUTPUT
+          echo "step_id=$(jq -r '.step_id // empty' tmp/progress.json)" >> $GITHUB_OUTPUT
 
       - name: Log Progress Event
         run: |
           mkdir -p logs/progress
           TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
-          echo '${{ github.event.client_payload }}' | jq . > "logs/progress/${TIMESTAMP}_${{ steps.parse.outputs.task_id }}.json"
+          cat tmp/progress.json | jq . > "logs/progress/${TIMESTAMP}_${{ steps.parse.outputs.task_id }}.json"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add logs/progress/*.json
           git commit -m "chore: log progress event ${{ steps.parse.outputs.task_id }}" || exit 0
           git push
 
-      - name: Call GPT for Analysis
+      - name: Call GPT for Analysis (Development Only)
+        if: vars.DEVELOPMENT_MODE == 'true'
         env:
           LLM_ENDPOINT: ${{ secrets.LLM_ENDPOINT }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || secrets.LLM_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
         run: |
-          # GPT解析ロジック（実装が必要）
-          echo "Analyzing progress event..."
+          echo "🧠 Analyzing progress event using GPT-5..."
+          # GPT解析ロジックは後で実装
+          # 現在はProgress Eventをログに記録
+          echo "✅ Progress event logged"
 
-      - name: Update Plan Delta
-        if: success()
+      - name: Update Plan Delta (Development Only)
+        if: vars.DEVELOPMENT_MODE == 'true'
         run: |
-          # PlanDelta更新ロジック（実装が必要）
-          echo "Updating plan delta..."
+          mkdir -p orchestration/plan
+          if [ ! -f "orchestration/plan/plan_delta.json" ]; then
+            cat <<'EOF' > orchestration/plan/plan_delta.json
+{
+  "decision": "continue",
+  "reasons": [],
+  "actions": [],
+  "metadata": {
+    "progress_events": []
+  }
+}
+EOF
+          fi
+          TMP=$(mktemp)
+          jq \
+            --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            --argjson event "$(cat tmp/progress.json)" \
+            '
+              .metadata = (.metadata // {}) |
+              .metadata.progress_events = (
+                (.metadata.progress_events // []) + [{
+                  "event_type": ($event.event_type // "unknown"),
+                  "task_id": ($event.task_id // "unknown"),
+                  "step_id": ($event.step_id // null),
+                  "status": ($event.event_type // "unknown"),
+                  "timestamp": $ts
+                }]
+              )
+            ' orchestration/plan/plan_delta.json > "$TMP"
+          mv "$TMP" orchestration/plan/plan_delta.json
+          echo "✅ Plan delta updated with progress metadata"
 
-      - name: Dispatch to Manus
-        if: success()
+      - name: Evaluate Plan Delta
+        id: plan_delta
+        run: |
+          DELTA_FILE="orchestration/plan/plan_delta.json"
+          if [ ! -f "$DELTA_FILE" ]; then
+            echo '{"decision":"none","reasons":["missing plan_delta"]}' > "$DELTA_FILE"
+          fi
+          DECISION=$(jq -r '.decision // "none"' "$DELTA_FILE")
+          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+          echo "reasons=$(jq -c '.reasons // []' "$DELTA_FILE")" >> $GITHUB_OUTPUT
+
+      - name: Prepare Manus Re-run Inputs
+        if: >
+          steps.plan_delta.outputs.decision == 'retry' ||
+          steps.plan_delta.outputs.decision == 'amended'
+        id: rerun
+        env:
+          TASK_ID: ${{ steps.parse.outputs.task_id }}
+          STEP_ID: ${{ steps.parse.outputs.step_id }}
+          DECISION: ${{ steps.plan_delta.outputs.decision }}
+        run: |
+          set -euo pipefail
+          mkdir -p tmp
+
+          PLAN_SRC="orchestration/plan/current_plan.json"
+          DELTA_FILE="orchestration/plan/plan_delta.json"
+          PLAN_DEST="tmp/manus_retry_plan.json"
+
+          if [ ! -f "$PLAN_SRC" ]; then
+            echo "❌ Plan source not found at $PLAN_SRC"
+            exit 1
+          fi
+
+          if jq -e '.amended_plan and (.amended_plan | type == "object")' "$DELTA_FILE" > /dev/null; then
+            jq '.amended_plan' "$DELTA_FILE" > "$PLAN_DEST"
+            echo "📝 Using amended_plan from PlanDelta"
+          else
+            cp "$PLAN_SRC" "$PLAN_DEST"
+            echo "📝 Using baseline plan for rerun"
+          fi
+
+          RAW_KEY=$(jq -r '.idempotency_key // empty' tmp/progress.json)
+          if [ -z "$RAW_KEY" ] || [ "$RAW_KEY" = "null" ]; then
+            RAW_KEY="${TASK_ID:-unknown}-${STEP_ID:-none}-$(date -u +"%Y%m%d%H%M%S")"
+          fi
+
+          jq --arg key "$RAW_KEY" --arg decision "$DECISION" --arg task "$TASK_ID" --arg step "${STEP_ID:-}" --argfile delta "$DELTA_FILE" '
+            .metadata = (.metadata // {}) |
+            .metadata.retry = {
+              idempotency_key: $key,
+              decision: $decision,
+              task_id: $task,
+              step_id: (if $step == "" then null else $step end),
+              delta_snapshot: $delta
+            }
+          ' "$PLAN_DEST" > tmp/plan_retry_annotated.json
+          mv tmp/plan_retry_annotated.json "$PLAN_DEST"
+
+          jq -n \
+            --arg key "$RAW_KEY" \
+            --arg decision "$DECISION" \
+            --arg task "$TASK_ID" \
+            --arg step "${STEP_ID:-}" \
+            --argfile delta "$DELTA_FILE" \
+            '
+              {
+                idempotency_key: $key,
+                decision: $decision,
+                task_id: ($task // null),
+                step_id: (if $step == "" then null else $step end),
+                delta: $delta
+              }
+            ' > tmp/manus_retry_metadata.json
+
+          if [ ! -f "orchestration/MANUS_EXECUTION_BRIEF_v2.0.txt" ]; then
+            echo "❌ Manus brief not found at orchestration/MANUS_EXECUTION_BRIEF_v2.0.txt"
+            exit 1
+          fi
+
+          echo "plan_path=$PLAN_DEST" >> "$GITHUB_OUTPUT"
+          echo "metadata_path=tmp/manus_retry_metadata.json" >> "$GITHUB_OUTPUT"
+          echo "idempotency_key=$RAW_KEY" >> "$GITHUB_OUTPUT"
+          echo "brief_path=orchestration/MANUS_EXECUTION_BRIEF_v2.0.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch to Manus (if needed)
+        if: >
+          success() &&
+          (steps.plan_delta.outputs.decision == 'retry' ||
+           steps.plan_delta.outputs.decision == 'amended')
         env:
           MANUS_API_KEY: ${{ secrets.MANUS_API_KEY }}
           MANUS_BASE_URL: ${{ vars.MANUS_BASE_URL }}
+          PROGRESS_WEBHOOK_URL: ${{ secrets.PROGRESS_WEBHOOK_URL }}
+          PLAN_PATH: ${{ steps.rerun.outputs.plan_path }}
+          BRIEF_PATH: ${{ steps.rerun.outputs.brief_path }}
+          METADATA_PATH: ${{ steps.rerun.outputs.metadata_path }}
+          IDEMPOTENCY_KEY: ${{ steps.rerun.outputs.idempotency_key }}
+          MANUS_DRY_RUN: ${{ vars.MANUS_DRY_RUN }}
         run: |
-          # Manus API呼び出し（実装が必要）
-          echo "Dispatching to Manus..."
+          # PlanDeltaに基づいてManus APIを再実行（必要に応じて）
+          if [ -z "$MANUS_API_KEY" ]; then
+            if [ "$MANUS_DRY_RUN" = "true" ]; then
+              echo "ℹ️ MANUS_API_KEY absent but MANUS_DRY_RUN enabled. Continuing with dry-run."
+            else
+              echo "⚠️ MANUS_API_KEY is not set. Skipping Manus API call."
+              exit 0
+            fi
+          fi
+          if [ -z "$PLAN_PATH" ] || [ ! -f "$PLAN_PATH" ]; then
+            echo "❌ Rerun plan not prepared. Aborting Manus API call."
+            exit 1
+          fi
+          if [ -z "$BRIEF_PATH" ] || [ ! -f "$BRIEF_PATH" ]; then
+            echo "❌ Manus brief file missing: $BRIEF_PATH"
+            exit 1
+          fi
 
+          echo "🔄 Executing Manus API action based on PlanDelta (decision: ${{ steps.plan_delta.outputs.decision }})..."
 
+          if [ -z "$PROGRESS_WEBHOOK_URL" ]; then
+            echo "ℹ️ PROGRESS_WEBHOOK_URL is not set. Manus will use default webhook (if any)."
+          fi
+
+          EXTRA_ARGS=()
+          if [ -n "$IDEMPOTENCY_KEY" ]; then
+            EXTRA_ARGS+=(--idempotency "$IDEMPOTENCY_KEY")
+          fi
+          if [ -n "$METADATA_PATH" ] && [ -f "$METADATA_PATH" ]; then
+            EXTRA_ARGS+=(--metadata-file "$METADATA_PATH")
+          fi
+
+          node scripts/manus-api.js create \
+            "${EXTRA_ARGS[@]}" \
+            "$BRIEF_PATH" \
+            "$PLAN_PATH" \
+            "$PROGRESS_WEBHOOK_URL"
+
+          echo "✅ Manus API rerun requested successfully"
