@@ -47,7 +47,7 @@ jobs:
           USER_ID: ${{ steps.parse.outputs.user_id }}
           TIMESTAMP: ${{ steps.parse.outputs.timestamp }}
         run: |
-          cat > update-sheets.js << 'EOF'
+          cat > update-sheets.cjs << 'EOF'
           const { google } = require('googleapis');
 
           async function updateGoogleSheets() {
@@ -97,7 +97,7 @@ jobs:
           updateGoogleSheets();
           EOF
 
-          node update-sheets.js
+          node update-sheets.cjs
 
       - name: Generate Plan
         env:
