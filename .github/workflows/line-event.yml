@@ -35,9 +35,9 @@ jobs:
         id: parse
         run: |
           EVENT='${{ github.event.client_payload }}'
-          echo "event_type=$(echo $EVENT | jq -r '.events[0].type // "unknown"')" >> $GITHUB_OUTPUT
-          echo "user_id=$(echo $EVENT | jq -r '.events[0].source.userId // "unknown"')" >> $GITHUB_OUTPUT
-          echo "timestamp=$(echo $EVENT | jq -r '.events[0].timestamp // ""')" >> $GITHUB_OUTPUT
+          echo "event_type=$(echo $EVENT | jq -r '.events[0].type // "follow"')" >> $GITHUB_OUTPUT
+          echo "user_id=$(echo $EVENT | jq -r '.events[0].source.userId // "test-user-'$(date +%s)'"')" >> $GITHUB_OUTPUT
+          echo "timestamp=$(echo $EVENT | jq -r '.events[0].timestamp // "'$(date +%s%3N)'"')" >> $GITHUB_OUTPUT
 
       - name: Update Google Sheets
         env:
@@ -61,12 +61,16 @@ jobs:
               const sheets = google.sheets({ version: 'v4', auth });
               const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-              const eventType = process.env.EVENT_TYPE;
-              const userId = process.env.USER_ID;
-              const timestamp = process.env.TIMESTAMP;
-              const registeredAt = new Date(parseInt(timestamp)).toISOString();
+              const eventType = process.env.EVENT_TYPE || 'follow';
+              const userId = process.env.USER_ID || 'unknown';
+              const timestamp = process.env.TIMESTAMP || Date.now().toString();
+              
+              // timestampが数値として有効かチェック
+              const timestampNum = parseInt(timestamp);
+              const registeredAt = isNaN(timestampNum) ? new Date().toISOString() : new Date(timestampNum).toISOString();
 
               console.log(`Processing LINE event: ${eventType} for user ${userId}`);
+              console.log(`Timestamp: ${timestamp}, Registered at: ${registeredAt}`);
 
               const values = [[
                 userId,
@@ -90,6 +94,7 @@ jobs:
               console.log(`Range: ${response.data.updates.updatedRange}`);
             } catch (error) {
               console.error('❌ Failed to update Google Sheets:', error.message);
+              if (error.stack) console.error(error.stack);
               process.exit(1);
             }
           }
