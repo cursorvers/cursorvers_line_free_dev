@@ -42,4 +42,4 @@ jobs:
         run: npm ci
 
       - name: Run Node tests
-        run: npm test
+        run: node --test tests/node/*.test.mjs
