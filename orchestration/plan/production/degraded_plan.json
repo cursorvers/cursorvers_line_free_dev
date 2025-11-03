@@ -1,0 +1,82 @@
+{
+  "id": "line_degraded_v1",
+  "version": "2025-11-03",
+  "title": "LINE友だち登録時の縮退運用（ICS通知ルート）",
+  "metadata": {
+    "channel": "line",
+    "description": "Manus/API連携を停止した際にオペレーションチームへICSとメッセージで引き継ぐ"
+  },
+  "risk": {
+    "level": "medium",
+    "reasons": [
+      "自動返信を停止し手動対応に切り替える",
+      "通知遅延が発生する可能性がある"
+    ],
+    "approval": "required"
+  },
+  "steps": [
+    {
+      "id": "record_event",
+      "action": "supabase.insert",
+      "connector": "supabase",
+      "payload": {
+        "table": "progress_events",
+        "data": {
+          "source": "line",
+          "user_hash": "{{HASHED_USER_ID}}",
+          "plan_id": "line_degraded_v1",
+          "plan_version": "2025-11-03",
+          "event_type": "{{EVENT_TYPE}}",
+          "payload": "{{EVENT_PAYLOAD}}",
+          "decision": "proceed",
+          "status": "queued",
+          "evidence": {
+            "degraded_reason": "{{DEGRADED_TRIGGER_REASON}}"
+          }
+        }
+      },
+      "idempotency_key": "{{EVENT_ID}}:record",
+      "on_error": "abort"
+    },
+    {
+      "id": "notify_ops",
+      "action": "notify.send",
+      "connector": "ops_webhook",
+      "payload": {
+        "subject": "[Degraded] 手動対応が必要なLINEイベント",
+        "body": "Manus連携が停止しているため、受信したLINEイベント（{{EVENT_ID}}）を手動で処理してください。ICS予定を参照し、担当者を割り当ててください。",
+        "attachments": [
+          "docs/alerts/line_degraded_outreach.ics"
+        ]
+      },
+      "idempotency_key": "{{EVENT_ID}}:notify",
+      "on_error": "manual_recovery"
+    },
+    {
+      "id": "log_manual_action",
+      "action": "github.append_log",
+      "connector": "github",
+      "payload": {
+        "path": "logs/progress/{{EVENT_DATE}}_degraded.log",
+        "content": "degraded_event={{EVENT_ID}}, user={{HASHED_USER_ID}}, assigned_to={{ONCALL_ENGINEER}}, note={{MANUAL_NOTES}}"
+      },
+      "idempotency_key": "{{EVENT_ID}}:log",
+      "on_error": "manual_recovery"
+    }
+  ],
+  "observability": {
+    "success_metrics": [
+      "ops_webhook.notifications.sent",
+      "manual_ack.latency"
+    ],
+    "logs": [
+      "degraded_mode.entry",
+      "ops_assignment"
+    ]
+  },
+  "manual_playbook": [
+    "Slack #line-opsチャンネルで担当者を決め、ICS予定に出欠登録する",
+    "ICSファイル（docs/alerts/line_degraded_outreach.ics）をGoogleカレンダーへインポートし、当番者が電話・メールでフォローする",
+    "対応完了後は logs/progress/{{EVENT_DATE}}_degraded.log に追記しGitへコミットする"
+  ]
+}
