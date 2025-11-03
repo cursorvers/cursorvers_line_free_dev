@@ -11,115 +11,267 @@ permissions:
   issues: write
   pull-requests: write
 
+env:
+  PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+  PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+  PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+  DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+  DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+
 jobs:
   handle-line-event:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    
+    timeout-minutes: 12
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        run: |
-          npm install googleapis@latest
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Parse LINE Event
-        id: parse
+      - name: Persist Event Payload
+        id: event
         run: |
-          EVENT='${{ github.event.client_payload }}'
-          echo "event_type=$(echo $EVENT | jq -r '.events[0].type // "follow"')" >> $GITHUB_OUTPUT
-          echo "user_id=$(echo $EVENT | jq -r '.events[0].source.userId // "test-user-'$(date +%s)'"')" >> $GITHUB_OUTPUT
-          echo "timestamp=$(echo $EVENT | jq -r '.events[0].timestamp // "'$(date +%s%3N)'"')" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          mkdir -p tmp
+          cat <<'JSON' > tmp/event.json
+${{ toJson(github.event.client_payload) }}
+JSON
+          EVENT_TYPE=$(jq -r '.events[0].type // "unknown"' tmp/event.json)
+          USER_COUNT=$(jq '[.events[].source.userId] | unique | length' tmp/event.json)
+          echo "event_type=$EVENT_TYPE" >> "$GITHUB_OUTPUT"
+          echo "user_count=$USER_COUNT" >> "$GITHUB_OUTPUT"
+          echo "payload_path=tmp/event.json" >> "$GITHUB_OUTPUT"
 
-      - name: Update Google Sheets
+      - name: Ensure Plan Directories
+        run: |
+          mkdir -p orchestration/plan
+          mkdir -p orchestration/plan/production
+
+      - name: Resolve Plan Mode
+        id: mode
+        run: |
+          set -euo pipefail
+          MODE="normal"
+          REASON="none"
+          if [ "${{ vars.MANUS_ENABLED }}" = "false" ]; then
+            MODE="degraded"
+            REASON="manus_disabled"
+          fi
+          if [ "${{ vars.DEGRADED_MODE }}" = "true" ]; then
+            MODE="degraded"
+            REASON="forced_variable"
+          fi
+          if [ -f "$DEGRADED_FLAG_PATH" ]; then
+            MODE="degraded"
+            REASON="flag_file_present"
+          fi
+          SOURCE="$PRODUCTION_PLAN_PATH"
+          WARNING=""
+          if [ "$MODE" = "degraded" ]; then
+            if [ -f "$DEGRADED_PLAN_PATH" ]; then
+              SOURCE="$DEGRADED_PLAN_PATH"
+            else
+              WARNING="degraded_plan_missing"
+              SOURCE="$PRODUCTION_PLAN_PATH"
+              REASON="plan_missing"
+              echo "⚠️ Degraded mode requested but $DEGRADED_PLAN_PATH not found. Falling back to current plan." >&2
+            fi
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "plan_source=$SOURCE" >> "$GITHUB_OUTPUT"
+          echo "warning=$WARNING" >> "$GITHUB_OUTPUT"
+          echo "degraded_reason=$REASON" >> "$GITHUB_OUTPUT"
+
+      - name: Generate PlanDelta (Development Only)
+        if: vars.DEVELOPMENT_MODE == 'true'
+        run: |
+          node scripts/plan/generate-plan-delta.js \
+            --event tmp/event.json \
+            --plan "$PLAN_CURRENT_PATH" \
+            --delta "$PLAN_DELTA_PATH"
+
+      - name: Load Selected Plan (Production)
+        if: vars.DEVELOPMENT_MODE != 'true'
+        run: |
+          set -euo pipefail
+          SOURCE="${{ steps.mode.outputs.plan_source }}"
+          if [ ! -f "$SOURCE" ]; then
+            echo "❌ Plan file not found at $SOURCE"
+            exit 1
+          fi
+          cp "$SOURCE" "$PLAN_CURRENT_PATH"
+          rm -f "$PLAN_DELTA_PATH"
+          echo "✅ Loaded plan from $SOURCE"
+
+      - name: Verify Plan File Exists
+        run: |
+          set -euo pipefail
+          if [ ! -f "$PLAN_CURRENT_PATH" ]; then
+            echo "❌ Plan file not found: $PLAN_CURRENT_PATH"
+            exit 1
+          fi
+          jq '.' "$PLAN_CURRENT_PATH" > /dev/null
+          echo "✅ Plan ready at $PLAN_CURRENT_PATH"
+
+      - name: Verify degraded assets
+        if: steps.mode.outputs.mode == 'degraded'
+        run: |
+          set -euo pipefail
+          if [ ! -f docs/alerts/line_degraded_outreach.ics ]; then
+            echo "❌ Expected docs/alerts/line_degraded_outreach.ics to exist for degraded workflow."
+            exit 1
+          fi
+          echo "✅ Degraded ICS asset available"
+
+      - name: Estimate Plan Cost
+        id: cost
+        run: |
+          set -euo pipefail
+          mkdir -p tmp
+          python orchestration/cost.py "$PLAN_CURRENT_PATH" > tmp/cost.json
+          cat tmp/cost.json
+          WITHIN=$(jq -r '.within_budget' tmp/cost.json)
+          echo "within_budget=$WITHIN" >> "$GITHUB_OUTPUT"
+          if [ "$WITHIN" != "true" ]; then
+            echo "⚠️ Budget warning: $(jq -r '.recommendation' tmp/cost.json)"
+          fi
+
+      - name: Upsert events into Supabase
+        id: supabase
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          OUTPUT=$(node scripts/supabase/upsert-line-event.js \
+            "${{ steps.event.outputs.payload_path }}" \
+            "$PLAN_CURRENT_PATH" \
+            "${{ github.run_id }}:${{ github.run_attempt }}" 2>&1 || true)
+          echo "$OUTPUT" | tee tmp/supabase-line.json
+          STATUS=$(echo "$OUTPUT" | jq -r '.status // "error"' 2>/dev/null || echo "error")
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ "$STATUS" != "ok" ]; then
+            echo "Supabase ingest did not complete successfully (status=$STATUS)"
+            exit 1
+          fi
+
+      - name: Update Google Sheets ledger
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          EVENT_TYPE: ${{ steps.parse.outputs.event_type }}
-          USER_ID: ${{ steps.parse.outputs.user_id }}
-          TIMESTAMP: ${{ steps.parse.outputs.timestamp }}
+          GOOGLE_SHEET_NAME: line_members
         run: |
-          cat > update-sheets.cjs << 'EOF'
-          const { google } = require('googleapis');
+          if [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ] || [ -z "$GOOGLE_SHEET_ID" ]; then
+            echo "ℹ️ Google Sheets credentials missing. Skipping ledger update."
+            exit 0
+          fi
+          node scripts/sheets/upsert-line-member.js tmp/event.json
 
-          async function updateGoogleSheets() {
-            try {
-              const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-              const auth = new google.auth.GoogleAuth({
-                credentials,
-                scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-              });
-
-              const sheets = google.sheets({ version: 'v4', auth });
-              const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-
-              const eventType = process.env.EVENT_TYPE || 'follow';
-              const userId = process.env.USER_ID || 'unknown';
-              const timestamp = process.env.TIMESTAMP || Date.now().toString();
-              
-              // timestampが数値として有効かチェック
-              const timestampNum = parseInt(timestamp);
-              const registeredAt = isNaN(timestampNum) ? new Date().toISOString() : new Date(timestampNum).toISOString();
-
-              console.log(`Processing LINE event: ${eventType} for user ${userId}`);
-              console.log(`Timestamp: ${timestamp}, Registered at: ${registeredAt}`);
-
-              const values = [[
-                userId,
-                `User ${userId.slice(-4)}`,
-                registeredAt,
-                false,
-                false,
-                registeredAt,
-                false,
-                `Event: ${eventType}`
-              ]];
-
-              const response = await sheets.spreadsheets.values.append({
-                spreadsheetId,
-                range: 'participants!A:H',
-                valueInputOption: 'USER_ENTERED',
-                requestBody: { values },
-              });
-
-              console.log(`✅ Successfully added ${response.data.updates.updatedRows} row(s) to Google Sheets`);
-              console.log(`Range: ${response.data.updates.updatedRange}`);
-            } catch (error) {
-              console.error('❌ Failed to update Google Sheets:', error.message);
-              if (error.stack) console.error(error.stack);
-              process.exit(1);
-            }
-          }
-
-          updateGoogleSheets();
-          EOF
-
-          node update-sheets.cjs
-
-      - name: Generate Plan
-        env:
-          LLM_ENDPOINT: ${{ secrets.LLM_ENDPOINT }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-        run: |
-          echo "Generating plan for LINE event..."
-
-      - name: Update Current Plan
-        if: success()
-        run: |
-          echo "Updating current plan..."
-
-      - name: Dispatch to Manus
-        if: success()
+      - name: Dispatch to Manus (Development Only)
+        if: vars.DEVELOPMENT_MODE == 'true' && vars.MANUS_ENABLED == 'true' && steps.mode.outputs.mode != 'degraded'
         env:
           MANUS_API_KEY: ${{ secrets.MANUS_API_KEY }}
           MANUS_BASE_URL: ${{ vars.MANUS_BASE_URL }}
+          PROGRESS_WEBHOOK_URL: ${{ secrets.PROGRESS_WEBHOOK_URL }}
         run: |
-          echo "Dispatching to Manus..."
+          if [ -z "$MANUS_API_KEY" ]; then
+            echo "⚠️ MANUS_API_KEY is not set. Skipping Manus API call."
+            exit 0
+          fi
+          PLAN_FILE="$PLAN_CURRENT_PATH"
+          BRIEF_FILE="orchestration/MANUS_EXECUTION_BRIEF_v2.0.txt"
+          if [ ! -f "$PLAN_FILE" ]; then
+            echo "⚠️ Plan file not found: $PLAN_FILE"
+            exit 1
+          fi
+          if [ ! -f "$BRIEF_FILE" ]; then
+            echo "⚠️ Brief file not found: $BRIEF_FILE"
+            exit 1
+          fi
+          echo "🚀 Calling Manus API to create task..."
+          node scripts/manus-api.js create "$BRIEF_FILE" "$PLAN_FILE" || {
+            echo "❌ Failed to create Manus task"
+            exit 1
+          }
+          echo "✅ Manus task created successfully"
+
+      - name: Commit event log
+        run: |
+          set -euo pipefail
+          mkdir -p logs/progress
+          TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
+          jq '.' tmp/event.json > "logs/progress/${TIMESTAMP}_line.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add logs/progress/*.json
+          git commit -m "chore: log line event ${TIMESTAMP}" || exit 0
+          git push || {
+            echo "⚠️ git push failed; ensure token has contents:write scope."
+            exit 1
+          }
+
+      - name: Notify stakeholders
+        if: always()
+        env:
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+          FALLBACK_WEBHOOK_URL: ${{ secrets.PROGRESS_WEBHOOK_URL }}
+          EVENT_TYPE: ${{ steps.event.outputs.event_type }}
+          SUPABASE_STATUS: ${{ steps.supabase.outputs.status || 'skipped' }}
+          MODE: ${{ steps.mode.outputs.mode }}
+          DEGRADED_REASON: ${{ steps.mode.outputs.degraded_reason || 'none' }}
+        run: |
+          if [ -z "${NOTIFY_WEBHOOK_URL:-}" ]; then
+            NOTIFY_WEBHOOK_URL="${FALLBACK_WEBHOOK_URL:-}"
+          fi
+          if [ -z "${NOTIFY_WEBHOOK_URL:-}" ]; then
+            echo "ℹ️ Notification webhook not configured. Skipping."
+            exit 0
+          fi
+          USER_COUNT='${{ steps.event.outputs.user_count }}'
+          MODE_VALUE="${MODE}"
+          REASON_VALUE="${DEGRADED_REASON}"
+          if [ "$MODE_VALUE" = "degraded" ]; then
+            MESSAGE=$(jq -n \
+              --arg txt "[LINE][DEGRADED] event processed: type=$EVENT_TYPE, supabase=$SUPABASE_STATUS, reason=$REASON_VALUE, users=$USER_COUNT. Refer to docs/alerts/line_degraded_outreach.ics for manual follow-up." \
+              '{text: $txt}')
+          else
+            MESSAGE=$(jq -n \
+              --arg txt "[LINE] event processed: type=$EVENT_TYPE, supabase=$SUPABASE_STATUS, mode=$MODE_VALUE, users=$USER_COUNT" \
+              '{text: $txt}')
+          fi
+          curl -sSf -X POST -H "Content-Type: application/json" \
+            -d "$MESSAGE" "$NOTIFY_WEBHOOK_URL"
+
+      - name: Summarize outcome
+        if: always()
+        run: |
+          MODE='${{ steps.mode.outputs.mode }}'
+          PLAN_WARNING='${{ steps.mode.outputs.warning }}'
+          REASON='${{ steps.mode.outputs.degraded_reason }}'
+          SUPABASE_STATUS='${{ steps.supabase.outputs.status || 'not-run' }}'
+          COST_WITHIN='${{ steps.cost.outputs.within_budget || 'unknown' }}'
+          echo "### LINE Event Handler" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$PLAN_WARNING" ]; then
+            echo "- Mode: \`$MODE\` (warning: $PLAN_WARNING)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Mode: \`$MODE\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$MODE" = "degraded" ] && [ "$REASON" != "none" ]; then
+            echo "  - Degraded reason: \`$REASON\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "- Supabase ingest: \`$SUPABASE_STATUS\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Plan within budget: \`$COST_WITHIN\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Event type: \`${{ steps.event.outputs.event_type }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Users processed: \`${{ steps.event.outputs.user_count }}\`" >> "$GITHUB_STEP_SUMMARY"
