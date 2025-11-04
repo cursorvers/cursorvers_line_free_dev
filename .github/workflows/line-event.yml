@@ -45,9 +45,28 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p tmp
-          printf '%s\n' '${{ toJson(github.event.client_payload) }}' > tmp/event.json
+          # Handle both repository_dispatch and workflow_dispatch
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            printf '%s\n' '${{ toJson(github.event.client_payload) }}' > tmp/event.json
+          else
+            # workflow_dispatch: create a minimal test payload
+            jq -n '{
+              "event_id": "test-' + "$(date -u +%s)" + '",
+              "received_at": now | todateiso8601,
+              "signature_valid": true,
+              "dedupe_key": "test-dedupe-key",
+              "events": [{
+                "type": "follow",
+                "timestamp": (now * 1000 | floor),
+                "source": {
+                  "type": "user",
+                  "userId": "test-user-id"
+                }
+              }]
+            }' > tmp/event.json
+          fi
           EVENT_TYPE=$(jq -r '.events[0].type // "unknown"' tmp/event.json)
-          USER_COUNT=$(jq '[.events[].source.userId] | unique | length' tmp/event.json)
+          USER_COUNT=$(jq '[.events[].source.userId] | unique | length' tmp/event.json 2>/dev/null || echo "0")
           echo "event_type=$EVENT_TYPE" >> "$GITHUB_OUTPUT"
           echo "user_count=$USER_COUNT" >> "$GITHUB_OUTPUT"
           echo "payload_path=tmp/event.json" >> "$GITHUB_OUTPUT"
@@ -151,6 +170,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PLAN_MODE: ${{ steps.mode.outputs.mode }}
         run: |
           set -euo pipefail
           OUTPUT=$(node scripts/supabase/upsert-line-event.js \
@@ -199,7 +219,7 @@ jobs:
             exit 1
           fi
           echo "🚀 Calling Manus API to create task..."
-          node scripts/manus-api.js create "$BRIEF_FILE" "$PLAN_FILE" || {
+          node scripts/manus-api.js create "$BRIEF_FILE" "$PLAN_FILE" --webhook "$PROGRESS_WEBHOOK_URL" || {
             echo "❌ Failed to create Manus task"
             exit 1
           }
@@ -222,6 +242,7 @@ jobs:
 
       - name: Notify stakeholders
         if: always()
+        continue-on-error: true
         env:
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
           FALLBACK_WEBHOOK_URL: ${{ secrets.PROGRESS_WEBHOOK_URL }}
@@ -237,20 +258,30 @@ jobs:
             echo "ℹ️ Notification webhook not configured. Skipping."
             exit 0
           fi
-          USER_COUNT='${{ steps.event.outputs.user_count }}'
-          MODE_VALUE="${MODE}"
-          REASON_VALUE="${DEGRADED_REASON}"
+          # Validate webhook URL format
+          if [[ ! "$NOTIFY_WEBHOOK_URL" =~ ^https?:// ]]; then
+            echo "⚠️ Invalid webhook URL format. Skipping."
+            exit 0
+          fi
+          USER_COUNT="${USER_COUNT:-${{ steps.event.outputs.user_count }}}"
+          MODE_VALUE="${MODE:-normal}"
+          REASON_VALUE="${DEGRADED_REASON:-none}"
+          EVENT_TYPE_VALUE="${EVENT_TYPE:-unknown}"
+          SUPABASE_STATUS_VALUE="${SUPABASE_STATUS:-skipped}"
           if [ "$MODE_VALUE" = "degraded" ]; then
             MESSAGE=$(jq -n \
-              --arg txt "[LINE][DEGRADED] event processed: type=$EVENT_TYPE, supabase=$SUPABASE_STATUS, reason=$REASON_VALUE, users=$USER_COUNT. Refer to docs/alerts/line_degraded_outreach.ics for manual follow-up." \
+              --arg txt "[LINE][DEGRADED] event processed: type=$EVENT_TYPE_VALUE, supabase=$SUPABASE_STATUS_VALUE, reason=$REASON_VALUE, users=$USER_COUNT. Refer to docs/alerts/line_degraded_outreach.ics for manual follow-up." \
               '{text: $txt}')
           else
             MESSAGE=$(jq -n \
-              --arg txt "[LINE] event processed: type=$EVENT_TYPE, supabase=$SUPABASE_STATUS, mode=$MODE_VALUE, users=$USER_COUNT" \
+              --arg txt "[LINE] event processed: type=$EVENT_TYPE_VALUE, supabase=$SUPABASE_STATUS_VALUE, mode=$MODE_VALUE, users=$USER_COUNT" \
               '{text: $txt}')
           fi
           curl -sSf -X POST -H "Content-Type: application/json" \
-            -d "$MESSAGE" "$NOTIFY_WEBHOOK_URL"
+            -d "$MESSAGE" "$NOTIFY_WEBHOOK_URL" || {
+            echo "⚠️ Failed to send notification. This is non-critical."
+            exit 0
+          }
 
       - name: Summarize outcome
         if: always()
