@@ -260,6 +260,11 @@ export async function upsertSupabaseRecords({
       console.warn(
         'Supabase line_members schema is missing columns (first_opt_in_at, etc). Retrying with downgraded payload.',
       );
+      console.warn(
+        JSON.stringify({
+          downgraded_member_records: downgradedRecords,
+        }),
+      );
       const downgradedBody = JSON.stringify(downgradedRecords);
       ({ resp, text } = await attempt(downgradedBody, 'downgraded'));
     }
