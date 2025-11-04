@@ -154,6 +154,8 @@ function downgradeLineMemberRecord(record) {
     last_opt_in_at,
     guardrail_sent_at,
     consent_guardrail,
+    status,
+    cta_tags,
     metadata = {},
     ...rest
   } = record;
@@ -164,6 +166,8 @@ function downgradeLineMemberRecord(record) {
     last_opt_in_at,
     guardrail_sent_at,
     consent_guardrail,
+    status,
+    cta_tags,
   };
 
   const entries = Object.entries(fallback).filter(([, value]) => value !== undefined && value !== null);
