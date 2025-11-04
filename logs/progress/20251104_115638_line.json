@@ -1,0 +1,16 @@
+{
+  "event_id": "test-1762257395",
+  "received_at": "2025-11-04T11:56:35Z",
+  "signature_valid": true,
+  "dedupe_key": "test-dedupe-key",
+  "events": [
+    {
+      "type": "follow",
+      "timestamp": 1762257395854,
+      "source": {
+        "type": "user",
+        "userId": "test-user-id"
+      }
+    }
+  ]
+}
