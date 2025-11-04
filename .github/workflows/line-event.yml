@@ -168,6 +168,34 @@ jobs:
             echo "⚠️ Budget warning: $(jq -r '.recommendation' tmp/cost.json)"
           fi
 
+      - name: Refresh Supabase schema cache
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "ℹ️ Supabase credentials missing. Skipping schema refresh."
+            exit 0
+          fi
+          BASE="${SUPABASE_URL%/}"
+          for i in {1..5}; do
+            echo "ℹ️ Notifying PostgREST to reload schema (attempt $i)..."
+            HTTP_STATUS=$(curl -sS -o /tmp/pg_notify_response.json -w "%{http_code}" \
+              -X POST "$BASE/rest/v1/rpc/pg_notify" \
+              -H "Content-Type: application/json" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -d '{"channel":"pgrst","payload":"reload schema"}' || echo "000")
+            if [ "$HTTP_STATUS" = "200" ]; then
+              cat /tmp/pg_notify_response.json
+            else
+              echo "⚠️ pg_notify returned HTTP $HTTP_STATUS"
+              cat /tmp/pg_notify_response.json || true
+            fi
+            sleep 1
+          done
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
       - name: Ensure Supabase scripts
         run: |
           set -euo pipefail
