@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "typecheck": "echo 'TypeScript check skipped' || true",
-    "test": "echo 'Tests skipped' || true",
+    "test": "node --test tests/**/*.test.mjs",
     "codex-agent": "node scripts/codex-agent.js"
   },
   "keywords": [
@@ -20,4 +20,3 @@
   "dependencies": {},
   "devDependencies": {}
 }
-
