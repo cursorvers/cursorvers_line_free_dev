@@ -1,4 +1,5 @@
 name: Plan Validator
+x-owner: devops
 
 on:
   pull_request:
@@ -34,3 +35,4 @@ jobs:
           node scripts/plan/validate-plan.js \
             orchestration/plan/current_plan.json \
             orchestration/plan/production/current_plan.json
+

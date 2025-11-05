@@ -40,3 +40,21 @@ export function normalizeBoolean(value, defaultValue = false) {
   }
   return defaultValue;
 }
+
+export function resolveFeatureFlags(env = {}, { degradedFlagPresent = false } = {}) {
+  const manusEnabled = env.MANUS_ENABLED ?? "true";
+  const degradedMode = env.DEGRADED_MODE ?? "false";
+  const developmentMode = env.DEVELOPMENT_MODE ?? "false";
+  const planMode = resolvePlanMode({ manusEnabled, degradedMode, degradedFlagPresent });
+  return {
+    manusEnabled,
+    degradedMode,
+    developmentMode,
+    planMode,
+    canDispatch: canDispatchToManus({
+      developmentMode,
+      manusEnabled,
+      planMode,
+    }),
+  };
+}

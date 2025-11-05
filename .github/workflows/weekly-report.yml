@@ -1,4 +1,5 @@
 name: 📊 Generate Weekly Report
+x-owner: ops
 
 # Automatically generate weekly reports from GitHub Projects V2
 # Issue #5 Phase A: Data Persistence Layer
@@ -44,3 +45,4 @@ jobs:
           echo "✅ Weekly report generated"
           echo "   Repository: ${{ github.repository }}"
           echo "   Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+

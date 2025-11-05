@@ -1,0 +1,14 @@
+name: Validate Workflow Configuration
+description: Ensure required workflow secrets and vars are present before execution.
+inputs:
+  workflow:
+    description: Workflow filename (e.g., line-event.yml)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Validate configuration manifest
+      shell: bash
+      run: node scripts/checks/validate-config.mjs "${{ inputs.workflow }}"
+      env:
+        SKIP_CONFIG_VALIDATION: ${{ env.SKIP_CONFIG_VALIDATION }}

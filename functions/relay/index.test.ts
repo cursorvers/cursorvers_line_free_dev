@@ -14,6 +14,7 @@ import {
   sanitizePayload,
   verifySignature,
 } from "./index.ts";
+import type { KvClient } from "./kv.ts";
 
 const BASE_ENV = {
   GH_OWNER: "owner",
@@ -162,6 +163,42 @@ Deno.test("createDedupKey is stable for identical events and differentiates chan
   assertNotEquals(firstKey, thirdKey);
 });
 
+Deno.test("createDedupKey incorporates Manus progress identifiers", () => {
+  const payload = {
+    progress_id: "task-123",
+    decision: "retry",
+    plan_variant: "production",
+    step_id: "s1",
+  };
+
+  const first = createDedupKey(
+    "manus_progress",
+    payload,
+    BASE_ENV,
+    null,
+    JSON.stringify(payload),
+  );
+
+  const same = createDedupKey(
+    "manus_progress",
+    { ...payload },
+    BASE_ENV,
+    null,
+    JSON.stringify(payload),
+  );
+
+  const different = createDedupKey(
+    "manus_progress",
+    { ...payload, step_id: "s2" },
+    BASE_ENV,
+    null,
+    JSON.stringify({ ...payload, step_id: "s2" }),
+  );
+
+  assertEquals(first, same);
+  assertNotEquals(first, different);
+});
+
 Deno.test("markEventAsSeen prevents duplicates and respects TTL expiry", async () => {
   __testOnly.clearMemoryDedupeCache();
   const kvFactory = () => Promise.resolve(null);
@@ -180,4 +217,126 @@ Deno.test("markEventAsSeen prevents duplicates and respects TTL expiry", async (
     fakeTime.restore();
     __testOnly.clearMemoryDedupeCache();
   }
+});
+
+Deno.test("markEventAsSeen respects external KV store state", async () => {
+  type KvKey = Parameters<KvClient["get"]>[0];
+  type KvEntry = Awaited<ReturnType<KvClient["get"]>>;
+  type KvSetOptions = Parameters<KvClient["set"]>[2];
+  type KvCommitResult = Awaited<
+    ReturnType<ReturnType<KvClient["atomic"]>["commit"]>
+  >;
+
+  const fakeTime = new FakeTime(1_700_000_000_000);
+  try {
+    const store = new Map<string, { value: unknown; expiration?: number }>();
+
+    const kvStub = {
+      async get(key: KvKey): Promise<KvEntry> {
+        const serialized = JSON.stringify(key as unknown);
+        const entry = store.get(serialized);
+        return {
+          key,
+          value: entry?.value ?? null,
+          versionstamp: null,
+          expiration: entry?.expiration,
+        };
+      },
+      async set(
+        key: KvKey,
+        value: unknown,
+        options?: KvSetOptions,
+      ): Promise<void> {
+        const serialized = JSON.stringify(key as unknown);
+        const expiration = options?.expireIn
+          ? Date.now() + options.expireIn
+          : undefined;
+        store.set(serialized, { value, expiration });
+      },
+      // Unused Kv APIs stubbed to satisfy the interface contract at runtime.
+      async delete() {},
+      async enqueue() {},
+      list() {
+        return {
+          async *[Symbol.asyncIterator]() {
+            for (const [serialized, entry] of store.entries()) {
+              yield {
+                key: JSON.parse(serialized) as KvKey,
+                value: entry.value,
+                versionstamp: null,
+                expiration: entry.expiration,
+              };
+            }
+          },
+        };
+      },
+      atomic() {
+        return {
+          check() {
+            return this;
+          },
+          set() {
+            return this;
+          },
+          sum() {
+            return this;
+          },
+          min() {
+            return this;
+          },
+          max() {
+            return this;
+          },
+          delete() {
+            return this;
+          },
+          mutate() {
+            return this;
+          },
+          commit: async () =>
+            ({ ok: true, versionstamp: "0000000000000000" } as KvCommitResult),
+        };
+      },
+      close() {},
+    } as unknown as KvClient;
+
+    const kvFactory = () => Promise.resolve(kvStub);
+
+    __testOnly.clearMemoryDedupeCache();
+    assert(await markEventAsSeen("kv-key", 60, kvFactory));
+    assertFalse(await markEventAsSeen("kv-key", 60, kvFactory));
+
+    fakeTime.tick(61_000);
+    assert(await markEventAsSeen("kv-key", 60, kvFactory));
+  } finally {
+    fakeTime.restore();
+    __testOnly.clearMemoryDedupeCache();
+  }
+});
+
+Deno.test("sanitizePayload trims Manus progress payloads to expected shape", () => {
+  const payload = {
+    progress_id: "task-123",
+    decision: "retry",
+    plan_delta: {
+      retry_after_seconds: 45,
+      decision: "retry",
+    },
+    context: {
+      plan_variant: "degraded",
+    },
+    step_id: "s1",
+    extra: "ignore-me",
+    error: { code: "X" },
+  };
+
+  const sanitized = sanitizePayload(payload, "manus_progress", BASE_ENV);
+  assertEquals(sanitized.progress_id, "task-123");
+  assertEquals(sanitized.plan_variant, "degraded");
+  assertEquals(sanitized.retry_after_seconds, 45);
+  assertEquals(sanitized.decision, "retry");
+  assertEquals(sanitized.metadata.step_id, "s1");
+  assertEquals(sanitized.metadata.error, { code: "X" });
+  assertEquals(sanitized.metadata.event_type, null);
+  assertFalse("extra" in sanitized);
 });

@@ -4,6 +4,7 @@ import {
   resolvePlanMode,
   canDispatchToManus,
   normalizeBoolean,
+  resolveFeatureFlags,
 } from "../../scripts/lib/feature-flags.js";
 
 test("resolvePlanMode returns normal when flags allow Manus", () => {
@@ -81,4 +82,25 @@ test("normalizeBoolean falls back to default when value is unknown", () => {
   assert.equal(normalizeBoolean("maybe", false), false);
   assert.equal(normalizeBoolean("maybe", true), true);
   assert.equal(normalizeBoolean(undefined, true), true);
+});
+
+test("resolveFeatureFlags derives plan mode and dispatch allowance", () => {
+  const flags = resolveFeatureFlags({
+    MANUS_ENABLED: "true",
+    DEGRADED_MODE: "false",
+    DEVELOPMENT_MODE: "true",
+  });
+  assert.equal(flags.planMode, "normal");
+  assert.equal(flags.canDispatch, true);
+
+  const degraded = resolveFeatureFlags(
+    {
+      MANUS_ENABLED: "true",
+      DEGRADED_MODE: "false",
+      DEVELOPMENT_MODE: "true",
+    },
+    { degradedFlagPresent: true },
+  );
+  assert.equal(degraded.planMode, "degraded");
+  assert.equal(degraded.canDispatch, false);
 });

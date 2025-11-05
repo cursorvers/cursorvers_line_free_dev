@@ -1,4 +1,5 @@
 name: Python Tests
+x-owner: devops
 
 on:
   push:
@@ -31,3 +32,4 @@ jobs:
       - name: Run pytest
         run: |
           python -m pytest tests
+

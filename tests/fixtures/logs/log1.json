@@ -1,0 +1,21 @@
+{
+  "event_id": "evt-1",
+  "received_at": "2025-11-05T00:00:00Z",
+  "events": [
+    {
+      "type": "message",
+      "timestamp": 1762257395854,
+      "source": {
+        "type": "user",
+        "userId": "hashed-user-1"
+      },
+      "message": {
+        "type": "text",
+        "text": "Sensitive message contents"
+      },
+      "replyToken": "token"
+    }
+  ],
+  "signature_valid": true,
+  "plan_mode": "normal"
+}

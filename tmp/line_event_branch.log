@@ -1,0 +1,665 @@
+handle-line-event	Set up job	﻿2025-11-05T07:07:44.4067070Z Current runner version: '2.329.0'
+handle-line-event	Set up job	2025-11-05T07:07:44.4092016Z ##[group]Runner Image Provisioner
+handle-line-event	Set up job	2025-11-05T07:07:44.4093354Z Hosted Compute Agent
+handle-line-event	Set up job	2025-11-05T07:07:44.4094338Z Version: 20251016.436
+handle-line-event	Set up job	2025-11-05T07:07:44.4095326Z Commit: 8ab8ac8bfd662a3739dab9fe09456aba92132568
+handle-line-event	Set up job	2025-11-05T07:07:44.4096325Z Build Date: 2025-10-15T20:44:12Z
+handle-line-event	Set up job	2025-11-05T07:07:44.4097132Z ##[endgroup]
+handle-line-event	Set up job	2025-11-05T07:07:44.4097915Z ##[group]Operating System
+handle-line-event	Set up job	2025-11-05T07:07:44.4098741Z Ubuntu
+handle-line-event	Set up job	2025-11-05T07:07:44.4099486Z 24.04.3
+handle-line-event	Set up job	2025-11-05T07:07:44.4100136Z LTS
+handle-line-event	Set up job	2025-11-05T07:07:44.4100907Z ##[endgroup]
+handle-line-event	Set up job	2025-11-05T07:07:44.4101693Z ##[group]Runner Image
+handle-line-event	Set up job	2025-11-05T07:07:44.4102486Z Image: ubuntu-24.04
+handle-line-event	Set up job	2025-11-05T07:07:44.4103517Z Version: 20251030.96.2
+handle-line-event	Set up job	2025-11-05T07:07:44.4104957Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20251030.96/images/ubuntu/Ubuntu2404-Readme.md
+handle-line-event	Set up job	2025-11-05T07:07:44.4106668Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20251030.96
+handle-line-event	Set up job	2025-11-05T07:07:44.4108120Z ##[endgroup]
+handle-line-event	Set up job	2025-11-05T07:07:44.4109919Z ##[group]GITHUB_TOKEN Permissions
+handle-line-event	Set up job	2025-11-05T07:07:44.4112221Z Actions: write
+handle-line-event	Set up job	2025-11-05T07:07:44.4113329Z Contents: write
+handle-line-event	Set up job	2025-11-05T07:07:44.4114047Z Issues: write
+handle-line-event	Set up job	2025-11-05T07:07:44.4114840Z Metadata: read
+handle-line-event	Set up job	2025-11-05T07:07:44.4115556Z PullRequests: write
+handle-line-event	Set up job	2025-11-05T07:07:44.4116391Z ##[endgroup]
+handle-line-event	Set up job	2025-11-05T07:07:44.4118598Z Secret source: Actions
+handle-line-event	Set up job	2025-11-05T07:07:44.4119579Z Prepare workflow directory
+handle-line-event	Set up job	2025-11-05T07:07:44.4494489Z Prepare all required actions
+handle-line-event	Set up job	2025-11-05T07:07:44.4531544Z Getting action download info
+handle-line-event	Set up job	2025-11-05T07:07:44.7765923Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+handle-line-event	Set up job	2025-11-05T07:07:44.9002376Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+handle-line-event	Set up job	2025-11-05T07:07:44.9956497Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+handle-line-event	Set up job	2025-11-05T07:07:45.2282385Z Complete job name: handle-line-event
+handle-line-event	Checkout repository	﻿2025-11-05T07:07:45.3189164Z ##[group]Run actions/checkout@v4
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3190666Z with:
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3191855Z   token: ***
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3192824Z   persist-credentials: true
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3194416Z   repository: mo666-med/cursorvers_line-discord
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3195694Z   ssh-strict: true
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3196646Z   ssh-user: git
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3197570Z   clean: true
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3198558Z   sparse-checkout-cone-mode: true
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3199717Z   fetch-depth: 1
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3200667Z   fetch-tags: false
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3201656Z   show-progress: true
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3202637Z   lfs: false
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3203724Z   submodules: false
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3204739Z   set-safe-directory: true
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3206080Z env:
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3207182Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3208704Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3210396Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3212354Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3214484Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Checkout repository	2025-11-05T07:07:45.3215920Z ##[endgroup]
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4480005Z Syncing repository: mo666-med/cursorvers_line-discord
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4482872Z ##[group]Getting Git version info
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4484886Z Working directory is '/home/runner/work/cursorvers_line-discord/cursorvers_line-discord'
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4487224Z [command]/usr/bin/git version
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4540449Z git version 2.51.2
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4568652Z ##[endgroup]
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4585730Z Temporarily overriding HOME='/home/runner/work/_temp/f43753eb-a025-4984-af25-165edf2b0126' before making global git config changes
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4590615Z Adding repository directory to the temporary git global config as a safe directory
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4595253Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cursorvers_line-discord/cursorvers_line-discord
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4638785Z Deleting the contents of '/home/runner/work/cursorvers_line-discord/cursorvers_line-discord'
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4641957Z ##[group]Initializing the repository
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4647956Z [command]/usr/bin/git init /home/runner/work/cursorvers_line-discord/cursorvers_line-discord
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4752560Z hint: Using 'master' as the name for the initial branch. This default branch name
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4755002Z hint: is subject to change. To configure the initial branch name to use in all
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4758171Z hint: of your new repositories, which will suppress this warning, call:
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4760417Z hint:
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4761522Z hint: 	git config --global init.defaultBranch <name>
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4762801Z hint:
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4764365Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4766573Z hint: 'development'. The just-created branch can be renamed via this command:
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4768284Z hint:
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4769355Z hint: 	git branch -m <name>
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4770671Z hint:
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4771998Z hint: Disable this message with "git config set advice.defaultBranchName false"
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4774656Z Initialized empty Git repository in /home/runner/work/cursorvers_line-discord/cursorvers_line-discord/.git/
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4778381Z [command]/usr/bin/git remote add origin https://github.com/mo666-med/cursorvers_line-discord
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4806280Z ##[endgroup]
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4808047Z ##[group]Disabling automatic garbage collection
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4809734Z [command]/usr/bin/git config --local gc.auto 0
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4840569Z ##[endgroup]
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4843291Z ##[group]Setting up auth
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4848227Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+handle-line-event	Checkout repository	2025-11-05T07:07:45.4883327Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+handle-line-event	Checkout repository	2025-11-05T07:07:45.5212465Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+handle-line-event	Checkout repository	2025-11-05T07:07:45.5245336Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+handle-line-event	Checkout repository	2025-11-05T07:07:45.5464206Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+handle-line-event	Checkout repository	2025-11-05T07:07:45.5506329Z ##[endgroup]
+handle-line-event	Checkout repository	2025-11-05T07:07:45.5509296Z ##[group]Fetching the repository
+handle-line-event	Checkout repository	2025-11-05T07:07:45.5518554Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +3e55075544c48d855a7a91fdd89debb8bfd1087c:refs/remotes/origin/phase2/t8-kpi-report
+handle-line-event	Checkout repository	2025-11-05T07:07:46.3103742Z From https://github.com/mo666-med/cursorvers_line-discord
+handle-line-event	Checkout repository	2025-11-05T07:07:46.3106313Z  * [new ref]         3e55075544c48d855a7a91fdd89debb8bfd1087c -> origin/phase2/t8-kpi-report
+handle-line-event	Checkout repository	2025-11-05T07:07:46.3135910Z ##[endgroup]
+handle-line-event	Checkout repository	2025-11-05T07:07:46.3137188Z ##[group]Determining the checkout info
+handle-line-event	Checkout repository	2025-11-05T07:07:46.3138461Z ##[endgroup]
+handle-line-event	Checkout repository	2025-11-05T07:07:46.3142686Z [command]/usr/bin/git sparse-checkout disable
+handle-line-event	Checkout repository	2025-11-05T07:07:46.3182885Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+handle-line-event	Checkout repository	2025-11-05T07:07:46.3210203Z ##[group]Checking out the ref
+handle-line-event	Checkout repository	2025-11-05T07:07:46.3213732Z [command]/usr/bin/git checkout --progress --force -B phase2/t8-kpi-report refs/remotes/origin/phase2/t8-kpi-report
+handle-line-event	Checkout repository	2025-11-05T07:07:46.5844337Z Switched to a new branch 'phase2/t8-kpi-report'
+handle-line-event	Checkout repository	2025-11-05T07:07:46.5845586Z branch 'phase2/t8-kpi-report' set up to track 'origin/phase2/t8-kpi-report'.
+handle-line-event	Checkout repository	2025-11-05T07:07:46.5859599Z ##[endgroup]
+handle-line-event	Checkout repository	2025-11-05T07:07:46.5903008Z [command]/usr/bin/git log -1 --format=%H
+handle-line-event	Checkout repository	2025-11-05T07:07:46.5925379Z 3e55075544c48d855a7a91fdd89debb8bfd1087c
+handle-line-event	Setup Node.js	﻿2025-11-05T07:07:46.6147174Z ##[group]Run actions/setup-node@v4
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6147589Z with:
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6147840Z   node-version: 20
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6148106Z   always-auth: false
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6148372Z   check-latest: false
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6148761Z   token: ***
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6149007Z env:
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6149313Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6149746Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6150211Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6150729Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6151221Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.6151601Z ##[endgroup]
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.7894112Z Found in cache @ /opt/hostedtoolcache/node/20.19.5/x64
+handle-line-event	Setup Node.js	2025-11-05T07:07:46.7900060Z ##[group]Environment details
+handle-line-event	Setup Node.js	2025-11-05T07:07:47.1245843Z node: v20.19.5
+handle-line-event	Setup Node.js	2025-11-05T07:07:47.1246470Z npm: 10.8.2
+handle-line-event	Setup Node.js	2025-11-05T07:07:47.1246936Z yarn: 1.22.22
+handle-line-event	Setup Node.js	2025-11-05T07:07:47.1247869Z ##[endgroup]
+handle-line-event	Setup Python	﻿2025-11-05T07:07:47.1375216Z ##[group]Run actions/setup-python@v5
+handle-line-event	Setup Python	2025-11-05T07:07:47.1375588Z with:
+handle-line-event	Setup Python	2025-11-05T07:07:47.1375854Z   python-version: 3.11
+handle-line-event	Setup Python	2025-11-05T07:07:47.1376129Z   check-latest: false
+handle-line-event	Setup Python	2025-11-05T07:07:47.1376482Z   token: ***
+handle-line-event	Setup Python	2025-11-05T07:07:47.1376743Z   update-environment: true
+handle-line-event	Setup Python	2025-11-05T07:07:47.1377044Z   allow-prereleases: false
+handle-line-event	Setup Python	2025-11-05T07:07:47.1377319Z   freethreaded: false
+handle-line-event	Setup Python	2025-11-05T07:07:47.1377572Z env:
+handle-line-event	Setup Python	2025-11-05T07:07:47.1377866Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Setup Python	2025-11-05T07:07:47.1378276Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Setup Python	2025-11-05T07:07:47.1378729Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Setup Python	2025-11-05T07:07:47.1379240Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Setup Python	2025-11-05T07:07:47.1379727Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Setup Python	2025-11-05T07:07:47.1380135Z ##[endgroup]
+handle-line-event	Setup Python	2025-11-05T07:07:47.3209835Z ##[group]Installed versions
+handle-line-event	Setup Python	2025-11-05T07:07:47.3336037Z Successfully set up CPython (3.11.14)
+handle-line-event	Setup Python	2025-11-05T07:07:47.3336734Z ##[endgroup]
+handle-line-event	Persist Event Payload	﻿2025-11-05T07:07:47.3462532Z ##[group]Run set -euo pipefail
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3462988Z [36;1mset -euo pipefail[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3463563Z [36;1mmkdir -p tmp[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3463970Z [36;1m# Always initialize with a fallback payload for manual dispatches[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3464406Z [36;1mTIMESTAMP=$(date -u +%s)[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3464774Z [36;1mjq -n --arg ts "$TIMESTAMP" '***[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3465115Z [36;1m  "event_id": "test-\($ts)",[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3465449Z [36;1m  "received_at": now | todateiso8601,[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3465782Z [36;1m  "signature_valid": true,[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3466106Z [36;1m  "dedupe_key": "test-dedupe-key",[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3466455Z [36;1m  "events": [***[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3466749Z [36;1m    "type": "follow",[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3467055Z [36;1m    "timestamp": (now * 1000 | floor),[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3467387Z [36;1m    "source": ***[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3467672Z [36;1m      "type": "user",[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3467961Z [36;1m      "userId": "test-user-id"[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3468306Z [36;1m    ***[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3468547Z [36;1m  ***][0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3468802Z [36;1m***' > tmp/event.json[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3469079Z [36;1m[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3469314Z [36;1mPAYLOAD='null'[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3469652Z [36;1mif [ "$PAYLOAD" != "null" ] && [ -n "$PAYLOAD" ]; then[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3470135Z [36;1m  if jq -e '.events | type == "array" and length > 0' <<<"$PAYLOAD" >/dev/null 2>&1; then[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3470600Z [36;1m    printf '%s\n' "$PAYLOAD" > tmp/event.json[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3470933Z [36;1m  fi[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3471167Z [36;1mfi[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3471567Z [36;1mEVENT_TYPE=$(jq -r '.events[0].type // "unknown"' tmp/event.json 2>/dev/null || echo "unknown")[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3472419Z [36;1mUSER_COUNT=$(jq '[.events[].source.userId] | unique | length' tmp/event.json 2>/dev/null || echo "0")[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3472963Z [36;1mecho "event_type=$EVENT_TYPE" >> "$GITHUB_OUTPUT"[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3473494Z [36;1mecho "user_count=$USER_COUNT" >> "$GITHUB_OUTPUT"[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3473918Z [36;1mecho "payload_path=tmp/event.json" >> "$GITHUB_OUTPUT"[0m
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3558163Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3558498Z env:
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3558812Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3559242Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3559697Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3560218Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3560698Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3561153Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3561630Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3562080Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3562500Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3562913Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3563600Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Persist Event Payload	2025-11-05T07:07:47.3587341Z ##[endgroup]
+handle-line-event	Ensure Plan Directories	﻿2025-11-05T07:07:47.3849573Z ##[group]Run mkdir -p orchestration/plan
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3850010Z [36;1mmkdir -p orchestration/plan[0m
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3850388Z [36;1mmkdir -p orchestration/plan/production[0m
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3885440Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3885786Z env:
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3886121Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3886579Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3887040Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3887563Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3888050Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3888511Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3888977Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3889439Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3889886Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3890311Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3890730Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Ensure Plan Directories	2025-11-05T07:07:47.3891090Z ##[endgroup]
+handle-line-event	Resolve Plan Mode	﻿2025-11-05T07:07:47.3994589Z ##[group]Run set -euo pipefail
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3995015Z [36;1mset -euo pipefail[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3995329Z [36;1mMODE="normal"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3995622Z [36;1mREASON="none"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3995931Z [36;1mif [ "true" = "false" ]; then[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3996276Z [36;1m  MODE="degraded"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3996596Z [36;1m  REASON="manus_disabled"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3996957Z [36;1mfi[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3997229Z [36;1mif [ "" = "true" ]; then[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3997551Z [36;1m  MODE="degraded"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3997868Z [36;1m  REASON="forced_variable"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3998191Z [36;1mfi[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3998486Z [36;1mif [ -f "$DEGRADED_FLAG_PATH" ]; then[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3998842Z [36;1m  MODE="degraded"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3999159Z [36;1m  REASON="flag_file_present"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3999484Z [36;1mfi[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.3999766Z [36;1mSOURCE="$PRODUCTION_PLAN_PATH"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4000105Z [36;1mWARNING=""[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4000603Z [36;1mif [ "$MODE" = "degraded" ]; then[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4000977Z [36;1m  if [ -f "$DEGRADED_PLAN_PATH" ]; then[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4001354Z [36;1m    SOURCE="$DEGRADED_PLAN_PATH"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4001680Z [36;1m  else[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4001975Z [36;1m    WARNING="degraded_plan_missing"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4002345Z [36;1m    SOURCE="$PRODUCTION_PLAN_PATH"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4002700Z [36;1m    REASON="plan_missing"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4003479Z [36;1m    echo "⚠️ Degraded mode requested but $DEGRADED_PLAN_PATH not found. Falling back to current plan." >&2[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4004020Z [36;1m  fi[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4004288Z [36;1mfi[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4004582Z [36;1mecho "mode=$MODE" >> "$GITHUB_OUTPUT"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4004995Z [36;1mecho "plan_source=$SOURCE" >> "$GITHUB_OUTPUT"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4005409Z [36;1mecho "warning=$WARNING" >> "$GITHUB_OUTPUT"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4005834Z [36;1mecho "degraded_reason=$REASON" >> "$GITHUB_OUTPUT"[0m
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4038673Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4039029Z env:
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4039376Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4039827Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4040319Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4040861Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4041390Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4041871Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4042370Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4042858Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4043418Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4043872Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4044336Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Resolve Plan Mode	2025-11-05T07:07:47.4044723Z ##[endgroup]
+handle-line-event	Generate PlanDelta (Development Only)	﻿2025-11-05T07:07:47.4125583Z ##[group]Run node scripts/plan/generate-plan-delta.js \
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4126077Z [36;1mnode scripts/plan/generate-plan-delta.js \[0m
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4126521Z [36;1m  --event tmp/event.json \[0m
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4126887Z [36;1m  --plan "$PLAN_CURRENT_PATH" \[0m
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4127221Z [36;1m  --delta "$PLAN_DELTA_PATH"[0m
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4160712Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4161034Z env:
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4161352Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4161777Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4162244Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4162751Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4163475Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4163943Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4164404Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4164888Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4165296Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4165719Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4166146Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4166501Z ##[endgroup]
+handle-line-event	Generate PlanDelta (Development Only)	2025-11-05T07:07:47.4500229Z Plan delta generated at orchestration/plan/plan_delta.json (decision=continue, event_type=follow)
+handle-line-event	Verify Plan File Exists	﻿2025-11-05T07:07:47.4571056Z ##[group]Run set -euo pipefail
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4571435Z [36;1mset -euo pipefail[0m
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4571758Z [36;1mif [ ! -f "$PLAN_CURRENT_PATH" ]; then[0m
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4572163Z [36;1m  echo "❌ Plan file not found: $PLAN_CURRENT_PATH"[0m
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4572704Z [36;1m  exit 1[0m
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4572945Z [36;1mfi[0m
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4573522Z [36;1mjq '.' "$PLAN_CURRENT_PATH" > /dev/null[0m
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4573906Z [36;1mecho "✅ Plan ready at $PLAN_CURRENT_PATH"[0m
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4608879Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4609209Z env:
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4609519Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4609964Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4610435Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4610975Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4611469Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4611958Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4612421Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4612896Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4613579Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4614008Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4614445Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4614802Z ##[endgroup]
+handle-line-event	Verify Plan File Exists	2025-11-05T07:07:47.4699153Z ✅ Plan ready at orchestration/plan/current_plan.json
+handle-line-event	Estimate Plan Cost	﻿2025-11-05T07:07:47.4728165Z ##[group]Run set -euo pipefail
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4728549Z [36;1mset -euo pipefail[0m
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4728837Z [36;1mmkdir -p tmp[0m
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4729235Z [36;1mpython orchestration/cost.py "$PLAN_CURRENT_PATH" > tmp/cost.json[0m
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4729668Z [36;1mcat tmp/cost.json[0m
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4730003Z [36;1mWITHIN=$(jq -r '.within_budget' tmp/cost.json)[0m
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4730417Z [36;1mecho "within_budget=$WITHIN" >> "$GITHUB_OUTPUT"[0m
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4730808Z [36;1mif [ "$WITHIN" != "true" ]; then[0m
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4731237Z [36;1m  echo "⚠️ Budget warning: $(jq -r '.recommendation' tmp/cost.json)"[0m
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4731638Z [36;1mfi[0m
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4766099Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4766419Z env:
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4766730Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4767155Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4767619Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4768178Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4768663Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4769112Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4769570Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4770032Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4770458Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4770866Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4771276Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.4771629Z ##[endgroup]
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.8151581Z ***
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.8152088Z   "estimated_cost": 2,
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.8152472Z   "within_budget": true,
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.8153295Z   "recommendation": "OK: 予算内です"
+handle-line-event	Estimate Plan Cost	2025-11-05T07:07:47.8153693Z ***
+handle-line-event	Refresh Supabase schema cache	﻿2025-11-05T07:07:47.8209483Z ##[group]Run set -euo pipefail
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8209869Z [36;1mset -euo pipefail[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8210310Z [36;1mif [ -z "$***SUPABASE_URL:-***" ] || [ -z "$***SUPABASE_SERVICE_ROLE_KEY:-***" ]; then[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8210847Z [36;1m  echo "ℹ️ Supabase credentials missing. Skipping schema refresh."[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8211273Z [36;1m  exit 0[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8211523Z [36;1mfi[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8211949Z [36;1mBASE="$***SUPABASE_URL%/***"[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8212284Z [36;1mfor i in ***1..5***; do[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8212673Z [36;1m  echo "ℹ️ Notifying PostgREST to reload schema (attempt $i)..."[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8213445Z [36;1m  HTTP_STATUS=$(curl -sS -o /tmp/pg_notify_response.json -w "%***http_code***" \[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8213943Z [36;1m    -X POST "$BASE/rest/v1/rpc/pg_notify" \[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8214323Z [36;1m    -H "Content-Type: application/json" \[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8214696Z [36;1m    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8215188Z [36;1m    -H "Authorization: ***" \[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8215611Z [36;1m    -d '***"channel":"pgrst","payload":"reload schema"***' || echo "000")[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8216031Z [36;1m  if [ "$HTTP_STATUS" = "200" ]; then[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8216378Z [36;1m    cat /tmp/pg_notify_response.json[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8216696Z [36;1m  else[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8217016Z [36;1m    echo "⚠️ pg_notify returned HTTP $HTTP_STATUS"[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8217400Z [36;1m    cat /tmp/pg_notify_response.json || true[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8217721Z [36;1m  fi[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8217967Z [36;1m  sleep 1[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8218214Z [36;1mdone[0m
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8254500Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8254820Z env:
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8255127Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8255551Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8256022Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8256548Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8257028Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8257483Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8257953Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8258417Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8258841Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8259272Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8259692Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8260131Z   SUPABASE_URL: https://haaxgwyimoqzzxzdaeep.supabase.co
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8261534Z   SUPABASE_SERVICE_ROLE_KEY: ***
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8261829Z ##[endgroup]
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:47.8318837Z ℹ️ Notifying PostgREST to reload schema (attempt 1)...
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:48.9300995Z ⚠️ pg_notify returned HTTP 404
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:49.9337095Z ***"code":"PGRST202","details":"Searched for the function public.pg_notify with parameters channel, payload or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.","hint":null,"message":"Could not find the function public.pg_notify(channel, payload) in the schema cache"***ℹ️ Notifying PostgREST to reload schema (attempt 2)...
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:50.6566307Z ⚠️ pg_notify returned HTTP 404
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:51.6594587Z ***"code":"PGRST202","details":"Searched for the function public.pg_notify with parameters channel, payload or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.","hint":null,"message":"Could not find the function public.pg_notify(channel, payload) in the schema cache"***ℹ️ Notifying PostgREST to reload schema (attempt 3)...
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:52.3478271Z ⚠️ pg_notify returned HTTP 404
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:53.3506883Z ***"code":"PGRST202","details":"Searched for the function public.pg_notify with parameters channel, payload or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.","hint":null,"message":"Could not find the function public.pg_notify(channel, payload) in the schema cache"***ℹ️ Notifying PostgREST to reload schema (attempt 4)...
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:53.6417938Z ⚠️ pg_notify returned HTTP 404
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:54.6445220Z ***"code":"PGRST202","details":"Searched for the function public.pg_notify with parameters channel, payload or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.","hint":null,"message":"Could not find the function public.pg_notify(channel, payload) in the schema cache"***ℹ️ Notifying PostgREST to reload schema (attempt 5)...
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:54.9617833Z ⚠️ pg_notify returned HTTP 404
+handle-line-event	Refresh Supabase schema cache	2025-11-05T07:07:55.9644381Z ***"code":"PGRST202","details":"Searched for the function public.pg_notify with parameters channel, payload or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.","hint":null,"message":"Could not find the function public.pg_notify(channel, payload) in the schema cache"***
+handle-line-event	Ensure Supabase scripts	﻿2025-11-05T07:07:55.9671548Z ##[group]Run set -euo pipefail
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9671930Z [36;1mset -euo pipefail[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9672233Z [36;1mmkdir -p scripts/supabase[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9672574Z [36;1mensure_file() ***[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9672859Z [36;1m  local target="$1"[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9673424Z [36;1m  local url="$2"[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9673721Z [36;1m  if [ -f "$target" ]; then[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9674009Z [36;1m    return 0[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9674268Z [36;1m  fi[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9674542Z [36;1m  echo "ℹ️ Fetching $target from $url"[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9674901Z [36;1m  curl -fsSL "$url" -o "$target"[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9675219Z [36;1m***[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9675523Z [36;1mBASE_REF=6bf29f72f6cd5bc91ceb11bf00e0d0b15ac3c004[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9676393Z [36;1mensure_file scripts/supabase/upsert-progress-event.js "https://raw.githubusercontent.com/mo666-med/cursorvers_line-discord/$BASE_REF/scripts/supabase/upsert-progress-event.js"[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9677669Z [36;1mensure_file scripts/supabase/upsert-line-event.js "https://raw.githubusercontent.com/mo666-med/cursorvers_line-discord/$BASE_REF/scripts/supabase/upsert-line-event.js"[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9678450Z [36;1mchmod +x scripts/supabase/upsert-*.js[0m
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9711298Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9711607Z env:
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9711919Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9712349Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9712806Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9713610Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9714107Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9714558Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9715028Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9715486Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9715913Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9716333Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9716764Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Ensure Supabase scripts	2025-11-05T07:07:55.9717121Z ##[endgroup]
+handle-line-event	Upsert events into Supabase	﻿2025-11-05T07:07:55.9823617Z ##[group]Run set -euo pipefail
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9824011Z [36;1mset -euo pipefail[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9824386Z [36;1mOUTPUT=$(node scripts/supabase/upsert-line-event.js \[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9824785Z [36;1m  "tmp/event.json" \[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9825087Z [36;1m  "$PLAN_CURRENT_PATH" \[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9825399Z [36;1m  "19094104356:1" 2>&1 || true)[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9825750Z [36;1mecho "$OUTPUT" | tee tmp/supabase-line.json[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9826227Z [36;1mSTATUS=$(echo "$OUTPUT" | jq -r '.status // "error"' 2>/dev/null || echo "error")[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9826705Z [36;1mecho "status=$STATUS" >> "$GITHUB_OUTPUT"[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9827054Z [36;1mif [ "$STATUS" != "ok" ]; then[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9827652Z [36;1m  echo "⚠️ Supabase ingest did not complete successfully (status=$STATUS)"[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9828162Z [36;1m  echo "⚠️ This may be due to schema cache not being updated yet."[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9828658Z [36;1m  echo "⚠️ The workflow will continue, but data may not be persisted."[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9829089Z [36;1mfi[0m
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9858262Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9858566Z env:
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9858863Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9859287Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9859741Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9860267Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9860751Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9861202Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9861678Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9862121Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9862538Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9862964Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9863613Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9864053Z   SUPABASE_URL: https://haaxgwyimoqzzxzdaeep.supabase.co
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9865452Z   SUPABASE_SERVICE_ROLE_KEY: ***
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9865748Z   PLAN_MODE: normal
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:55.9865995Z ##[endgroup]
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:58.5189241Z Supabase line_members schema is missing columns (first_opt_in_at, etc). Retrying with downgraded payload.
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:58.5192344Z ***"downgraded_member_records":[***"user_hash":"test-user-id","metadata":***"latest_stage":"follow","last_event_type":"follow","last_message":null,"reply_token":null,"supabase_missing_columns":***"first_opt_in_at":"2025-11-05T07:07:47.374Z","last_opt_in_at":"2025-11-05T07:07:47.374Z","guardrail_sent_at":"2025-11-05T07:07:47.374Z","consent_guardrail":true,"status":"active","cta_tags":[],"updated_at":"2025-11-05T07:07:47.374Z"***]***
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:58.5194766Z ***"status":"error","message":"Supabase line_members upsert failed (400): ***\"code\":\"PGRST204\",\"details\":null,\"hint\":null,\"message\":\"Could not find the 'user_hash' column of 'line_members' in the schema cache\"***"***
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:58.5225572Z ⚠️ Supabase ingest did not complete successfully (status=error)
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:58.5226693Z ⚠️ This may be due to schema cache not being updated yet.
+handle-line-event	Upsert events into Supabase	2025-11-05T07:07:58.5227521Z ⚠️ The workflow will continue, but data may not be persisted.
+handle-line-event	Update Google Sheets ledger	﻿2025-11-05T07:07:58.5257888Z ##[group]Run if [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ] || [ -z "$GOOGLE_SHEET_ID" ]; then
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5258574Z [36;1mif [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ] || [ -z "$GOOGLE_SHEET_ID" ]; then[0m
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5259141Z [36;1m  echo "ℹ️ Google Sheets credentials missing. Skipping ledger update."[0m
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5259560Z [36;1m  exit 0[0m
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5259797Z [36;1mfi[0m
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5260179Z [36;1mnode scripts/sheets/upsert-line-member.js tmp/event.json || ***[0m
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5260687Z [36;1m  echo "⚠️ Google Sheets update failed. This is non-critical."[0m
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5261068Z [36;1m  exit 0[0m
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5261314Z [36;1m***[0m
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5294588Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5294895Z env:
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5295199Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5295625Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5296082Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5296627Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5297099Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5297719Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5298181Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5298634Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5299044Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5299475Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5299893Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5309425Z   GOOGLE_SERVICE_ACCOUNT_JSON: ***
+handle-line-event	Update Google Sheets ledger	
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5309834Z   GOOGLE_SHEET_ID: ***
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5310108Z   GOOGLE_SHEET_NAME: line_members
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:58.5310394Z ##[endgroup]
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1841035Z Failed to update Google Sheets: Error: Failed to read sheet values: 400 ***
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1841906Z   "error": ***
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1842375Z     "code": 400,
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1843245Z     "message": "Unable to parse range: line_members!A1:E1",
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1843980Z     "status": "INVALID_ARGUMENT"
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1844440Z   ***
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1844780Z ***
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1844960Z 
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1845867Z     at fetchExistingValues (file:///home/runner/work/cursorvers_line-discord/cursorvers_line-discord/scripts/sheets/upsert-line-member.js:83:11)
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1847259Z     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1848719Z     at async ensureHeader (file:///home/runner/work/cursorvers_line-discord/cursorvers_line-discord/scripts/sheets/upsert-line-member.js:135:20)
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1850322Z     at async main (file:///home/runner/work/cursorvers_line-discord/cursorvers_line-discord/scripts/sheets/upsert-line-member.js:188:3)
+handle-line-event	Update Google Sheets ledger	2025-11-05T07:07:59.1885101Z ⚠️ Google Sheets update failed. This is non-critical.
+handle-line-event	Dispatch to Manus (Development Only)	﻿2025-11-05T07:07:59.1943705Z ##[group]Run if [ -z "$MANUS_API_KEY" ]; then
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1944163Z [36;1mif [ -z "$MANUS_API_KEY" ]; then[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1944576Z [36;1m  echo "⚠️ MANUS_API_KEY is not set. Skipping Manus API call."[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1944952Z [36;1m  exit 0[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1945187Z [36;1mfi[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1945440Z [36;1mPLAN_FILE="$PLAN_CURRENT_PATH"[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1945836Z [36;1mBRIEF_FILE="orchestration/MANUS_EXECUTION_BRIEF_v2.0.txt"[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1946226Z [36;1mif [ ! -f "$PLAN_FILE" ]; then[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1946563Z [36;1m  echo "⚠️ Plan file not found: $PLAN_FILE"[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1946888Z [36;1m  exit 1[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1947120Z [36;1mfi[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1947364Z [36;1mif [ ! -f "$BRIEF_FILE" ]; then[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1947711Z [36;1m  echo "⚠️ Brief file not found: $BRIEF_FILE"[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1948032Z [36;1m  exit 1[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1948259Z [36;1mfi[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1948526Z [36;1mecho "🚀 Calling Manus API to create task..."[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1949129Z [36;1mnode scripts/manus-api.js create "$BRIEF_FILE" "$PLAN_FILE" --webhook "$PROGRESS_WEBHOOK_URL" || ***[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1949676Z [36;1m  echo "❌ Failed to create Manus task"[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1949993Z [36;1m  exit 1[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1950239Z [36;1m***[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1950507Z [36;1mecho "✅ Manus task created successfully"[0m
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1983770Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1984079Z env:
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1984386Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1984805Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1985258Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1985773Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1986260Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1986723Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1987351Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1987810Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1988222Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1988636Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1989059Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1989715Z   MANUS_API_KEY: ***
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1989996Z   MANUS_BASE_URL: https://api.manus.ai
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1990470Z   PROGRESS_WEBHOOK_URL: ***
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.1990745Z ##[endgroup]
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:07:59.2044326Z 🚀 Calling Manus API to create task...
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.6634784Z ***
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.6635296Z   "status": "ok",
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.6635782Z   "action": "create",
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.6636260Z   "result": ***
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.6636785Z     "task_id": "GAw9XFdztRtU7uBNu9nfDi",
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.6637626Z     "task_title": "Implementation Guidelines for Plan JSON Execution",
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.6638536Z     "task_url": "https://manus.im/app/GAw9XFdztRtU7uBNu9nfDi"
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.6639154Z   ***
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.6639543Z ***
+handle-line-event	Dispatch to Manus (Development Only)	2025-11-05T07:08:00.7354512Z ✅ Manus task created successfully
+handle-line-event	Commit event log	﻿2025-11-05T07:08:00.7396007Z ##[group]Run set -euo pipefail
+handle-line-event	Commit event log	2025-11-05T07:08:00.7396638Z [36;1mset -euo pipefail[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7397166Z [36;1mmkdir -p logs/progress[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7397746Z [36;1mTIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7398525Z [36;1mjq '.' tmp/event.json > "logs/progress/$***TIMESTAMP***_line.json"[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7399387Z [36;1mgit config user.name "github-actions[bot]"[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7400183Z [36;1mgit config user.email "github-actions[bot]@users.noreply.github.com"[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7400956Z [36;1mgit add logs/progress/*.json[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7401701Z [36;1mgit commit -m "chore: log line event $***TIMESTAMP***" || exit 0[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7402512Z [36;1mgit push || ***[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7403390Z [36;1m  echo "⚠️ git push failed; ensure token has contents:write scope."[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7404100Z [36;1m  exit 1[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7404563Z [36;1m***[0m
+handle-line-event	Commit event log	2025-11-05T07:08:00.7440098Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Commit event log	2025-11-05T07:08:00.7440770Z env:
+handle-line-event	Commit event log	2025-11-05T07:08:00.7441320Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Commit event log	2025-11-05T07:08:00.7442055Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Commit event log	2025-11-05T07:08:00.7442882Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Commit event log	2025-11-05T07:08:00.7443861Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Commit event log	2025-11-05T07:08:00.7444375Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Commit event log	2025-11-05T07:08:00.7444830Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Commit event log	2025-11-05T07:08:00.7445293Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Commit event log	2025-11-05T07:08:00.7445747Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Commit event log	2025-11-05T07:08:00.7446188Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Commit event log	2025-11-05T07:08:00.7446617Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Commit event log	2025-11-05T07:08:00.7447041Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Commit event log	2025-11-05T07:08:00.7447423Z ##[endgroup]
+handle-line-event	Commit event log	2025-11-05T07:08:00.8858621Z [phase2/t8-kpi-report 46c33f5] chore: log line event 20251105_070800
+handle-line-event	Commit event log	2025-11-05T07:08:00.8859463Z  1 file changed, 16 insertions(+)
+handle-line-event	Commit event log	2025-11-05T07:08:00.8860136Z  create mode 100644 logs/progress/20251105_070800_line.json
+handle-line-event	Commit event log	2025-11-05T07:08:01.3611587Z To https://github.com/mo666-med/cursorvers_line-discord
+handle-line-event	Commit event log	2025-11-05T07:08:01.3612823Z    3e55075..46c33f5  phase2/t8-kpi-report -> phase2/t8-kpi-report
+handle-line-event	Notify stakeholders	﻿2025-11-05T07:08:01.3693604Z ##[group]Run if [ -z "$***NOTIFY_WEBHOOK_URL:-***" ]; then
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3694216Z [36;1mif [ -z "$***NOTIFY_WEBHOOK_URL:-***" ]; then[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3694662Z [36;1m  NOTIFY_WEBHOOK_URL="$***FALLBACK_WEBHOOK_URL:-***"[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3695244Z [36;1mfi[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3695559Z [36;1mif [ -z "$***NOTIFY_WEBHOOK_URL:-***" ]; then[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3696019Z [36;1m  echo "ℹ️ Notification webhook not configured. Skipping."[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3696439Z [36;1m  exit 0[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3696704Z [36;1mfi[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3696979Z [36;1m# Validate webhook URL format[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3697379Z [36;1mif [[ ! "$NOTIFY_WEBHOOK_URL" =~ ^https?:// ]]; then[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3697820Z [36;1m  echo "⚠️ Invalid webhook URL format. Skipping."[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3698185Z [36;1m  exit 0[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3698452Z [36;1mfi[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3698744Z [36;1mUSER_COUNT="$***USER_COUNT:-1***"[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3699105Z [36;1mMODE_VALUE="$***MODE:-normal***"[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3699525Z [36;1mREASON_VALUE="$***DEGRADED_REASON:-none***"[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3699943Z [36;1mEVENT_TYPE_VALUE="$***EVENT_TYPE:-unknown***"[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3700407Z [36;1mSUPABASE_STATUS_VALUE="$***SUPABASE_STATUS:-skipped***"[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3700843Z [36;1mif [ "$MODE_VALUE" = "degraded" ]; then[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3701207Z [36;1m  MESSAGE=$(jq -n \[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3702059Z [36;1m    --arg txt "[LINE][DEGRADED] event processed: type=$EVENT_TYPE_VALUE, supabase=$SUPABASE_STATUS_VALUE, reason=$REASON_VALUE, users=$USER_COUNT. Refer to docs/alerts/line_degraded_outreach.ics for manual follow-up." \[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3702946Z [36;1m    '***text: $txt***')[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3703488Z [36;1melse[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3703771Z [36;1m  MESSAGE=$(jq -n \[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3704373Z [36;1m    --arg txt "[LINE] event processed: type=$EVENT_TYPE_VALUE, supabase=$SUPABASE_STATUS_VALUE, mode=$MODE_VALUE, users=$USER_COUNT" \[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3705003Z [36;1m    '***text: $txt***')[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3705305Z [36;1mfi[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3705641Z [36;1mcurl -sSf -X POST -H "Content-Type: application/json" \[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3706102Z [36;1m  -d "$MESSAGE" "$NOTIFY_WEBHOOK_URL" || ***[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3706551Z [36;1m  echo "⚠️ Failed to send notification. This is non-critical."[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3706954Z [36;1m  exit 0[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3707233Z [36;1m***[0m
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3739767Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3740103Z env:
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3740430Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3740871Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3741358Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3741898Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3742406Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3742894Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3743704Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3744212Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3744655Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3745101Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3745547Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3745934Z   NOTIFY_WEBHOOK_URL: 
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3746398Z   FALLBACK_WEBHOOK_URL: ***
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3746693Z   EVENT_TYPE: follow
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3746977Z   SUPABASE_STATUS: error
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3747257Z   MODE: normal
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3747524Z   DEGRADED_REASON: none
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.3747802Z ##[endgroup]
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.4488690Z curl: (22) The requested URL returned error: 404
+handle-line-event	Notify stakeholders	2025-11-05T07:08:01.4506000Z ⚠️ Failed to send notification. This is non-critical.
+handle-line-event	Summarize outcome	﻿2025-11-05T07:08:01.4529984Z ##[group]Run MODE='normal'
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4530338Z [36;1mMODE='normal'[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4530758Z [36;1mPLAN_WARNING=''[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4531037Z [36;1mREASON='none'[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4531308Z [36;1mSUPABASE_STATUS='error'[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4531607Z [36;1mCOST_WITHIN='true'[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4531956Z [36;1mecho "### LINE Event Handler" >> "$GITHUB_STEP_SUMMARY"[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4532358Z [36;1mif [ -n "$PLAN_WARNING" ]; then[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4532778Z [36;1m  echo "- Mode: \`$MODE\` (warning: $PLAN_WARNING)" >> "$GITHUB_STEP_SUMMARY"[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4533351Z [36;1melse[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4533657Z [36;1m  echo "- Mode: \`$MODE\`" >> "$GITHUB_STEP_SUMMARY"[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4533992Z [36;1mfi[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4534293Z [36;1mif [ "$MODE" = "degraded" ] && [ "$REASON" != "none" ]; then[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4534746Z [36;1m  echo "  - Degraded reason: \`$REASON\`" >> "$GITHUB_STEP_SUMMARY"[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4535133Z [36;1mfi[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4535531Z [36;1mecho "- Supabase ingest: \`$SUPABASE_STATUS\`" >> "$GITHUB_STEP_SUMMARY"[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4536076Z [36;1mecho "- Plan within budget: \`$COST_WITHIN\`" >> "$GITHUB_STEP_SUMMARY"[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4536559Z [36;1mecho "- Event type: \`follow\`" >> "$GITHUB_STEP_SUMMARY"[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4537005Z [36;1mecho "- Users processed: \`1\`" >> "$GITHUB_STEP_SUMMARY"[0m
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4566661Z shell: /usr/bin/bash -e ***0***
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4566963Z env:
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4567261Z   PLAN_CURRENT_PATH: orchestration/plan/current_plan.json
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4567666Z   PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4568120Z   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4568625Z   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4569097Z   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4569542Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4570007Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4570458Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4570867Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4571278Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4571689Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+handle-line-event	Summarize outcome	2025-11-05T07:08:01.4572038Z ##[endgroup]
+handle-line-event	Post Setup Python	﻿2025-11-05T07:08:01.4672854Z Post job cleanup.
+handle-line-event	Post Setup Node.js	﻿2025-11-05T07:08:01.6284790Z Post job cleanup.
+handle-line-event	Post Checkout repository	﻿2025-11-05T07:08:01.8050842Z Post job cleanup.
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9006729Z [command]/usr/bin/git version
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9048911Z git version 2.51.2
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9094137Z Temporarily overriding HOME='/home/runner/work/_temp/9d8b153b-57e3-42c5-8126-35c774b58c98' before making global git config changes
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9095653Z Adding repository directory to the temporary git global config as a safe directory
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9106523Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cursorvers_line-discord/cursorvers_line-discord
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9141092Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9175374Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9411332Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9432043Z http.https://github.com/.extraheader
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9444458Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+handle-line-event	Post Checkout repository	2025-11-05T07:08:01.9474381Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+handle-line-event	Complete job	﻿2025-11-05T07:08:01.9798588Z Cleaning up orphan processes

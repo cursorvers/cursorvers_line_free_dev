@@ -160,7 +160,7 @@ python orchestration/cost.py orchestration/plan/current_plan.json
 - **用途**: Supabase 完全移行までの暫定 CRM。`scripts/sheets/upsert-line-member.js` が `line-event.yml` から呼ばれ、`user_hash` をキーに upsert。
 - **保持期間**: 移行完了までアクティブデータは保持。Supabase へ移行後は 6 か月でアーカイブ削除。過去データは Supabase 側で永続化する。
 - **アクセス権限**: 編集は Tech Lead / Ops Lead のみ。閲覧は Marketing チームと Product Lead に限定。Google Workspace Admin で監査ログを有効化。
-- **監査と照合**: 月次で `scripts/reconcile-ledgers.ts`（実装予定）または手動クロスチェックを実施し、重大な差分は Slack `#line-ops` に報告。結果は `logs/progress/` もしくは KPI レポートに添付する。
+- **監査と照合**: 月次で `node scripts/reconcile-ledgers.js` を実行し、Supabase と Sheets の差分レポートを取得。重大な差分は Slack `#line-ops` に報告し、結果を `logs/progress/` もしくは KPI レポートに添付する（一時的に CLI が使えない場合は手動クロスチェック）。
 
 ---
 
@@ -275,12 +275,68 @@ gh secret set LLM_API_KEY --body "sk-..."
 
 - [ ] Secretsのローテーション
 - [ ] Supabase Edge (Front Door) の証明書更新確認
-- [ ] Supabase と Google Sheets の差分を照合（`scripts/reconcile-ledgers.ts` 実装後はレポート添付）
+- [ ] Supabase と Google Sheets の差分を照合（`node scripts/reconcile-ledgers.js` のレポートを添付）
 - [ ] `.sdd/specs/line-funnel/decisions.md` / Runbook の内容を最新化
 
 ---
 
-## 12. 参考リンク
+## 12. GitHub Actions メンテナンス
+
+### 12-1. ベンダースクリプトの同期
+
+```bash
+# 変更がないか検証のみ
+npm run vendor:verify
+
+# Pinned commit から取得して manifest を更新
+npm run vendor:sync
+
+# 差分を確認し、必要なら PR を作成
+git diff scripts/vendor/
+```
+
+### 12-2. Webhook ルーターの更新
+
+- 正常系のラベル更新は `scripts/webhook-router.mjs` が担当。Issue / コメントごとにユースケースを追加する際は Node テストを先に書き、`npm run test:actions` で検証する。
+- CLI での動作確認例: `node scripts/webhook-router.mjs issue opened 123`。
+- 旧 `webhook-event-router.yml` は廃止済み。新しいハンドラー `webhook-handler.yml` のみがイベントルーティングを担う。
+
+### 12-3. ログの Artifact 退避
+
+- `.github/actions/persist-progress` が `line-event.yml` / `manus-progress.yml` から呼ばれ、push 失敗時に Artifact を作成する。
+- Artifact 名は `progress-log-YYYYMMDDHHMMSS` 等で `tmp/log-artifacts/` 配下に展開される構成を保持。
+- 取得手順: GitHub Actions の実行ページ → `Artifacts` → 対象をダウンロード → 展開したファイルを参照し、必要に応じて再コミットする。
+- Artifact の保持期間は既定で 90 日。必要に応じて `retention-days` を変更可能。
+
+### 12-4. 設定バリデーション
+
+- `.github/actions/validate-config` が主要ワークフロー起動前に必須 Secrets/Vars を検証する。
+- ルールは `config/workflows/required-secrets.json` で管理され、投入忘れがあると早期に失敗する。
+- 緊急時は環境変数 `SKIP_CONFIG_VALIDATION=true` を指定して一時的にスキップ可能（恒久運用は禁止）。
+
+### 12-5. 重要パラメータと健全性チェック
+
+| Name | Scope | 用途 | チェックコマンド |
+| --- | --- | --- | --- |
+| `MANUS_ENABLED` | GitHub Variables | Manus API 連携の有効／無効を切り替えるフラグ | `./scripts/verify-secrets.sh` |
+| `DEGRADED_MODE` | GitHub Variables | 縮退モードの有効化フラグ（Front Door との整合性必須） | `./scripts/verify-secrets.sh` |
+| `GEMINI_COST_PER_CALL` | GitHub Variables | Gemini 要約ステップのコスト試算に利用 | `./scripts/verify-secrets.sh` |
+| `MANUS_BASE_URL` | GitHub Variables | Manus エンドポイントのベース URL。開発／本番で切り替え | `./scripts/verify-secrets.sh` |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Variables / Secrets | Supabase REST への書き込みに利用 | `npm run lint`（`validate-config` 経由） |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_SHEET_ID` | Secrets | Google Sheets 台帳の更新に利用 | `npm run lint`（`validate-config` 経由） |
+
+- GitHub CLI が利用できる場合は `./scripts/verify-secrets.sh` を実行すると Secrets/Variables の一覧と不足がその場で表示される。
+- CI では `npm run lint`（`.github/actions/validate-config`）で同じ欠落を検出するため、手動変更時も PR 内で早期に気付ける。
+
+### 12-6. 運用メトリクスの収集
+
+- LINE/Gemini 連携の要約は `scripts/automation/run-gemini-log-summary.mjs` が `tmp/gemini/log-summary.json` と Artifact (`gemini-metrics`) に保存する。
+- 週次レポートやコスト集計は `scripts/automation/report-gemini-metrics.mjs` で取得し、`docs/automation/GEMINI_POC_REPORT.md` へ反映する。
+- ログコミット結果は `.github/actions/persist-progress` の Artifact 名（`line-event-*` / `manus-progress-*`）で追跡できる。SLO 監視には GitHub Actions の履歴と合わせて確認する。
+
+---
+
+## 13. 参考リンク
 
 - [GitHub Repository](https://github.com/mo666-med/line-friend-registration-system)
 - [LINE Developers Console](https://developers.line.biz/console/)

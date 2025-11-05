@@ -6,7 +6,7 @@
   "actions": [],
   "metadata": {
     "event_type": "follow",
-    "plan_title": "友だち登録時のウェルカムメッセージ送信",
+    "plan_title": "LINE友だち登録時のウェルカムメッセージ送信（通常モード）",
     "generated_at": "2025-11-01T08:06:44.139Z"
   }
 }

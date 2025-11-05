@@ -35,15 +35,20 @@
         "conflict_target": ["user_hash"],
         "data": {
           "user_hash": "{{HASHED_USER_ID}}",
-          "latest_stage": "welcome_message_prepared",
-          "last_event_at": "{{EVENT_RECEIVED_AT}}",
-          "conversion_flag": false,
+          "first_opt_in_at": "{{EVENT_RECEIVED_AT}}",
+          "last_opt_in_at": "{{EVENT_RECEIVED_AT}}",
+          "cta_tags": [],
+          "status": "active",
+          "guardrail_sent_at": "{{EVENT_RECEIVED_AT}}",
+          "consent_guardrail": true,
           "metadata": {
             "display_name": "{{PROFILE.displayName}}",
             "picture_url": "{{PROFILE.pictureUrl}}",
             "status_message": "{{PROFILE.statusMessage}}",
             "language": "{{PROFILE.language}}",
-            "last_event_type": "{{EVENT_TYPE}}"
+            "latest_stage": "welcome_message_prepared",
+            "last_event_type": "{{EVENT_TYPE}}",
+            "reply_token": "{{REPLY_TOKEN}}"
           }
         }
       },

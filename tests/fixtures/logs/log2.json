@@ -1,0 +1,16 @@
+{
+  "event_id": "evt-2",
+  "received_at": "2025-11-05T01:00:00Z",
+  "events": [
+    {
+      "type": "follow",
+      "timestamp": 1762257995854,
+      "source": {
+        "type": "user",
+        "userId": "hashed-user-2"
+      }
+    }
+  ],
+  "signature_valid": true,
+  "plan_mode": "normal"
+}

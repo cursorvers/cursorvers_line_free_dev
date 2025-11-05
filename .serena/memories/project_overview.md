@@ -1,0 +1,5 @@
+# Project Overview
+- Purpose: workflow-centric LINE Official Account onboarding system that relays incoming LINE webhooks and Manus progress events through a Supabase Edge Function into GitHub Actions for processing, logging, and KPI tracking.
+- Key components: `functions/relay` (Supabase Edge Function in TypeScript/Deno), `.github/workflows` (automation pipelines), `database/migrations` (Supabase schema), `orchestration/plan` (plan/current state JSON), and `logs/progress` for persisted progress telemetry.
+- Tech stack: TypeScript/ES modules (Node 20 & Deno runtime for Supabase), GitHub Actions YAML, Supabase SQL migrations, auxiliary Python (pytest) cost calculation.
+- Operational model: Thin always-on Edge function forwards events via GitHub `repository_dispatch`; GitHub workflows call Manus API, GPT analysis, Supabase storage, and LINE replies while keeping full audit trails.

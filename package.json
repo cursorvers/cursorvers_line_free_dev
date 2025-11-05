@@ -8,6 +8,11 @@
     "typecheck": "echo 'TypeScript check skipped' || true",
     "test": "node --test tests/**/*.test.mjs",
     "test:feature-flags": "node --test tests/node/feature-flags.test.mjs",
+    "test:actions": "node --test tests/actions/**/*.test.mjs",
+    "lint": "npm run test:actions",
+    "vendor:sync": "node scripts/vendor/sync.mjs",
+    "vendor:verify": "node scripts/vendor/sync.mjs --verify",
+    "workflows:inventory": "node scripts/automation/generate-workflow-inventory.mjs",
     "codex-agent": "node scripts/codex-agent.js"
   },
   "keywords": [

@@ -1,4 +1,5 @@
 name: 🔴 Economic Circuit Breaker
+x-owner: ops
 # AGENTS.md v5.0 - Economic Governance Protocol準拠
 # Reference: ai-course-content-generator economic-circuit-breaker.yml
 
@@ -393,3 +394,4 @@ jobs:
           echo "✅ System operating within budget"
           echo "📊 Consumption: ${{ steps.calculate.outputs.consumption_percent }}%"
           echo "💚 All systems normal"
+

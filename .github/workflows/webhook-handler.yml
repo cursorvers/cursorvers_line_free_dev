@@ -1,4 +1,5 @@
 name: 🔔 Webhook Event Handler
+x-owner: devops
 
 # Central event router for GitHub OS Event Bus
 # Addresses Issue #5 - Phase B: Event Bus Implementation
@@ -31,6 +32,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Log Event
         run: |
@@ -195,3 +201,22 @@ jobs:
           echo "✅ Event processed: ${{ github.event_name }}.${{ github.event.action }}"
           echo "🎯 Routing completed at: $(date -u +%H:%M:%S)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      - name: Apply Issue State Routing
+        if: github.event_name == 'issues'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_LABELS: ${{ toJSON(github.event.issue.labels) }}
+          LABEL_NAME: ${{ github.event.label.name }}
+        run: |
+          node scripts/webhook-router.mjs issue "${{ github.event.action }}" "${{ github.event.issue.number }}"
+
+      - name: Apply Comment State Routing
+        if: github.event_name == 'issue_comment' && github.event.action == 'created'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_LABELS: ${{ toJSON(github.event.issue.labels) }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+        run: |
+          node scripts/webhook-router.mjs comment "${{ github.event.action }}" "${{ github.event.issue.number }}"
+

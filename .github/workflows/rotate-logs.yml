@@ -1,4 +1,5 @@
 name: Rotate Logs
+x-owner: devops
 
 on:
   schedule:
@@ -37,4 +38,5 @@ jobs:
           echo "ログローテーションが完了しました。" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "詳細はコミットログを確認してください。" >> $GITHUB_STEP_SUMMARY
+
 

@@ -36,10 +36,16 @@
 - Reconfirmed architecture expectation that funnel automation should stay GitHub Actions-first; no new business metrics provided yet despite follow-up request.
 - Still need stakeholder input on broader KPI stack, subscriber segmentation strategy, and operational ownership of content approvals.
 - Next steering checkpoint should secure answers to outstanding questions above before advancing to `/sdd-requirements`.
+- Current session directive focused on GitHub Actions reconnaissance; stakeholder KPIs/segmentation details remain unprovided.
+- 2025-??-??: 再度ビジネス要件（KPI詳細、主要ユーザー導線、運用責任分担、リスク背景）を日本語でヒアリング依頼済み。回答待ちのため製品方針の精緻化は保留。
+- 2025-??-??: Geminiログ要約PoCの目的・評価指標（工数削減率、異常検知率、失敗率/応答時間、APIコスト）と想定利用者（オンコールOps／週次レビュー担当エンジニア）を確認。PoC期間は既存手動レビューと併用し、出力は必ず人が検証する方針。
 
 ## Session Summary & Next Steps
 - Captured product vision (note → LINE → consulting funnel) and provisional conversion target (40% note-to-LINE opt-in).
 - Identified automation touchpoints: article alerts, resource delivery, event/consulting promotions, all requiring safety messaging.
 - Recognized operational imperatives: lightweight maintainability, cost control on Manus, strong compliance posture.
+- Completed reconnaissance of主要GitHub Actions（line-event/manus-progress/manus-task-runner/economic-circuit-breaker）で、週次Manus自動実行やコスト監視のプレースホルダ実装、リモート依存（`wget yq`）といった技術的留意点を把握。
 - Steering inputs (webhook spec, Manus brief v2.0/v3.1, Cursor handover package) already prepared; real-time push notification path recommended for progress telemetry.
-- Open items before `/sdd-requirements`: align on detailed KPI stack (beyond 40%), finalize message cadence and segmentation rules, confirm Google Sheets data-handling policy, prioritize automation scenarios for MVP, and schedule implementation readiness tasks (Edge deploy, Actions wiring, secret provisioning) referenced in the handover plan.
+- Gemini PoCによりログレビュー負荷軽減と異常検知支援を評価する枠組みを確立（要約活用フロー、Secrets管理、評価レポート雛形）。
+- Open items before `/sdd-requirements`: align on detailed KPI stack (beyond 40%), finalize message cadence and segmentation rules, confirm Google Sheets data-handling policy, prioritize automation scenarios for MVP, schedule implementation readiness tasks (Edge deploy, Actions wiring, secret provisioning) referenced in the handover plan, and validate GitHub Actions coverage aligns with stakeholder priorities.
+- Pending stakeholder replies: note/LINEコンバージョン以外の優先指標、既存LINE登録者のセグメントと改善ポイント、直近の運用課題やリスク事例、日常運用チームの権限範囲（フラグ切替など）を確認する必要あり。回答到着までは要件深化を停止。

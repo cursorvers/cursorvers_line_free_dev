@@ -1,4 +1,5 @@
 name: Issue Opened - Auto Label
+x-owner: ops
 
 on:
   issues:
@@ -58,3 +59,4 @@ jobs:
                 labels: labels
               });
             }
+

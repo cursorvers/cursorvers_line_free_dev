@@ -1,4 +1,5 @@
 name: Update Project Status
+x-owner: ops
 
 # Update project status based on PR state
 on:
@@ -89,3 +90,4 @@ jobs:
           EOF
 
           npx tsx update-status.ts
+

@@ -1,4 +1,5 @@
 name: PR Opened - Auto Review
+x-owner: ops
 
 on:
   pull_request:
@@ -38,3 +39,4 @@ jobs:
               issue_number: context.payload.pull_request.number,
               body: '🤖 自動レビュー開始\n\nコードレビューを実施しています...'
             });
+

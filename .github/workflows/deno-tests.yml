@@ -1,4 +1,5 @@
 name: Deno Tests
+x-owner: devops
 
 on:
   push:
@@ -26,3 +27,4 @@ jobs:
       - name: Run Deno unit tests
         run: |
           deno test --allow-read --allow-env functions/relay/index.test.ts
+

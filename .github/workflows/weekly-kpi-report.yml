@@ -1,4 +1,5 @@
 name: Weekly KPI Report
+x-owner: ops
 
 # Post weekly KPI report to GitHub Discussions every Monday at 9:00 AM UTC
 on:
@@ -49,3 +50,4 @@ jobs:
         run: |
           echo "### 📊 Weekly KPI Report" >> "$GITHUB_STEP_SUMMARY"
           cat tmp/kpi.md >> "$GITHUB_STEP_SUMMARY"
+

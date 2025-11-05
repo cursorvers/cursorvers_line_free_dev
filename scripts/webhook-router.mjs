@@ -1,4 +1,4 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 /**
  * Webhook Event Router
  *
@@ -11,11 +11,11 @@ import { Octokit } from '@octokit/rest';
 const argv = process.argv.slice(2);
 
 if (argv.length < 2) {
-  console.error('Usage: webhook-router.ts <event-type> <action> [id]');
+  console.error('Usage: webhook-router.mjs <event-type> <action> [id]');
   process.exit(1);
 }
 
-const EVENT_TYPE = argv[0] as 'issue' | 'pr' | 'push' | 'comment';
+const EVENT_TYPE = argv[0];
 const ACTION = argv[1];
 const IDENTIFIER = argv[2];
 
@@ -45,21 +45,21 @@ const STATE_LABELS = [
   '✅ state:done',
 ];
 
-type IssueStateLabel = typeof STATE_LABELS[number];
-
 const labelPayload = (() => {
   const raw = process.env.ISSUE_LABELS;
-  if (!raw) return [] as string[];
+  if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return parsed.map((entry: any) => (typeof entry === 'string' ? entry : entry?.name ?? '')).filter(Boolean);
+    return parsed
+      .map((entry) => (typeof entry === 'string' ? entry : entry?.name ?? ''))
+      .filter(Boolean);
   } catch (error) {
     console.warn('Failed to parse ISSUE_LABELS payload:', error);
     return [];
   }
 })();
 
-async function setIssueState(issueNumber: number, nextState: IssueStateLabel | null) {
+async function setIssueState(issueNumber, nextState) {
   const { data: issue } = await octokit.issues.get({
     owner,
     repo,
@@ -67,7 +67,7 @@ async function setIssueState(issueNumber: number, nextState: IssueStateLabel | n
   });
 
   const currentLabels = issue.labels.map((label) => (typeof label === 'string' ? label : label.name ?? ''));
-  const hasState = (state: string) => currentLabels.includes(state);
+  const hasState = (state) => currentLabels.includes(state);
 
   const labelsToRemove = STATE_LABELS.filter((label) => label !== nextState && hasState(label));
 
@@ -76,7 +76,8 @@ async function setIssueState(issueNumber: number, nextState: IssueStateLabel | n
       await octokit.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: label });
       console.log(`Removed state label: ${label}`);
     } catch (error) {
-      console.warn(`Failed to remove label ${label}:`, (error as Error).message);
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Failed to remove label ${label}:`, message);
     }
   }
 
@@ -88,8 +89,8 @@ async function setIssueState(issueNumber: number, nextState: IssueStateLabel | n
   }
 }
 
-function determineStateFromLabels(labels: string[]): IssueStateLabel | null {
-  const priority: IssueStateLabel[] = [
+export function determineStateFromLabels(labels) {
+  const priority = [
     '🚫 state:blocked',
     '⏸️ state:paused',
     '🏗️ state:implementing',
@@ -130,9 +131,7 @@ async function handleIssueEvent() {
 
   if (ACTION === 'labeled' || ACTION === 'unlabeled') {
     if (labelName === '🤖agent-execute' && ACTION === 'labeled') {
-      const stateLabels = labelPayload.filter((label) =>
-        STATE_LABELS.includes(label as IssueStateLabel)
-      ) as IssueStateLabel[];
+      const stateLabels = labelPayload.filter((label) => STATE_LABELS.includes(label));
       const hasActiveState = stateLabels.some((label) => label !== '📥 state:pending');
       if (!hasActiveState) {
         await setIssueState(issueNumber, '🔍 state:analyzing');
@@ -180,7 +179,7 @@ async function handleCommentEvent() {
   }
 
   const lower = requested.toLowerCase();
-  const mapping: Record<string, IssueStateLabel> = {
+  const mapping = {
     pending: '📥 state:pending',
     analyzing: '🔍 state:analyzing',
     implementing: '🏗️ state:implementing',

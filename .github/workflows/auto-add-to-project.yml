@@ -1,4 +1,5 @@
 name: Auto Add Issues to Project
+x-owner: ops
 
 # When new issues are created, automatically add them to the project board
 on:
@@ -23,3 +24,4 @@ jobs:
           script: |
             // This will be implemented when custom field automation is added
             console.log('Issue #${{ github.event.issue.number }} added to project');
+

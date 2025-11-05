@@ -1,4 +1,5 @@
 name: LINE Event Handler
+x-owner: devops
 
 on:
   repository_dispatch:
@@ -30,6 +31,22 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
 
+      - name: Validate configuration
+        uses: ./.github/actions/validate-config
+        with:
+          workflow: line-event.yml
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          MANUS_API_KEY: ${{ secrets.MANUS_API_KEY }}
+          MANUS_BASE_URL: ${{ vars.MANUS_BASE_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+          PROGRESS_WEBHOOK_URL: ${{ secrets.PROGRESS_WEBHOOK_URL }}
+          SKIP_CONFIG_VALIDATION: ${{ env.SKIP_CONFIG_VALIDATION }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -45,30 +62,28 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p tmp
-          # Always initialize with a fallback payload for manual dispatches
-          TIMESTAMP=$(date -u +%s)
-          jq -n --arg ts "$TIMESTAMP" '{
-            "event_id": "test-\($ts)",
-            "received_at": now | todateiso8601,
-            "signature_valid": true,
-            "dedupe_key": "test-dedupe-key",
-            "events": [{
-              "type": "follow",
-              "timestamp": (now * 1000 | floor),
-              "source": {
-                "type": "user",
-                "userId": "test-user-id"
-              }
-            }]
-          }' > tmp/event.json
-
-          PAYLOAD='${{ toJson(github.event.client_payload) }}'
-          if [ "$PAYLOAD" != "null" ] && [ -n "$PAYLOAD" ]; then
-            if jq -e '.events | type == "array" and length > 0' <<<"$PAYLOAD" >/dev/null 2>&1; then
-              printf '%s\n' "$PAYLOAD" > tmp/event.json
-            fi
+          # Handle both repository_dispatch and workflow_dispatch
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            printf '%s\n' '${{ toJson(github.event.client_payload) }}' > tmp/event.json
+          else
+            # workflow_dispatch: create a minimal test payload
+            TIMESTAMP=$(date -u +%s)
+            jq -n --arg ts "$TIMESTAMP" '{
+              "event_id": "test-\($ts)",
+              "received_at": now | todateiso8601,
+              "signature_valid": true,
+              "dedupe_key": "test-dedupe-key",
+              "events": [{
+                "type": "follow",
+                "timestamp": (now * 1000 | floor),
+                "source": {
+                  "type": "user",
+                  "userId": "test-user-id"
+                }
+              }]
+            }' > tmp/event.json
           fi
-          EVENT_TYPE=$(jq -r '.events[0].type // "unknown"' tmp/event.json 2>/dev/null || echo "unknown")
+          EVENT_TYPE=$(jq -r '.events[0].type // "unknown"' tmp/event.json)
           USER_COUNT=$(jq '[.events[].source.userId] | unique | length' tmp/event.json 2>/dev/null || echo "0")
           echo "event_type=$EVENT_TYPE" >> "$GITHUB_OUTPUT"
           echo "user_count=$USER_COUNT" >> "$GITHUB_OUTPUT"
@@ -168,52 +183,6 @@ jobs:
             echo "⚠️ Budget warning: $(jq -r '.recommendation' tmp/cost.json)"
           fi
 
-      - name: Refresh Supabase schema cache
-        run: |
-          set -euo pipefail
-          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-            echo "ℹ️ Supabase credentials missing. Skipping schema refresh."
-            exit 0
-          fi
-          BASE="${SUPABASE_URL%/}"
-          for i in {1..5}; do
-            echo "ℹ️ Notifying PostgREST to reload schema (attempt $i)..."
-            HTTP_STATUS=$(curl -sS -o /tmp/pg_notify_response.json -w "%{http_code}" \
-              -X POST "$BASE/rest/v1/rpc/pg_notify" \
-              -H "Content-Type: application/json" \
-              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-              -d '{"channel":"pgrst","payload":"reload schema"}' || echo "000")
-            if [ "$HTTP_STATUS" = "200" ]; then
-              cat /tmp/pg_notify_response.json
-            else
-              echo "⚠️ pg_notify returned HTTP $HTTP_STATUS"
-              cat /tmp/pg_notify_response.json || true
-            fi
-            sleep 1
-          done
-        env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
-      - name: Ensure Supabase scripts
-        run: |
-          set -euo pipefail
-          mkdir -p scripts/supabase
-          ensure_file() {
-            local target="$1"
-            local url="$2"
-            if [ -f "$target" ]; then
-              return 0
-            fi
-            echo "ℹ️ Fetching $target from $url"
-            curl -fsSL "$url" -o "$target"
-          }
-          BASE_REF=6bf29f72f6cd5bc91ceb11bf00e0d0b15ac3c004
-          ensure_file scripts/supabase/upsert-progress-event.js "https://raw.githubusercontent.com/mo666-med/cursorvers_line-discord/$BASE_REF/scripts/supabase/upsert-progress-event.js"
-          ensure_file scripts/supabase/upsert-line-event.js "https://raw.githubusercontent.com/mo666-med/cursorvers_line-discord/$BASE_REF/scripts/supabase/upsert-line-event.js"
-          chmod +x scripts/supabase/upsert-*.js
-
       - name: Upsert events into Supabase
         id: supabase
         continue-on-error: true
@@ -223,7 +192,7 @@ jobs:
           PLAN_MODE: ${{ steps.mode.outputs.mode }}
         run: |
           set -euo pipefail
-          OUTPUT=$(node scripts/supabase/upsert-line-event.js \
+          OUTPUT=$(node scripts/vendor/supabase/upsert-line-event.js \
             "${{ steps.event.outputs.payload_path }}" \
             "$PLAN_CURRENT_PATH" \
             "${{ github.run_id }}:${{ github.run_attempt }}" 2>&1 || true)
@@ -247,7 +216,7 @@ jobs:
             echo "ℹ️ Google Sheets credentials missing. Skipping ledger update."
             exit 0
           fi
-          node scripts/sheets/upsert-line-member.js tmp/event.json || {
+          node scripts/vendor/google/upsert-line-member.js tmp/event.json || {
             echo "⚠️ Google Sheets update failed. This is non-critical."
             exit 0
           }
@@ -280,20 +249,138 @@ jobs:
           }
           echo "✅ Manus task created successfully"
 
-      - name: Commit event log
+      - name: Prepare event log
+        if: always()
+        id: line_log
         run: |
           set -euo pipefail
           mkdir -p logs/progress
           TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
-          jq '.' tmp/event.json > "logs/progress/${TIMESTAMP}_line.json"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add logs/progress/*.json
-          git commit -m "chore: log line event ${TIMESTAMP}" || exit 0
-          git push || {
-            echo "⚠️ git push failed; ensure token has contents:write scope."
-            exit 1
-          }
+          TARGET="logs/progress/${TIMESTAMP}_line.json"
+          jq '.' tmp/event.json > "$TARGET"
+          echo "path=$TARGET" >> "$GITHUB_OUTPUT"
+
+      - name: Persist event log
+        if: ${{ always() && steps.line_log.outputs.path != '' }}
+        uses: ./.github/actions/persist-progress
+        with:
+          path: ${{ steps.line_log.outputs.path }}
+          commit-message: chore: log line event
+          artifact-label: line-event
+
+      - name: Gemini Log Summary
+        id: gemini
+        continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_COST_PER_CALL: ${{ vars.GEMINI_COST_PER_CALL }}
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/gemini
+          START_MS=$(python - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+)
+          node scripts/automation/run-gemini-log-summary.mjs \
+            --input logs/progress \
+            --output tmp/gemini/log-summary.json \
+            --limit 50 || true
+          END_MS=$(python - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+)
+          DURATION_MS=$((END_MS - START_MS))
+          if [ -f tmp/gemini/log-summary.json ]; then
+            STATUS=$(jq -r '.status // "unknown"' tmp/gemini/log-summary.json 2>/dev/null || echo "unknown")
+            SUMMARY=$(jq -r '.summary // ""' tmp/gemini/log-summary.json 2>/dev/null || echo "")
+            LATENCY=$(jq -r '.latency_ms // 0' tmp/gemini/log-summary.json 2>/dev/null || echo "0")
+            COST=$(jq -r '.cost_estimate // 0' tmp/gemini/log-summary.json 2>/dev/null || echo "0")
+            LOGS_COUNT=$(jq -r '.logs_count // 0' tmp/gemini/log-summary.json 2>/dev/null || echo "0")
+            MODEL=$(jq -r '.model // ""' tmp/gemini/log-summary.json 2>/dev/null || echo "")
+          else
+            STATUS="missing"
+            SUMMARY=""
+            LATENCY="0"
+            COST="0"
+            LOGS_COUNT="0"
+            MODEL=""
+          fi
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "duration_ms=$DURATION_MS" >> "$GITHUB_OUTPUT"
+          echo "latency_ms=$LATENCY" >> "$GITHUB_OUTPUT"
+          echo "cost_estimate=$COST" >> "$GITHUB_OUTPUT"
+          echo "logs_count=$LOGS_COUNT" >> "$GITHUB_OUTPUT"
+          if [ -n "$MODEL" ]; then
+            echo "model=$MODEL" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$SUMMARY" ] && [ "$SUMMARY" != "null" ]; then
+            {
+              echo "summary<<EOF"
+              echo "$SUMMARY"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Record Gemini Metrics
+        if: always()
+        env:
+          METRICS_PATH: tmp/gemini/metrics.jsonl
+          GEMINI_STATUS: ${{ steps.gemini.outputs.status || 'unavailable' }}
+          GEMINI_DURATION: ${{ steps.gemini.outputs.duration_ms || '0' }}
+          GEMINI_LATENCY: ${{ steps.gemini.outputs.latency_ms || '0' }}
+          GEMINI_COST: ${{ steps.gemini.outputs.cost_estimate || '0' }}
+          GEMINI_LOGS: ${{ steps.gemini.outputs.logs_count || '0' }}
+          GEMINI_MODEL: ${{ steps.gemini.outputs.model || '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$METRICS_PATH")"
+          python - <<'PY' >> "$METRICS_PATH"
+import json
+import os
+from datetime import datetime, timezone
+
+def parse_int(value):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+def parse_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+record = {
+    "run_id": f"{os.environ.get('GITHUB_RUN_ID')}:{os.environ.get('GITHUB_RUN_ATTEMPT')}",
+    "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+    "status": os.environ.get('GEMINI_STATUS') or 'unavailable',
+    "duration_ms": parse_int(os.environ.get('GEMINI_DURATION')),
+    "latency_ms": parse_int(os.environ.get('GEMINI_LATENCY')),
+    "logs_count": parse_int(os.environ.get('GEMINI_LOGS')),
+    "cost_estimate": parse_float(os.environ.get('GEMINI_COST')),
+    "model": os.environ.get('GEMINI_MODEL') or '',
+}
+print(json.dumps(record))
+PY
+
+      - name: Upload Gemini Log Summary Artifact
+        if: always() && steps.gemini.outputs.status
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-log-summary
+          path: tmp/gemini/log-summary.json
+          if-no-files-found: ignore
+
+      - name: Upload Gemini Metrics Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-metrics
+          path: tmp/gemini/metrics.jsonl
+          if-no-files-found: ignore
 
       - name: Notify stakeholders
         if: always()
@@ -323,13 +410,22 @@ jobs:
           REASON_VALUE="${DEGRADED_REASON:-none}"
           EVENT_TYPE_VALUE="${EVENT_TYPE:-unknown}"
           SUPABASE_STATUS_VALUE="${SUPABASE_STATUS:-skipped}"
+          if [ -f tmp/supabase-line.json ]; then
+            FILE_STATUS=$(jq -r '.status // empty' tmp/supabase-line.json 2>/dev/null || true)
+            if [ -n "$FILE_STATUS" ]; then
+              SUPABASE_STATUS_VALUE="$FILE_STATUS"
+            fi
+          fi
+          GEMINI_STATUS_VALUE="${{ steps.gemini.outputs.status || 'unavailable' }}"
+          GEMINI_COST_VALUE="${{ steps.gemini.outputs.cost_estimate || '0' }}"
+          if [ -z "$GEMINI_COST_VALUE" ]; then GEMINI_COST_VALUE="0"; fi
           if [ "$MODE_VALUE" = "degraded" ]; then
             MESSAGE=$(jq -n \
-              --arg txt "[LINE][DEGRADED] event processed: type=$EVENT_TYPE_VALUE, supabase=$SUPABASE_STATUS_VALUE, reason=$REASON_VALUE, users=$USER_COUNT. Refer to docs/alerts/line_degraded_outreach.ics for manual follow-up." \
+              --arg txt "[LINE][DEGRADED] event processed: type=$EVENT_TYPE_VALUE, supabase=$SUPABASE_STATUS_VALUE, gemini=$GEMINI_STATUS_VALUE (cost=$GEMINI_COST_VALUE), reason=$REASON_VALUE, users=$USER_COUNT. Refer to docs/alerts/line_degraded_outreach.ics for manual follow-up." \
               '{text: $txt}')
           else
             MESSAGE=$(jq -n \
-              --arg txt "[LINE] event processed: type=$EVENT_TYPE_VALUE, supabase=$SUPABASE_STATUS_VALUE, mode=$MODE_VALUE, users=$USER_COUNT" \
+              --arg txt "[LINE] event processed: type=$EVENT_TYPE_VALUE, supabase=$SUPABASE_STATUS_VALUE, gemini=$GEMINI_STATUS_VALUE (cost=$GEMINI_COST_VALUE), mode=$MODE_VALUE, users=$USER_COUNT" \
               '{text: $txt}')
           fi
           curl -sSf -X POST -H "Content-Type: application/json" \
@@ -345,6 +441,29 @@ jobs:
           PLAN_WARNING='${{ steps.mode.outputs.warning }}'
           REASON='${{ steps.mode.outputs.degraded_reason }}'
           SUPABASE_STATUS='${{ steps.supabase.outputs.status || 'not-run' }}'
+          GEMINI_STATUS='${{ steps.gemini.outputs.status || 'unavailable' }}'
+          GEMINI_SUMMARY='${{ steps.gemini.outputs.summary || '' }}'
+          GEMINI_DURATION='${{ steps.gemini.outputs.duration_ms || '' }}'
+          GEMINI_LATENCY='${{ steps.gemini.outputs.latency_ms || '' }}'
+          GEMINI_COST='${{ steps.gemini.outputs.cost_estimate || '' }}'
+          GEMINI_LOGS='${{ steps.gemini.outputs.logs_count || '' }}'
+          SUPABASE_PROGRESS=""
+          if [ -f tmp/supabase-line.json ]; then
+            FILE_STATUS=$(jq -r '.status // empty' tmp/supabase-line.json 2>/dev/null || true)
+            if [ -n "$FILE_STATUS" ]; then
+              SUPABASE_STATUS="$FILE_STATUS"
+            fi
+            PROGRESS_COUNT=$(jq -r '.progress_records // ""' tmp/supabase-line.json 2>/dev/null || true)
+            MEMBER_COUNT=$(jq -r '.member_records // ""' tmp/supabase-line.json 2>/dev/null || true)
+            EXTRA=""
+            if [ -n "$PROGRESS_COUNT" ] || [ -n "$MEMBER_COUNT" ]; then
+              EXTRA="progress=$([ -n "$PROGRESS_COUNT" ] && echo "$PROGRESS_COUNT" || echo "-")"
+              if [ -n "$MEMBER_COUNT" ]; then
+                EXTRA="$EXTRA, members=$MEMBER_COUNT"
+              fi
+              SUPABASE_PROGRESS="$EXTRA"
+            fi
+          fi
           COST_WITHIN='${{ steps.cost.outputs.within_budget || 'unknown' }}'
           echo "### LINE Event Handler" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$PLAN_WARNING" ]; then
@@ -355,7 +474,22 @@ jobs:
           if [ "$MODE" = "degraded" ] && [ "$REASON" != "none" ]; then
             echo "  - Degraded reason: \`$REASON\`" >> "$GITHUB_STEP_SUMMARY"
           fi
-          echo "- Supabase ingest: \`$SUPABASE_STATUS\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$SUPABASE_PROGRESS" ]; then
+            echo "- Supabase ingest: \`$SUPABASE_STATUS\` ($SUPABASE_PROGRESS)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Supabase ingest: \`$SUPABASE_STATUS\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -z "$GEMINI_DURATION" ]; then GEMINI_DURATION="n/a"; fi
+          if [ -z "$GEMINI_LATENCY" ]; then GEMINI_LATENCY="n/a"; fi
+          if [ -z "$GEMINI_COST" ]; then GEMINI_COST="0"; fi
+          if [ -z "$GEMINI_LOGS" ]; then GEMINI_LOGS="0"; fi
+          echo "- Gemini log summary: \`$GEMINI_STATUS\` (duration=${GEMINI_DURATION}ms, latency=${GEMINI_LATENCY}ms, cost=${GEMINI_COST}, logs=${GEMINI_LOGS})" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$GEMINI_SUMMARY" ]; then
+            TRUNCATED=$(echo "$GEMINI_SUMMARY" | head -c 200)
+            echo "  - $TRUNCATED" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$GEMINI_STATUS" = "skipped_missing_key" ]; then
+            echo "  - Gemini API key not configured" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "- Plan within budget: \`$COST_WITHIN\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Event type: \`${{ steps.event.outputs.event_type }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Users processed: \`${{ steps.event.outputs.user_count }}\`" >> "$GITHUB_STEP_SUMMARY"

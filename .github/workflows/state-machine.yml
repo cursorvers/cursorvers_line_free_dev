@@ -1,4 +1,5 @@
 name: 🔄 State Machine Automation
+x-owner: devops
 
 # Automatically manage Issue/PR state based on labels
 # Constitutional requirement: "Labels are the OS's state management"
@@ -304,3 +305,4 @@ jobs:
               issue_number: context.payload.issue.number,
               labels: ['⚠️ severity:Sev.2-High']
             });
+

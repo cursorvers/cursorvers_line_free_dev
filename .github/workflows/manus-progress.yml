@@ -1,4 +1,5 @@
 name: Manus Progress Handler
+x-owner: devops
 
 on:
   repository_dispatch:
@@ -19,6 +20,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Validate configuration
+        uses: ./.github/actions/validate-config
+        with:
+          workflow: manus-progress.yml
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SKIP_CONFIG_VALIDATION: ${{ env.SKIP_CONFIG_VALIDATION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -44,7 +54,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
-          OUTPUT=$(node scripts/supabase/upsert-progress-event.js "${{ steps.event.outputs.payload_path }}" 2>&1 || true)
+          OUTPUT=$(node scripts/vendor/supabase/upsert-progress-event.js "${{ steps.event.outputs.payload_path }}" 2>&1 || true)
           echo "$OUTPUT" | tee tmp/progress-supabase.json
           STATUS=$(echo "$OUTPUT" | jq -r '.status // "error"' 2>/dev/null || echo "error")
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"
@@ -85,18 +95,24 @@ jobs:
             exit 1
           fi
 
-      - name: Append raw progress log
+      - name: Prepare progress log
         if: always()
+        id: progress_log
         run: |
           set -euo pipefail
           mkdir -p logs/progress
           TS=$(date -u +"%Y%m%d_%H%M%S")
-          cp "${{ steps.event.outputs.payload_path }}" "logs/progress/${TS}_${{ steps.event.outputs.task_id }}.json"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add logs/progress/*.json
-          git commit -m "chore: log Manus progress ${{ steps.event.outputs.task_id }}" || exit 0
-          git push || echo "Git push skipped (token without contents:write scope)"
+          TARGET="logs/progress/${TS}_${{ steps.event.outputs.task_id }}.json"
+          cp "${{ steps.event.outputs.payload_path }}" "$TARGET"
+          echo "path=$TARGET" >> "$GITHUB_OUTPUT"
+
+      - name: Persist progress log
+        if: ${{ always() && steps.progress_log.outputs.path != '' }}
+        uses: ./.github/actions/persist-progress
+        with:
+          path: ${{ steps.progress_log.outputs.path }}
+          commit-message: chore: log Manus progress
+          artifact-label: manus-progress
 
       - name: Summarize outcome
         if: always()
@@ -114,4 +130,3 @@ jobs:
           if [ "$DECISION" = "retry" ] && [ -n "$RETRY" ]; then
             echo "- Retry after: ${RETRY}s" >> "$GITHUB_STEP_SUMMARY"
           fi
-

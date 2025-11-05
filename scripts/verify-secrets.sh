@@ -118,6 +118,7 @@ check_github_variable() {
 check_github_variable "DEVELOPMENT_MODE" "DEVELOPMENT_MODE" true
 check_github_variable "MANUS_ENABLED" "MANUS_ENABLED" true
 check_github_variable "MANUS_BASE_URL" "MANUS_BASE_URL" false
+check_github_variable "GEMINI_COST_PER_CALL" "GEMINI_COST_PER_CALL" false
 
 echo ""
 
@@ -174,7 +175,20 @@ check_file "orchestration/plan/production/degraded_plan.json" "degraded_plan.jso
 
 echo ""
 
-# 6. 結果サマリー
+echo "### 6. Workflow Secret Coverage"
+echo ""
+if node scripts/checks/verify-secrets.mjs --workflow line-event.yml --workflow manus-progress.yml; then
+  echo ""
+  echo "  ✅ workflow secret coverage satisfied"
+else
+  echo ""
+  echo "  ❌ Workflow secret coverage check failed"
+  ((ERRORS++))
+fi
+
+echo ""
+
+# 7. 結果サマリー
 echo "## 📊 Verification Summary"
 echo ""
 
@@ -202,4 +216,3 @@ else
   echo "   # .env を編集して必要な環境変数を設定"
   exit 1
 fi
-

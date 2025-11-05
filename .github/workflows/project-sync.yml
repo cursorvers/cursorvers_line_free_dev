@@ -1,4 +1,5 @@
 name: Sync Issues to Project
+x-owner: ops
 
 on:
   issues:
@@ -19,3 +20,4 @@ jobs:
         with:
           project-url: https://github.com/orgs/${{ github.repository_owner }}/projects/1
           github-token: ${{ secrets.GITHUB_TOKEN }}
+

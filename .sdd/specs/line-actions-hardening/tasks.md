@@ -1,0 +1,27 @@
+# Line Actions Hardening – Task Breakdown
+
+| Priority | Task | Objective | Suggested Owner | Key Artifacts | Definition of Done | Validation | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P0 | [Workflow inventory & ownership](design.md#1-ワークフロー棚卸しと責任者定義) | Annotate every workflow with `x-owner` metadata and publish an auditable inventory. | DevOps | `.github/workflows/**/*.yml`<br>`scripts/automation/generate-workflow-inventory.mjs`<br>`docs/automation/WORKFLOWS.md`<br>`.sdd/steering/tech.md` | Inventory script renders a deterministic table, all workflows include `x-owner`, steering doc links to the inventory. | `node scripts/automation/generate-workflow-inventory.mjs` succeeds; snapshot/unit test asserts inventory shape; CI fails when an owner is missing. | ✅ Done |
+| P0 | [Vendor Supabase/Sheets helpers](design.md#2-supabase-ヘルパーのベンドル化) | Eliminate runtime `curl` fetches by bundling helper scripts with integrity tracking. | DevOps / Backend | `scripts/vendor/**/*`<br>`scripts/vendor/manifest.json`<br>`scripts/vendor/sync.mjs`<br>`.github/workflows/line-event.yml`<br>`package.json` | Vendor manifest lists source + checksums, workflows call local helpers, `curl` steps removed. | `npm run vendor:sync` and `npm run vendor:verify` pass locally and in CI; `act` happy-path for `line-event` completes without network fetch. | ✅ Done |
+| P0 | [Unify webhook routing](design.md#3-ルーター統合) | Consolidate event routing into `webhook-handler.yml` and retire redundant routers. | Developer Experience | `.github/workflows/webhook-handler.yml`<br>`scripts/webhook-router.mjs`<br>`.github/workflows/webhook-event-router.yml` | Single workflow handles all events; legacy router removed or archived; documentation reflects new entry point. | Unit tests for router module; `act` smoke covering representative events; CI `actionlint` clean. | ✅ Done |
+| P1 | [Pre-flight config validation](design.md#4-事前設定バリデーション) | Ensure workflows fail fast when required secrets/vars are missing. | DevOps | `.github/actions/validate-config/`<br>`scripts/checks/validate-config.mjs`<br>`config/workflows/required-secrets.json`<br>`.github/workflows/line-event.yml` | Validation action reusable across workflows; skip flag documented; failure messaging links to setup guide. | `node --test scripts/checks/validate-config.mjs` with positive/negative cases; CI job exercising validation via mocked env. | ✅ Done |
+| P1 | [Resilient log persistence](design.md#5-堅牢なログ永続化) | Centralize commit/push logic and guarantee artifact fallback for logs. | DevOps / Ops | `.github/actions/persist-progress/`<br>`scripts/logs/archive.mjs`<br>`.github/workflows/line-event.yml`<br>`.github/workflows/manus-progress.yml` | Composite action pushes when possible; fallback uploads timestamped artifact; log rotation policy retained. | `node --test scripts/logs/archive.mjs` (push success/failure); integration test using dry-run repo; CI artifact upload verified via mock. | ✅ Done |
+| P1 | [CI test & lint uplift](design.md#6-自動テスト--ci-強化) | Expand automated coverage for workflow scripts and enforce YAML quality gates. | QA / DevOps | `package.json`<br>`tests/actions/**/*`<br>`.github/workflows/node-tests.yml`<br>`scripts/**` | New tests run on PRs; `actionlint` and `npm run test:actions` required; optional `act` smoke gated by `ci-smoke` label. | `npm test`, `npm run test:actions`, and `npm run lint:actions` (if separate) pass; CI pipeline enforces gates. | ✅ Done |
+| P2 | [Runbook & release updates](design.md#7-ドキュメント--オンボーディング) | Document new operating procedures and share release summary. | Docs / Ops | `docs/RUNBOOK.md`<br>`docs/automation/WORKFLOWS.md`<br>`docs/releases/line-actions-hardening.md`<br>`.sdd/steering/tech.md` | Runbook covers vendor sync, router ops, log retrieval; release note drafted; compliance review sign-off recorded. | Documentation lint/build (if applicable) passes; stakeholder review checklist completed. | ✅ Done |
+
+## Sequencing & Ownership
+- **Phase 1 (can run in parallel):** `Workflow inventory & ownership` and `Vendor Supabase/Sheets helpers`. Early inventory clarifies scope for downstream tasks, while vendoring removes external dependencies before validation and logging changes.
+- **Phase 2 (depends on Phase 1 outputs):** `Unify webhook routing` should follow inventory to avoid churn; `Pre-flight config validation` and `Resilient log persistence` depend on vendored scripts to reduce rework.
+- **Phase 3:** `CI test & lint uplift` activates once new scripts/actions stabilize so tests can target final APIs. `Runbook & release updates` wraps up after engineering work, aggregating links and change notes.
+- Suggested owners reflect existing domain responsibility (DevOps for workflow infra, Developer Experience for routing, QA for test orchestration, Docs/Ops for runbooks). Adjust as team availability dictates.
+
+## Potential Blockers
+- Awaiting Ops/Admin confirmation on providing a protected PAT with `contents:write`; without it, log persistence fallback remains partial.
+- Runner capacity for `act` smoke tests may require GitHub-hosted or self-hosted setup; plan contingency if tooling is unavailable.
+- DevOps staffing for ongoing vendor manifest refreshes must be committed; otherwise vendoring task stalls.
+
+## Related Documents
+- Design: `.sdd/specs/line-actions-hardening/design.md`
+- Requirements: `.sdd/specs/line-actions-hardening/requirements.md`
+- Background inventory: `docs/automation/WORKFLOWS.md` (to be generated/updated)

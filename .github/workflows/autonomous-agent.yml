@@ -1,4 +1,5 @@
 name: Autonomous Agent Execution
+x-owner: devops
 
 on:
   issues:
@@ -323,3 +324,4 @@ gh secret set LLM_ENDPOINT --body \"https://api.openai.com/v1/chat/completions\"
               repo: context.repo.repo,
               labels: ['🚨escalated', '❌agent-failed']
             })
+
