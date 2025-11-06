@@ -1,0 +1,98 @@
+name: Manus API Inquiry
+x-owner: devops
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_issue:
+        description: 'Create GitHub Issue with results'
+        required: false
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  inquire-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Manus API Inquiry
+        id: inquiry
+        continue-on-error: true
+        env:
+          MANUS_API_KEY: ${{ secrets.MANUS_API_KEY }}
+        run: |
+          node scripts/manus/inquire-api.mjs
+        working-directory: .
+
+      - name: Upload Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manus-api-inquiry-results
+          path: |
+            tmp/manus-inquiry-results.json
+            tmp/manus-inquiry-summary.md
+          retention-days: 90
+
+      - name: Create GitHub Issue
+        if: always() && inputs.create_issue == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            let summary = '';
+            try {
+              summary = fs.readFileSync('tmp/manus-inquiry-summary.md', 'utf8');
+            } catch (error) {
+              summary = '## 問い合わせ結果\n\n結果ファイルの読み込みに失敗しました。';
+            }
+            
+            const resultsPath = 'tmp/manus-inquiry-results.json';
+            let resultsJson = {};
+            try {
+              resultsJson = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+            } catch (error) {
+              // Ignore
+            }
+            
+            const title = `[Manus API問い合わせ] ${new Date().toISOString().split('T')[0]}`;
+            const body = `${summary}\n\n---\n\n**実行ワークフロー**: [View Run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n**実行日時**: ${resultsJson.timestamp || new Date().toISOString()}\n\n## 次のステップ\n\n1. 結果を確認し、正しいエンドポイントを特定\n2. \`scripts/lib/manus-api.js\`のデフォルトURLを更新\n3. ドキュメントを更新\n4. GitHub Variables/Secretsを設定`;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['manus-api', 'inquiry', 'devops']
+            });
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### 🔍 Manus API問い合わせ完了" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f tmp/manus-inquiry-results.json ]; then
+            echo "✅ 結果ファイルが生成されました" >> "$GITHUB_STEP_SUMMARY"
+            echo "- JSON: \`tmp/manus-inquiry-results.json\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Markdown: \`tmp/manus-inquiry-summary.md\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ 結果ファイルが生成されませんでした" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "詳細はArtifactまたはIssueを確認してください。" >> "$GITHUB_STEP_SUMMARY"
+
