@@ -334,6 +334,53 @@ git diff scripts/vendor/
 - 週次レポートやコスト集計は `scripts/automation/report-gemini-metrics.mjs` で取得し、`docs/automation/GEMINI_POC_REPORT.md` へ反映する。
 - ログコミット結果は `.github/actions/persist-progress` の Artifact 名（`line-event-*` / `manus-progress-*`）で追跡できる。SLO 監視には GitHub Actions の履歴と合わせて確認する。
 
+### 12-7. Manus API問い合わせワークフロー（成功事例）
+
+2025-11-06に`manus-api-inquiry.yml`ワークフローを実装・実行し、Manus APIへの接続確認を自動化しました。
+
+**実装内容**:
+- `scripts/manus/inquire-api.mjs`: 複数エンドポイント（`api.manus.ai` / `api.manus.im`）への接続テストスクリプト
+- `.github/workflows/manus-api-inquiry.yml`: GitHub Actionsワークフロー定義
+- Debug Secretsステップ: `MANUS_API_KEY`と`MANUS_BASE_URL`の設定状況を確認
+
+**実行方法**:
+```bash
+# GitHub Actionsから実行
+gh workflow run manus-api-inquiry.yml -f create_issue=true
+
+# またはAPI経由でブランチ指定実行
+gh api repos/mo666-med/cursorvers_line-discord/actions/workflows/manus-api-inquiry.yml/dispatches \
+  -X POST --input - <<EOF
+{
+  "ref": "chore-run-tests-CcDmo",
+  "inputs": {
+    "create_issue": "true"
+  }
+}
+EOF
+```
+
+**確認ポイント**:
+1. Debug Secretsステップで`MANUS_API_KEY length`が0でないことを確認
+2. `MANUS_BASE_URL`が正しく設定されていることを確認
+3. Artifact `manus-api-inquiry-results`から結果ファイルを取得
+4. 自動作成されたIssueで結果を確認
+
+**実行結果（2025-11-06）**:
+- ✅ 両エンドポイント（`api.manus.ai` / `api.manus.im`）で認証テストが成功（200 OK）
+- ✅ `/v1/tasks`エンドポイントが正常に動作
+- ⚠️ `/health`と`/v1`エンドポイントは404（存在しない）
+- ✅ 正しいエンドポイントは`https://api.manus.ai/v1/tasks`または`https://api.manus.im/v1/tasks`
+
+**注意事項**:
+- GitHub Actionsワークフローファイルでは`x-owner`のようなカスタムフィールドは使用不可（検証エラーになる）
+- 必要なメタ情報はコメントまたはドキュメント側で管理
+
+**参考**:
+- 実行例: https://github.com/mo666-med/cursorvers_line-discord/actions/runs/19130277482
+- Issue例: https://github.com/mo666-med/cursorvers_line-discord/issues/8
+- Artifact: `manus-api-inquiry-results` (実行ごとに生成)
+
 ---
 
 ## 13. 参考リンク
