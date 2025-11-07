@@ -5,6 +5,12 @@ on:
   repository_dispatch:
     types: [line_event]
   workflow_dispatch:
+    inputs:
+      payload_path:
+        description: 'Path to event payload JSON file (relative to repo root)'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -101,22 +107,30 @@ jobs:
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             printf '%s\n' '${{ toJson(github.event.client_payload) }}' > tmp/event.json
           else
-            # workflow_dispatch: create a minimal test payload
-            TIMESTAMP=$(date -u +%s)
-            jq -n --arg ts "$TIMESTAMP" '{
-              "event_id": "test-\($ts)",
-              "received_at": now | todateiso8601,
-              "signature_valid": true,
-              "dedupe_key": "test-dedupe-key",
-              "events": [{
-                "type": "follow",
-                "timestamp": (now * 1000 | floor),
-                "source": {
-                  "type": "user",
-                  "userId": "test-user-id"
-                }
-              }]
-            }' > tmp/event.json
+            # workflow_dispatch: use provided payload_path or create default
+            PAYLOAD_PATH="${{ github.event.inputs.payload_path }}"
+            if [ -n "$PAYLOAD_PATH" ] && [ -f "$PAYLOAD_PATH" ]; then
+              echo "📄 Using provided payload file: $PAYLOAD_PATH"
+              cp "$PAYLOAD_PATH" tmp/event.json
+            else
+              # Create a minimal test payload
+              echo "📝 Creating default test payload"
+              TIMESTAMP=$(date -u +%s)
+              jq -n --arg ts "$TIMESTAMP" '{
+                "event_id": "test-\($ts)",
+                "received_at": now | todateiso8601,
+                "signature_valid": true,
+                "dedupe_key": "test-dedupe-key",
+                "events": [{
+                  "type": "follow",
+                  "timestamp": (now * 1000 | floor),
+                  "source": {
+                    "type": "user",
+                    "userId": "test-user-id"
+                  }
+                }]
+              }' > tmp/event.json
+            fi
           fi
           EVENT_TYPE=$(jq -r '.events[0].type // "unknown"' tmp/event.json)
           USER_COUNT=$(jq '[.events[].source.userId] | unique | length' tmp/event.json 2>/dev/null || echo "0")
