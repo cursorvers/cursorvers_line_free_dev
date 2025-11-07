@@ -12,7 +12,7 @@ import Ajv from 'ajv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const PROJECT_ROOT = join(__dirname, '..');
+const PROJECT_ROOT = join(__dirname, '..', '..');
 
 /**
  * Load codex.spec.yaml and validate against JSON Schema
@@ -25,7 +25,7 @@ export async function loadSpec(specPath = join(PROJECT_ROOT, 'codex.spec.yaml'))
   const spec = yaml.load(yamlContent);
 
   // Load JSON Schema
-  const schemaPath = join(PROJECT_ROOT, '..', 'schemas', 'codex-spec.schema.json');
+  const schemaPath = join(PROJECT_ROOT, 'schemas', 'codex-spec.schema.json');
   const schemaContent = fs.readFileSync(schemaPath, 'utf8');
   const schema = JSON.parse(schemaContent);
 
