@@ -128,3 +128,14 @@ export async function cancelManusTask(taskId, overrides = {}) {
     userAgent: config.userAgent,
   });
 }
+
+export async function fetchManusConfig({ path = "/v1/config/line", overrides = {} } = {}) {
+  const config = resolveConfig(overrides);
+  return await requestManus({
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
+    path,
+    method: "GET",
+    userAgent: config.userAgent,
+  });
+}

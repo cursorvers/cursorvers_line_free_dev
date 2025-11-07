@@ -1,0 +1,119 @@
+{
+  "parameters": [
+    {
+      "id": "LINE_CHANNEL_ACCESS_TOKEN",
+      "type": "string",
+      "required": true,
+      "location": "secret",
+      "owner": "ops",
+      "description": "LINE Messaging API channel access token for sending messages"
+    },
+    {
+      "id": "LINE_CASE_STUDIES_URL",
+      "type": "string",
+      "required": false,
+      "location": "variable",
+      "owner": "ops",
+      "description": "URL for LINE case studies page (can be fetched from Manus API)"
+    },
+    {
+      "id": "LINE_GUIDE_URL",
+      "type": "string",
+      "required": false,
+      "location": "variable",
+      "owner": "ops",
+      "description": "URL for LINE guide page (can be fetched from Manus API)"
+    },
+    {
+      "id": "LINE_GIFT_URL",
+      "type": "string",
+      "required": false,
+      "location": "variable",
+      "owner": "ops",
+      "description": "URL for LINE gift page (can be fetched from Manus API)"
+    },
+    {
+      "id": "MANUS_API_KEY",
+      "type": "string",
+      "required": true,
+      "location": "secret",
+      "owner": "ops",
+      "description": "Manus API key for task execution and config fetching"
+    },
+    {
+      "id": "MANUS_BASE_URL",
+      "type": "string",
+      "required": false,
+      "location": "variable",
+      "default": "https://api.manus.ai",
+      "owner": "ops",
+      "description": "Manus API base URL"
+    },
+    {
+      "id": "MANUS_LINE_CONFIG_PATH",
+      "type": "string",
+      "required": false,
+      "location": "variable",
+      "default": "/v1/config/line",
+      "owner": "ops",
+      "description": "Manus API path for LINE configuration"
+    },
+    {
+      "id": "SUPABASE_URL",
+      "type": "string",
+      "required": true,
+      "location": "variable",
+      "owner": "ops",
+      "description": "Supabase project URL"
+    },
+    {
+      "id": "SUPABASE_SERVICE_ROLE_KEY",
+      "type": "string",
+      "required": true,
+      "location": "secret",
+      "owner": "ops",
+      "description": "Supabase service role key for admin operations"
+    },
+    {
+      "id": "GOOGLE_SERVICE_ACCOUNT_JSON",
+      "type": "string",
+      "required": false,
+      "location": "secret",
+      "owner": "ops",
+      "description": "Google Service Account JSON for Sheets integration"
+    },
+    {
+      "id": "GOOGLE_SHEET_ID",
+      "type": "string",
+      "required": false,
+      "location": "secret",
+      "owner": "ops",
+      "description": "Google Sheet ID for member ledger"
+    },
+    {
+      "id": "GEMINI_API_KEY",
+      "type": "string",
+      "required": false,
+      "location": "secret",
+      "owner": "ops",
+      "description": "Google Gemini API key for log summarization"
+    },
+    {
+      "id": "PROGRESS_WEBHOOK_URL",
+      "type": "string",
+      "required": false,
+      "location": "secret",
+      "owner": "ops",
+      "description": "Webhook URL for Manus progress notifications"
+    },
+    {
+      "id": "NOTIFY_WEBHOOK_URL",
+      "type": "string",
+      "required": false,
+      "location": "secret",
+      "owner": "ops",
+      "description": "Webhook URL for general notifications"
+    }
+  ]
+}
+

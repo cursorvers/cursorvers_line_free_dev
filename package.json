@@ -13,7 +13,11 @@
     "vendor:sync": "node scripts/vendor/sync.mjs",
     "vendor:verify": "node scripts/vendor/sync.mjs --verify",
     "workflows:inventory": "node scripts/automation/generate-workflow-inventory.mjs",
-    "codex-agent": "node scripts/codex-agent.js"
+    "codex-agent": "node scripts/codex-agent.js",
+    "line:templates": "node scripts/automation/build-line-templates.mjs",
+    "line:flex": "node scripts/automation/send-line-flex.mjs",
+    "line:scenario": "node scripts/automation/send-line-scenario.mjs",
+    "runtime:verify": "node scripts/checks/verify-runtime-config.mjs"
   },
   "keywords": [
     "line",

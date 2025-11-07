@@ -52,6 +52,41 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Fetch Manus LINE Config
+        id: manus-config
+        continue-on-error: true
+        env:
+          MANUS_API_KEY: ${{ secrets.MANUS_API_KEY }}
+          MANUS_BASE_URL: ${{ vars.MANUS_BASE_URL }}
+          MANUS_LINE_CONFIG_PATH: ${{ vars.MANUS_LINE_CONFIG_PATH }}
+        run: |
+          if [ -z "$MANUS_API_KEY" ]; then
+            echo "ℹ️ MANUS_API_KEY not set. Skipping Manus config fetch."
+            exit 0
+          fi
+          node scripts/manus/export-config.mjs \
+            --output tmp/manus-line-config.json \
+            --path "${MANUS_LINE_CONFIG_PATH:-/v1/config/line}" || {
+            echo "⚠️ Failed to fetch Manus config. Continuing with defaults."
+            exit 0
+          }
+
+      - name: Build LINE Templates
+        continue-on-error: true
+        env:
+          LINE_CASE_STUDIES_URL: ${{ env.LINE_CASE_STUDIES_URL }}
+          LINE_GUIDE_URL: ${{ env.LINE_GUIDE_URL }}
+          LINE_GIFT_URL: ${{ env.LINE_GIFT_URL }}
+        run: |
+          if command -v npm &> /dev/null && [ -f package.json ]; then
+            npm run line:templates || {
+              echo "⚠️ Template build failed. Continuing without templates."
+              exit 0
+            }
+          else
+            echo "ℹ️ npm not available or package.json missing. Skipping template build."
+          fi
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -88,6 +123,49 @@ jobs:
           echo "event_type=$EVENT_TYPE" >> "$GITHUB_OUTPUT"
           echo "user_count=$USER_COUNT" >> "$GITHUB_OUTPUT"
           echo "payload_path=tmp/event.json" >> "$GITHUB_OUTPUT"
+
+      - name: Evaluate orchestration spec constraints
+        run: |
+          mkdir -p tmp/orchestration
+          node scripts/orchestration/evaluate-line-event.mjs \
+            --event "${{ steps.event.outputs.payload_path }}" \
+            --spec codex.spec.yaml \
+            --output tmp/orchestration/spec-evaluation.json || {
+            echo "⚠️ Spec evaluation failed. Continuing without template dispatch."
+            exit 0
+          }
+
+      - name: Dispatch LINE replies
+        continue-on-error: true
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          DEVELOPMENT_MODE: ${{ vars.DEVELOPMENT_MODE }}
+          LINE_CASE_STUDIES_URL: ${{ env.LINE_CASE_STUDIES_URL }}
+          LINE_GUIDE_URL: ${{ env.LINE_GUIDE_URL }}
+          LINE_GIFT_URL: ${{ env.LINE_GIFT_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LINE_CHANNEL_ACCESS_TOKEN:-}" ]; then
+            echo "ℹ️ LINE channel access token not configured. Skipping template dispatch."
+            exit 0
+          fi
+          if [ ! -f tmp/orchestration/spec-evaluation.json ]; then
+            echo "ℹ️ Spec evaluation file not found. Skipping template dispatch."
+            exit 0
+          fi
+          DRY_RUN=""
+          if [ "${DEVELOPMENT_MODE}" = "true" ]; then
+            DRY_RUN="--dry-run"
+          fi
+          node scripts/orchestration/reply-line-templates.mjs \
+            --event "${{ steps.event.outputs.payload_path }}" \
+            --evaluation tmp/orchestration/spec-evaluation.json \
+            --templates config/line/templates \
+            --token "$LINE_CHANNEL_ACCESS_TOKEN" \
+            $DRY_RUN || {
+            echo "⚠️ Template dispatch failed. Continuing workflow."
+            exit 0
+          }
 
       - name: Ensure Plan Directories
         run: |
