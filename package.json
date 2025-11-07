@@ -27,6 +27,9 @@
   ],
   "author": "mo666-med",
   "license": "MIT",
-  "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "js-yaml": "^4.1.0",
+    "uri-js": "^4.4.1"
+  }
 }
