@@ -383,7 +383,229 @@ EOF
 
 ---
 
-## 13. 参考リンク
+## 12-8. Runtimeレジストリ更新手順
+
+Runtimeレジストリ（`config/workflows/runtime-parameters.json`）は、GitHub Actionsで使用するSecrets/Variablesの定義を管理します。
+
+### レジストリの確認
+
+```bash
+# 現在の設定を確認
+npm run runtime:verify
+
+# 特定のレジストリファイルを指定
+npm run runtime:verify -- --registry config/workflows/runtime-parameters.json
+```
+
+### 新しいパラメータの追加
+
+1. **`config/workflows/runtime-parameters.json`を編集**
+   ```json
+   {
+     "parameters": [
+       {
+         "id": "NEW_PARAMETER_NAME",
+         "type": "string",
+         "required": true,
+         "location": "secret",  // または "variable"
+         "owner": "ops",
+         "description": "パラメータの説明"
+       }
+     ]
+   }
+   ```
+
+2. **GitHub Secrets/Variablesに設定**
+   ```bash
+   # Secretの場合
+   gh secret set NEW_PARAMETER_NAME --body "value"
+   
+   # Variableの場合
+   gh variable set NEW_PARAMETER_NAME --body "value"
+   ```
+
+3. **設定を確認**
+   ```bash
+   npm run runtime:verify
+   ```
+
+### LINE関連パラメータの設定
+
+**必須パラメータ**:
+- `LINE_CHANNEL_ACCESS_TOKEN` (Secret) - LINE Messaging APIのチャネルアクセストークン
+
+**オプションパラメータ**（Manus APIから自動取得可能）:
+- `LINE_CASE_STUDIES_URL` (Variable) - 事例紹介ページのURL
+- `LINE_GUIDE_URL` (Variable) - ガイドページのURL
+- `LINE_GIFT_URL` (Variable) - プレゼントページのURL
+
+**設定手順**:
+1. Manus側の`/v1/config/line`エンドポイントにURLを登録
+2. `line-event.yml`ワークフロー実行時に`scripts/manus/export-config.mjs`が自動取得
+3. 取得したURLが`$GITHUB_ENV`に設定され、テンプレートビルド時に使用される
+
+**手動設定**（Manus APIを使用しない場合）:
+```bash
+gh variable set LINE_CASE_STUDIES_URL --body "https://example.com/case-studies"
+gh variable set LINE_GUIDE_URL --body "https://example.com/guide"
+gh variable set LINE_GIFT_URL --body "https://example.com/gift"
+```
+
+### レジストリの検証
+
+```bash
+# ローカル環境で検証（環境変数から読み込み）
+npm run runtime:verify
+
+# GitHub Actionsでの検証
+# .github/actions/check-runtime-config を使用
+```
+
+---
+
+## 12-9. LINE返信ログの取得方法
+
+LINE返信の実行ログは複数の場所に記録されます。
+
+### 1. GitHub Actions実行ログ
+
+**取得方法**:
+```bash
+# 最新の実行を確認
+gh run list --workflow=line-event.yml --limit 5
+
+# 特定の実行のログを取得
+gh run view <run-id> --log > line-event-log.txt
+
+# 実行IDを指定してログを取得
+gh run view <run-id> --log | grep -A 10 "Dispatch LINE replies"
+```
+
+**確認ポイント**:
+- `Fetch Manus LINE Config`ステップ: Manus設定の取得状況
+- `Build LINE Templates`ステップ: テンプレートビルドの成功/失敗
+- `Evaluate orchestration spec constraints`ステップ: spec評価結果
+- `Dispatch LINE replies`ステップ: 実際のLINE返信実行状況
+
+### 2. Artifactからの取得
+
+**取得方法**:
+```bash
+# 実行IDを指定してArtifactをダウンロード
+gh run download <run-id>
+
+# 特定のArtifactのみダウンロード
+gh run download <run-id> --name manus-api-inquiry-results
+```
+
+**Artifactの内容**:
+- `tmp/manus-line-config.json` - Manusから取得したLINE設定
+- `tmp/orchestration/spec-evaluation.json` - spec評価結果
+- `tmp/event.json` - LINEイベントペイロード
+
+### 3. Supabaseログ
+
+**取得方法**:
+```bash
+# Supabase CLIを使用
+supabase functions logs relay --project-ref <project-ref>
+
+# 特定の期間のログを取得
+supabase functions logs relay --project-ref <project-ref> --since 1h
+```
+
+**確認ポイント**:
+- LINE Webhookの受信状況
+- GitHub Actionsへの`repository_dispatch`送信状況
+- エラーログ
+
+### 4. LINE Developers Console
+
+**取得方法**:
+1. [LINE Developers Console](https://developers.line.biz/console/)にログイン
+2. チャネルを選択
+3. **Messaging API**タブ → **統計情報**を確認
+4. **Webhook送信状況**でメッセージ送信数を確認
+
+**確認ポイント**:
+- メッセージ送信数
+- エラー率
+- レスポンス時間
+
+### 5. ローカルログファイル
+
+**取得方法**:
+```bash
+# 最新のログを確認
+ls -lt logs/progress/ | head -10
+
+# 特定のログファイルを確認
+cat logs/progress/20251106_120000_line.json | jq '.'
+
+# ログを検索
+grep -r "replyToken" logs/progress/ | head -20
+```
+
+**ログファイルの形式**:
+- `YYYYMMDD_HHMMSS_line.json` - LINEイベントのログ
+- `tmp/orchestration/spec-evaluation.json` - spec評価結果
+
+### 6. GitHub Step Summary
+
+**取得方法**:
+GitHub Actionsの実行ページで**Summary**セクションを確認
+
+**確認ポイント**:
+- Runtime Parameter Checkの結果
+- 各ステップの実行状況
+- エラーメッセージ
+
+### トラブルシューティング
+
+**問題**: LINE返信が送信されない
+
+**確認手順**:
+1. `LINE_CHANNEL_ACCESS_TOKEN`が正しく設定されているか確認
+   ```bash
+   npm run runtime:verify
+   ```
+
+2. `Dispatch LINE replies`ステップのログを確認
+   ```bash
+   gh run view <run-id> --log | grep -A 20 "Dispatch LINE replies"
+   ```
+
+3. spec評価結果を確認
+   ```bash
+   gh run download <run-id>
+   cat tmp/orchestration/spec-evaluation.json | jq '.results[] | select(.triggered | length > 0)'
+   ```
+
+4. テンプレートファイルが存在するか確認
+   ```bash
+   ls -la config/line/templates/
+   ```
+
+**問題**: テンプレート内のURLが解決されない
+
+**確認手順**:
+1. Manus設定が正しく取得されているか確認
+   ```bash
+   gh run download <run-id>
+   cat tmp/manus-line-config.json | jq '.'
+   ```
+
+2. 環境変数が`$GITHUB_ENV`に設定されているか確認
+   ```bash
+   gh run view <run-id> --log | grep -E "LINE_CASE_STUDIES_URL|LINE_GUIDE_URL|LINE_GIFT_URL"
+   ```
+
+3. テンプレートビルド時のログを確認
+   ```bash
+   gh run view <run-id> --log | grep -A 10 "Build LINE Templates"
+   ```
+
+---
 
 - [GitHub Repository](https://github.com/mo666-med/line-friend-registration-system)
 - [LINE Developers Console](https://developers.line.biz/console/)
