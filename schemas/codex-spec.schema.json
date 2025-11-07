@@ -30,10 +30,21 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["id", "condition", "actions"],
+                "required": ["id", "actions"],
+                "anyOf": [
+                  { "required": ["condition"] },
+                  { "required": ["when"] }
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "when": {
+                    "type": "string",
+                    "description": "Condition expression for rule matching"
                   },
                   "condition": {
                     "type": "string"
@@ -57,6 +68,21 @@
                         },
                         "handler": {
                           "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "limits": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": ["once_per_user", "rate_limit"]
+                        },
+                        "window_days": {
+                          "type": "integer"
                         }
                       }
                     }

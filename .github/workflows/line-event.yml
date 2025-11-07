@@ -1,5 +1,4 @@
 name: LINE Event Handler
-x-owner: devops
 
 on:
   repository_dispatch:
@@ -365,7 +364,7 @@ jobs:
         uses: ./.github/actions/persist-progress
         with:
           path: ${{ steps.line_log.outputs.path }}
-          commit-message: chore: log line event
+          commit-message: "chore: log line event"
           artifact-label: line-event
 
       - name: Gemini Log Summary

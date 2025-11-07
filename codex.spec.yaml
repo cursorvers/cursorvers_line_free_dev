@@ -111,6 +111,11 @@ tags:
     type: "boolean"
     default: false
 
+  paid_active:
+    description: "有料会員アクティブ"
+    type: "boolean"
+    default: false
+
   last_broadcast_date:
     description: "最後のブロードキャスト送信日"
     type: "date"
