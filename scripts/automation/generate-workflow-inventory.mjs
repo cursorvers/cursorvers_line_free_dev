@@ -14,8 +14,15 @@ const HEADER = `# GitHub Actions Workflow Inventory
 
 > 自動生成ファイル。更新する場合は \`npm run workflows:inventory\` を実行してください。
 
-| ワークフロー | ファイル | オーナー | トリガー | 最終更新 |
-| --- | --- | --- | --- | --- |
+| ワークフロー | ファイル | オーナー | パーミッション | トリガー | 最終更新 |
+| --- | --- | --- | --- | --- | --- |
+`;
+const ROUTER_POLICY = `
+## Router Policy
+
+- \`webhook-handler.yml\` is the canonical event router; all GitHub webhooks for this repository should flow through it.
+- Routing logic lives in \`scripts/webhook-router.mjs\`, which manages issue state labels and responds to \`/state <value>\` comment commands.
+- Non-issue events currently emit telemetry summaries only; extend the router script when additional automation is required.
 `;
 
 function getGitMetadata(relativePath) {
@@ -43,7 +50,7 @@ function extractSimple(field, content) {
   return match ? match[1].trim() : undefined;
 }
 
-function tryParseOnBlock(content) {
+function captureIndentedBlock(field, content) {
   const lines = content.split(/\r?\n/);
   const block = [];
   let capturing = false;
@@ -51,7 +58,7 @@ function tryParseOnBlock(content) {
 
   for (const line of lines) {
     if (!capturing) {
-      const match = line.match(/^(\s*)on\s*:/);
+      const match = line.match(new RegExp(`^(\\s*)${field}\\s*:`));
       if (match) {
         capturing = true;
         baseIndent = match[1]?.length ?? 0;
@@ -70,6 +77,13 @@ function tryParseOnBlock(content) {
   }
 
   if (block.length === 0) return undefined;
+  return { block, baseIndent };
+}
+
+function tryParseOnBlock(content) {
+  const captured = captureIndentedBlock('on', content);
+  if (!captured) return undefined;
+  const { block, baseIndent } = captured;
 
   const triggers = new Set();
   const [firstLine, ...rest] = block;
@@ -116,6 +130,44 @@ function tryParseOnBlock(content) {
   return Array.from(triggers);
 }
 
+function tryParsePermissions(content) {
+  const captured = captureIndentedBlock('permissions', content);
+  if (!captured) return undefined;
+  const { block, baseIndent } = captured;
+  const [firstLine, ...rest] = block;
+  const inline = firstLine.split(':').slice(1).join(':').trim();
+  if (inline) {
+    return inline.replace(/['"]/g, '');
+  }
+
+  const map = new Map();
+  for (const line of rest) {
+    if (!line.trim() || line.trim().startsWith('#')) continue;
+    const indent = line.search(/\S/);
+    if (indent <= baseIndent) break;
+    const match = line.trim().match(/^([A-Za-z0-9_\-]+)\s*:\s*(.*)$/);
+    if (!match) continue;
+    const key = match[1];
+    const value = (match[2] ?? '')
+      .replace(/['"]/g, '')
+      .replace(/\s+#.*$/, '')
+      .trim();
+    map.set(key, value || 'unspecified');
+  }
+  if (map.size === 0) return undefined;
+  return Object.fromEntries(Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function formatPermissions(permissions) {
+  if (!permissions) return '—';
+  if (typeof permissions === 'string') {
+    return permissions || '—';
+  }
+  return Object.entries(permissions)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(', ');
+}
+
 export async function generateWorkflowInventory({ outputPath = DEFAULT_OUTPUT_PATH, dryRun = false } = {}) {
   const entries = await fs.readdir(workflowsDir);
   const rows = [];
@@ -128,6 +180,8 @@ export async function generateWorkflowInventory({ outputPath = DEFAULT_OUTPUT_PA
     const owner = extractSimple('x-owner', content) ?? 'unspecified';
     const rawTriggers = tryParseOnBlock(content);
     const triggers = formatTriggers(rawTriggers);
+    const rawPermissions = tryParsePermissions(content);
+    const permissions = formatPermissions(rawPermissions);
     const relativePath = path.posix.join('.github', 'workflows', file);
     const gitMeta = getGitMetadata(relativePath);
 
@@ -135,19 +189,21 @@ export async function generateWorkflowInventory({ outputPath = DEFAULT_OUTPUT_PA
       name,
       owner,
       triggers,
+      permissions,
       relativePath,
       gitMeta,
       file: file,
       triggersList: rawTriggers ?? [],
+      permissionsRaw: rawPermissions,
     });
   }
 
-  const bodyLines = rows.map(({ name, owner, triggers, relativePath, gitMeta }) => {
+  const bodyLines = rows.map(({ name, owner, permissions, triggers, relativePath, gitMeta }) => {
       const link = `[${name}](../../${relativePath})`;
-      return `| ${link} | \`${relativePath}\` | ${owner} | ${triggers} | ${gitMeta} |`;
+      return `| ${link} | \`${relativePath}\` | ${owner} | ${permissions} | ${triggers} | ${gitMeta} |`;
     });
 
-  const markdown = `${HEADER}${bodyLines.join('\n')}\n`;
+  const markdown = `${HEADER}${bodyLines.join('\n')}\n${ROUTER_POLICY}`;
 
   if (!dryRun) {
     await fs.writeFile(outputPath, markdown, 'utf8');
@@ -156,9 +212,93 @@ export async function generateWorkflowInventory({ outputPath = DEFAULT_OUTPUT_PA
   return { rows, markdown, outputPath };
 }
 
+function parseArgs(argv = process.argv.slice(2)) {
+  const options = {
+    outputArg: null,
+    dryRun: false,
+    check: false,
+    help: false,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--output' || arg === '-o') {
+      options.outputArg = argv[index + 1] ?? null;
+      if (options.outputArg !== null) {
+        index += 1;
+      }
+      continue;
+    }
+    if (arg === '--dry-run') {
+      options.dryRun = true;
+      continue;
+    }
+    if (arg === '--check') {
+      options.check = true;
+      continue;
+    }
+    if (arg === '--help' || arg === '-h') {
+      options.help = true;
+      continue;
+    }
+    throw new Error(`Unknown argument: ${arg}`);
+  }
+
+  return options;
+}
+
+function printUsage() {
+  console.log(`Usage: node scripts/automation/generate-workflow-inventory.mjs [options]
+
+Options:
+  --output <path>, -o   Specify output path (default: docs/automation/WORKFLOWS.md)
+  --dry-run             Generate inventory without writing to disk; prints Markdown to stdout
+  --check               Verify the inventory file is up to date; exits non-zero on drift
+  --help, -h            Show this help message
+`);
+}
+
 async function main() {
   try {
-    await generateWorkflowInventory();
+    const { outputArg, dryRun, check, help } = parseArgs();
+
+    if (help) {
+      printUsage();
+      return;
+    }
+
+    let outputPath = DEFAULT_OUTPUT_PATH;
+    if (outputArg) {
+      outputPath = path.isAbsolute(outputArg)
+        ? outputArg
+        : path.resolve(repoRoot, outputArg);
+    }
+
+    if (check) {
+      const { markdown } = await generateWorkflowInventory({ outputPath, dryRun: true });
+      let existing;
+      try {
+        existing = await fs.readFile(outputPath, 'utf8');
+      } catch (error) {
+        console.error(`Inventory file not found at ${outputPath}. Run \`npm run workflows:inventory\`.`);
+        process.exitCode = 1;
+        return;
+      }
+
+      if (existing !== markdown) {
+        console.error('Workflow inventory is outdated. Run `npm run workflows:inventory` and commit the changes.');
+        process.exitCode = 1;
+        return;
+      }
+
+      console.log('Workflow inventory is up to date.');
+      return;
+    }
+
+    const { markdown } = await generateWorkflowInventory({ outputPath, dryRun });
+    if (dryRun) {
+      process.stdout.write(markdown);
+    }
   } catch (error) {
     console.error(error);
     process.exitCode = 1;

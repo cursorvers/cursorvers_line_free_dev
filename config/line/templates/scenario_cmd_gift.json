@@ -1,0 +1,112 @@
+{
+  "description": "LINE限定プレゼントの案内",
+  "messages": [
+    {
+      "type": "text",
+      "text": "限定プレゼントの受け取りページです。パスワードを控えておいてくださいね！"
+    },
+    {
+      "type": "flex",
+      "altText": "LINE限定プレゼント",
+      "contents": {
+        "type": "bubble",
+        "size": "mega",
+        "hero": {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#1A0F2D",
+          "paddingAll": "26px",
+          "contents": [
+            {
+              "type": "text",
+              "text": "LINE限定プレゼント",
+              "weight": "bold",
+              "size": "xl",
+              "color": "#FFFFFF"
+            },
+            {
+              "type": "text",
+              "text": "手順に沿ってパスワードを入力すると特典をダウンロードできます。",
+              "color": "#F7D9FF",
+              "wrap": true,
+              "margin": "md"
+            }
+          ]
+        },
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "paddingAll": "22px",
+          "spacing": "lg",
+          "contents": [
+            {
+              "type": "box",
+              "layout": "vertical",
+              "backgroundColor": "#281648",
+              "cornerRadius": "16px",
+              "paddingAll": "16px",
+              "contents": [
+                {
+                  "type": "text",
+                  "text": "受け取り手順",
+                  "weight": "bold",
+                  "color": "#FFFFFF"
+                },
+                {
+                  "type": "text",
+                  "text": "1. 受け取りページを開く\n2. パスワードを入力\n3. ZIPファイルを保存",
+                  "wrap": true,
+                  "color": "#EEDCFF",
+                  "margin": "md"
+                },
+                {
+                  "type": "box",
+                  "layout": "baseline",
+                  "margin": "lg",
+                  "contents": [
+                    {
+                      "type": "text",
+                      "text": "PW",
+                      "color": "#FF9DF7",
+                      "weight": "bold",
+                      "flex": 0
+                    },
+                    {
+                      "type": "text",
+                      "text": "17171baa",
+                      "color": "#FFFFFF",
+                      "weight": "bold",
+                      "margin": "md"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "button",
+              "style": "primary",
+              "color": "#C045FF",
+              "action": {
+                "type": "uri",
+                "label": "プレゼントを受け取る",
+                "uri": "{{LINE_GIFT_URL}}"
+              }
+            },
+            {
+              "type": "text",
+              "text": "※ パスワードは今後変更する場合があります。最新情報はこのトークでお知らせします。",
+              "color": "#BFA7D8",
+              "size": "sm",
+              "wrap": true
+            }
+          ]
+        },
+        "styles": {
+          "body": {
+            "backgroundColor": "#130B20"
+          }
+        }
+      }
+    }
+  ]
+}

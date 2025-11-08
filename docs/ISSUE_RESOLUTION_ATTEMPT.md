@@ -25,14 +25,14 @@
 ## 📊 次のステップ
 
 1. **数分待つ** - GitHub Actionsがイベントを処理するまで待機
-2. **GitHub Actionsページで確認**: https://github.com/mo666-med/cursorvers_line-discord/actions
+2. **GitHub Actionsページで確認**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 3. **Issueのコメントを確認**: GPT-5による分析結果が追加されるはずです
 
 ## 🔗 確認リンク
 
-- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line-discord/actions
-- **Issue #1**: https://github.com/mo666-med/cursorvers_line-discord/issues/1
-- **Issue #2**: https://github.com/mo666-med/cursorvers_line-discord/issues/2
+- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
+- **Issue #1**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/1
+- **Issue #2**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/2
 
 ## ⚠️ 注意事項
 

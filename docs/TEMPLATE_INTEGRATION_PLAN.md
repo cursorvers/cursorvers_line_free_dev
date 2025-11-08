@@ -4,7 +4,7 @@
 
 ## 1. 背景
 
-`./dev-infra/dev.sh diff-template --target ~/Dev/cursorvers_line-discord --detail` の結果、テンプレート適用時に **428 件** の削除候補が検出された。主に以下の資産が削除対象となり、このまま `apply-template` を実行すると Phase1 成果物が失われる。
+`./dev-infra/dev.sh diff-template --target ~/Dev/cursorvers_line_free_dev --detail` の結果、テンプレート適用時に **428 件** の削除候補が検出された。主に以下の資産が削除対象となり、このまま `apply-template` を実行すると Phase1 成果物が失われる。
 
 - 全ドキュメント (`docs/` 190 件超)
 - GitHub Actions ワークフロー (`.github/workflows/` 40 件)
@@ -30,7 +30,7 @@
 
 1. **ホワイトリスト方式でのテンプレ適用**  
    - `apply-template.sh` に `--exclude-file` オプションを実装し、除外パターンを記載したファイルを渡す。  
-   - `dev-infra/templates/excludes/cursorvers-line-discord.txt` を基点に、既存資産を `rsync --exclude-from` で保護する。
+   - `dev-infra/templates/excludes/cursorvers-line-free-dev.txt` を基点に、既存資産を `rsync --exclude-from` で保護する。
 
 2. **テンプレート側の整理**  
    - `templates/default` からこのリポジトリに不要な項目（空 README など）を削除し、共通運用に必要なスクリプト/CI のみ残す。  
@@ -49,7 +49,7 @@
 ## 5. 次のアクション
 
 1. 除外リスト（`dev-infra/templates/exclude-cursorvers.txt` 等）の作成。  
-2. `apply-template.sh` に `--exclude-file` サポートを追加済み。今後は `./dev-infra/dev.sh apply-template --target ~/Dev/cursorvers_line-discord --exclude-file dev-infra/templates/excludes/cursorvers-line-discord.txt` の形式で試行する。  
+2. `apply-template.sh` に `--exclude-file` サポートを追加済み。今後は `./dev-infra/dev.sh apply-template --target ~/Dev/cursorvers_line_free_dev --exclude-file dev-infra/templates/excludes/cursorvers-line-free-dev.txt` の形式で試行する。  
 3. Phase1 未完タスクと平行して、テンプレ適用の PoC をサンドボックスワークツリーで実施。  
 4. 結果を `/sdd/specs/line-funnel/tasks.md` の Dev-Infra チェックリストへ反映。
 

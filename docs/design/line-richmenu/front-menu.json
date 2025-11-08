@@ -1,0 +1,40 @@
+{
+  "size": { "width": 2500, "height": 843 },
+  "selected": true,
+  "name": "front_menu_v2",
+  "chatBarText": "メニュー",
+  "areas": [
+    {
+      "bounds": { "x": 0, "y": 0, "width": 1250, "height": 421 },
+      "action": {
+        "type": "uri",
+        "label": "LINE限定＠無料資料",
+        "uri": "{{LINE_GUIDE_URL}}"
+      }
+    },
+    {
+      "bounds": { "x": 1250, "y": 0, "width": 1250, "height": 421 },
+      "action": {
+        "type": "uri",
+        "label": "PREMIUMプレミアム",
+        "uri": "{{LINE_PREMIUM_URL}}"
+      }
+    },
+    {
+      "bounds": { "x": 0, "y": 421, "width": 1250, "height": 422 },
+      "action": {
+        "type": "message",
+        "label": "INQUIRYお問い合わせ",
+        "text": "お問い合わせ"
+      }
+    },
+    {
+      "bounds": { "x": 1250, "y": 421, "width": 1250, "height": 422 },
+      "action": {
+        "type": "message",
+        "label": "CONSULTING導入支援",
+        "text": "導入支援の相談"
+      }
+    }
+  ]
+}

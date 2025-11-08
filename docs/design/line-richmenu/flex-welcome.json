@@ -1,0 +1,91 @@
+{
+  "type": "flex",
+  "altText": "開発事例のご案内",
+  "contents": {
+    "type": "bubble",
+    "size": "mega",
+    "hero": {
+      "type": "box",
+      "layout": "vertical",
+      "backgroundColor": "#131737",
+      "paddingAll": "24px",
+      "contents": [
+        {
+          "type": "text",
+          "text": "AI開発事例のご案内",
+          "weight": "bold",
+          "size": "xl",
+          "color": "#FFFFFF"
+        },
+        {
+          "type": "text",
+          "text": "スタートからの成果物と支援メニューをまとめました。",
+          "margin": "md",
+          "wrap": true,
+          "color": "#C5CCFF"
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "lg",
+      "paddingAll": "20px",
+      "contents": [
+        {
+          "type": "box",
+          "layout": "baseline",
+          "spacing": "sm",
+          "contents": [
+            {
+              "type": "text",
+              "text": "🧩 最新案件",
+              "weight": "bold",
+              "color": "#FFFFFF"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "要件定義から運用自動化までのワークフローと、採用したツールスタックを公開しています。類似領域があればそのまま流用できます。",
+          "wrap": true,
+          "color": "#E6EAFF"
+        },
+        {
+          "type": "box",
+          "layout": "vertical",
+          "spacing": "md",
+          "contents": [
+            {
+              "type": "button",
+              "height": "sm",
+              "style": "primary",
+              "color": "#4B63FF",
+              "action": {
+                "type": "uri",
+                "label": "開発事例を見る",
+                "uri": "{{LINE_CASE_STUDIES_URL}}"
+              }
+            },
+            {
+              "type": "button",
+              "height": "sm",
+              "style": "secondary",
+              "color": "#24304E",
+              "action": {
+                "type": "uri",
+                "label": "ノウハウ資料を読む",
+                "uri": "{{LINE_GUIDE_URL}}"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "styles": {
+      "body": {
+        "backgroundColor": "#0F1630"
+      }
+    }
+  }
+}

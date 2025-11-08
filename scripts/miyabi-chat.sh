@@ -174,7 +174,7 @@ while true; do
     
     # 環境変数を設定
     export ISSUE_NUMBER=$ISSUE_NUM
-    export REPOSITORY=mo666-med/cursorvers_line-discord
+    export REPOSITORY=mo666-med/cursorvers_line_free_dev
     export GITHUB_TOKEN=$(gh auth token 2>/dev/null || echo "")
     
     # OPENAI_API_KEYを取得
@@ -206,7 +206,7 @@ while true; do
         fi
       fi
       
-      export REPOSITORY=mo666-med/cursorvers_line-discord
+      export REPOSITORY=mo666-med/cursorvers_line_free_dev
       export GITHUB_TOKEN=$(gh auth token 2>/dev/null || echo "")
       export OPENAI_MODEL=$(gh variable get OPENAI_MODEL --json value -q .value 2>/dev/null || echo "gpt-5")
       

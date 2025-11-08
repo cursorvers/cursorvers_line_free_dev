@@ -43,7 +43,7 @@
 
 ### GitHub Actionsページ
 
-直接確認: https://github.com/mo666-med/cursorvers_line-discord/actions
+直接確認: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 
 フィルタ:
 - Workflow: `autonomous-agent.yml`
@@ -86,7 +86,7 @@ GitHub Actionsワークフローは、Issueラベルが追加されてから**�
 ## 📝 次のステップ
 
 1. **数分待つ**（GitHub Actionsがイベントを処理するまで）
-2. **GitHub Actionsページで確認**: https://github.com/mo666-med/cursorvers_line-discord/actions
+2. **GitHub Actionsページで確認**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 3. **Issueのコメントを確認**: Issue #1にGPT-5による分析結果が追加される
 
 ## ⚠️ 注意事項

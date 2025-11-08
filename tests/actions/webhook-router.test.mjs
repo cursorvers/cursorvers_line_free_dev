@@ -57,3 +57,18 @@ test('determineStateFromLabels falls back to pending when no priority match', as
   const state = determineStateFromLabels(['📥 state:pending']);
   assert.equal(state, '📥 state:pending');
 });
+
+test('parseStateCommand maps shorthand to label', async () => {
+  const { parseStateCommand } = await loadRouterModule();
+  const parsed = parseStateCommand('/state reviewing');
+  assert.equal(parsed.requested, 'reviewing');
+  assert.equal(parsed.state, '👀 state:reviewing');
+});
+
+test('parseStateCommand returns null when command missing', async () => {
+  const { parseStateCommand } = await loadRouterModule();
+  assert.equal(parseStateCommand('hello'), null);
+  const result = parseStateCommand('/state');
+  assert.ok(result);
+  assert.equal(result.state, null);
+});

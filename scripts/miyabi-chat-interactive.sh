@@ -55,7 +55,7 @@ while true; do
     
     # 環境変数を設定
     export ISSUE_NUMBER=$ISSUE_NUM
-    export REPOSITORY=mo666-med/cursorvers_line-discord
+    export REPOSITORY=mo666-med/cursorvers_line_free_dev
     export GITHUB_TOKEN=$(gh auth token 2>/dev/null || echo "")
     
     # OPENAI_API_KEYを取得（GitHub Secretsからは直接取得できないため、環境変数から取得）

@@ -8,6 +8,21 @@ function uniq(array) {
   return [...new Set(array.filter(Boolean))];
 }
 
+function percentile(values, quantile) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const position = (sorted.length - 1) * quantile;
+  const lowerIndex = Math.floor(position);
+  const upperIndex = Math.ceil(position);
+  if (lowerIndex === upperIndex) {
+    return sorted[lowerIndex];
+  }
+  const weight = position - lowerIndex;
+  return sorted[lowerIndex] * (1 - weight) + sorted[upperIndex] * weight;
+}
+
 async function readFileIfExists(path) {
   try {
     return await fs.readFile(path, 'utf-8');
@@ -89,7 +104,10 @@ export function aggregateMetrics(records) {
   let durationCount = 0;
   let latencyCount = 0;
   let totalCost = 0;
+  let totalAnomalies = 0;
   const models = [];
+  const latencyValues = [];
+  const durationValues = [];
 
   for (const record of records) {
     const status = typeof record.status === 'string' ? record.status : 'unknown';
@@ -99,11 +117,13 @@ export function aggregateMetrics(records) {
     if (Number.isFinite(duration)) {
       durationSum += duration;
       durationCount += 1;
+      durationValues.push(duration);
     }
     const latency = Number(record.latency_ms);
     if (Number.isFinite(latency)) {
       latencySum += latency;
       latencyCount += 1;
+      latencyValues.push(latency);
     }
     const cost = Number(record.cost_estimate);
     if (Number.isFinite(cost)) {
@@ -112,6 +132,10 @@ export function aggregateMetrics(records) {
     if (record.model) {
       models.push(String(record.model));
     }
+    const anomaliesCount = Number(record.anomalies_count);
+    if (Number.isFinite(anomaliesCount)) {
+      totalAnomalies += anomaliesCount;
+    }
   }
 
   const totalRuns = records.length;
@@ -119,6 +143,12 @@ export function aggregateMetrics(records) {
   const failureCount = totalRuns - successCount - (breakdown.skipped_no_logs ?? 0) - (breakdown.skipped_missing_key ?? 0);
   const avgDuration = durationCount > 0 ? durationSum / durationCount : 0;
   const avgLatency = latencyCount > 0 ? latencySum / latencyCount : 0;
+  const latencyP50 = percentile(latencyValues, 0.5);
+  const latencyP90 = percentile(latencyValues, 0.9);
+  const latencyP95 = percentile(latencyValues, 0.95);
+  const durationP50 = percentile(durationValues, 0.5);
+  const durationP90 = percentile(durationValues, 0.9);
+  const durationP95 = percentile(durationValues, 0.95);
 
   return {
     total_runs: totalRuns,
@@ -129,6 +159,17 @@ export function aggregateMetrics(records) {
     failures: failureCount < 0 ? 0 : failureCount,
     status_breakdown: breakdown,
     unique_models: uniq(models),
+    latency_percentiles_ms: {
+      p50: latencyP50,
+      p90: latencyP90,
+      p95: latencyP95,
+    },
+    duration_percentiles_ms: {
+      p50: durationP50,
+      p90: durationP90,
+      p95: durationP95,
+    },
+    total_anomalies: totalAnomalies,
   };
 }
 
@@ -142,6 +183,9 @@ export function formatMarkdown(summary) {
     ['Avg Latency (ms)', summary.avg_latency_ms.toFixed(1)],
     ['Total Cost', summary.total_cost.toFixed(6)],
     ['Failures', String(summary.failures)],
+    ['Latency p95 (ms)', summary.latency_percentiles_ms?.p95?.toFixed?.(1) ?? '0.0'],
+    ['Duration p95 (ms)', summary.duration_percentiles_ms?.p95?.toFixed?.(1) ?? '0.0'],
+    ['Total Anomalies', String(summary.total_anomalies ?? 0)],
   ];
 
   const lines = rows.map(([k, v]) => `| ${k} | ${v} |`);

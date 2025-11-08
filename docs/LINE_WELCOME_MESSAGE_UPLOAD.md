@@ -27,7 +27,7 @@ LINE Developers Consoleのウェルカムメッセージ設定をGitHubにアッ
 ## 🔗 リンク
 
 - **Issue**: 作成されたIssueのURLを確認してください
-- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line-discord/actions
+- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 - **LINE Developers Console**: https://manager.line.biz/account/@529ybhfo/autoresponse/welcome
 
 ## ✅ 次のステップ

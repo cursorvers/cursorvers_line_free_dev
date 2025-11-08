@@ -18,7 +18,7 @@ gh pr merge 4 --merge --delete-branch
 ### 方法2: GitHub Web UIでマージ
 
 1. **PRページを開く**
-   - https://github.com/mo666-med/cursorvers_line-discord/pull/4
+   - https://github.com/mo666-med/cursorvers_line_free_dev/pull/4
 
 2. **マージ方法を選択**
    - 「Merge pull request」ボタンをクリック

@@ -1,0 +1,26 @@
+[
+  {
+    "type": "action",
+    "action": {
+      "type": "message",
+      "label": "開発事例を見る",
+      "text": "開発事例のご案内"
+    }
+  },
+  {
+    "type": "action",
+    "action": {
+      "type": "message",
+      "label": "プレゼントの受け取り",
+      "text": "プレゼントの受け取り"
+    }
+  },
+  {
+    "type": "action",
+    "action": {
+      "type": "message",
+      "label": "お問い合わせ",
+      "text": "お問い合わせ"
+    }
+  }
+]

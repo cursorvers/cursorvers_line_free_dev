@@ -210,7 +210,7 @@ PRAgent（Draft PR作成）
 ### 全体の状態
 
 ```
-📊 Agentic OS Status - mo666-med/cursorvers_line-discord
+📊 Agentic OS Status - mo666-med/cursorvers_line_free_dev
 
 📥 Pending: 2 (待機中)
 🏗️ Implementing: 1 (実装中)

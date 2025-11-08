@@ -1,101 +1,161 @@
-# Line Actions Hardening – 設計
+# Line Actions Hardening – Design
 
-## 概要
-LINE ファネルを支える GitHub Actions 群を堅牢化するために、(1) すべてのワークフローを棚卸しして責任者を明確化し、(2) 実行時依存（`curl` ダウンロードや二重ルーター）を排除し、(3) 事前検証で設定漏れをブロックし、(4) テレメトリログとテストカバレッジを強化する。対象は本リポジトリ内で稼働する自動化に限定し、Edge/Deno 側の契約は変更しない。
+## 1. Objectives & Scope
+- Harden the LINE automation GitHub Actions so every run is reproducible, well-instrumented, and maintainable by internal operators or contracted teams.
+- Deliver all nine acceptance criteria from `.sdd/specs/line-actions-hardening/requirements.md`: workflow inventory, router consolidation, vendored helpers, pre-flight validation, resilient log persistence, automated checks, external runbook, parameter registry/CLI, and metrics observability.
+- Preserve existing behavior controlled by `MANUS_ENABLED`, `DEGRADED_MODE`, and `DEVELOPMENT_MODE` while eliminating runtime downloads and clarifying degraded-mode fallbacks.
 
-## アーキテクチャ / データフロー
+## 2. System Architecture
 
+### 2.1 Boundaries & Data Flow
 ```
-LINE / Manus Webhooks → Edge Relay (Deno) → repository_dispatch → GitHub Actions
-                                                                       │
-                                            ┌───────────────────────────┴────────────┐
-                                            │ ワークフロー棚卸し & 設定検証レイヤー │
-                                            └───────────────────────────┬────────────┘
-                                                                         │
-          ┌──────────────────────┬─────────────────────┬─────────────────┴──────────────────┐
-          │ 強化版 line-event   │ 強化版 manus-…     │ 正規ルーター webhook-handler        │
-          └──────┬──────────────┴──────────┬────────┴──────────┬────────────────────────┘
-                 │                           │                    │
-        Supabase ヘルパー（ベンドル） Manus ヘルパー   運用ガードレール系ワークフロー
-                 │                           │                    │
-          Supabase REST              Manus API          Google Sheets / GitHub Artifact
+LINE Edge → GitHub repository_dispatch(line_event) ┐
+                                                   │
+Manus Webhook → GitHub repository_dispatch(manus) ─┼─> .github/workflows/webhook-handler.yml
+                                                   │        ↓ (dispatch rules via scripts/webhook-router.mjs)
+                                                   │
+                                         ┌─────────┴────────┐
+                                         │                  │
+                                   line-event.yml     manus-progress.yml
+                                         │                  │
+                                         │                  └─> scripts/vendor/supabase/upsert-progress-event.js
+                                         │
+                                         ├─> scripts/vendor/supabase/upsert-line-event.js
+                                         ├─> scripts/vendor/google/upsert-line-member.js
+                                         ├─> orchestration/plan/**/*.json (plan selection)
+                                         ├─> scripts/manus-api.js (dev-only Manus dispatch)
+                                         ├─> scripts/automation/run-gemini-log-summary.mjs
+                                         └─> .github/actions/persist-progress → git commit ∥ artifact fallback
 ```
+- Upstream LINE/Manus ingress and Supabase/Google APIs remain unchanged; this spec focuses on GitHub-side automation and repo assets.
+- All executable helpers are checked into `scripts/` (either hand-written or vendor-synced with checksums). Workflows must not fetch remote code at runtime.
+- Telemetry (logs, metrics) is persisted via git commits when possible and falls back to GitHub Artifacts via `persist-progress`.
 
-- **ワークフロー棚卸し:** `scripts/automation/generate-workflow-inventory.mjs` が `.github/workflows/**/*.yml` を走査し、名称・トリガー・責任者（`x-owner` メタ情報）・最終更新を抽出して `docs/automation/WORKFLOWS.md` を生成する。
-- **設定検証レイヤー:** 主要ワークフロー冒頭で `uses: ./.github/actions/validate-config` を実行し、必要な secrets/vars の存在を確認。欠如時は手順付きエラーで即時失敗させる。
-- **ベンドル済みヘルパー:** Supabase / Sheets 用スクリプトを `scripts/vendor/` に格納し、チェックサムを `manifest.json` で管理。`node scripts/vendor/sync.js` で上流更新を反映する。
-- **ログ永続化:** 再利用可能コンポジットアクション `./.github/actions/persist-progress` が git commit/push を試行。失敗時はタイムスタンプ付きバンドルとして `actions/upload-artifact` に退避し、`rotate-logs.yml` のローテーション方針を維持しつつ欠損を防ぐ。
+### 2.2 Components & Responsibilities
+| Layer | Responsibility | Key Assets |
+| --- | --- | --- |
+| Router | Canonical entry point that normalizes GitHub events & dispatches follow-up workflows | `.github/workflows/webhook-handler.yml`, `scripts/webhook-router.mjs` |
+| Primary workflows | Event ingestion, plan management, Manus progress reconciliation, guardrails | `.github/workflows/line-event.yml`, `manus-progress.yml`, `economic-circuit-breaker.yml`, `rotate-logs.yml` |
+| Composite actions | Shared validation, persistence, parameter checks | `.github/actions/validate-config`, `.github/actions/persist-progress`, (new) `.github/actions/check-runtime-config` |
+| Script library | Business logic executed by workflows | `scripts/vendor/**`, `scripts/checks/**`, `scripts/logs/archive.mjs`, `scripts/automation/*.mjs`, `scripts/manus/*.mjs` |
+| Governance docs | Runbooks, workflow inventory, parameter tables, steering pointers | `docs/automation/WORKFLOWS.md`, `docs/runbooks/line-actions.md`, `docs/operations/runtime-config.md`, `.sdd/steering/tech.md` |
+| Telemetry sinks | Metrics aggregation, artifacts, KPI exports | `logs/**`, `scripts/automation/report-gemini-metrics.mjs`, `gemini-*` workflows |
 
-## 詳細アプローチ
+### 2.3 Patterns & Tooling
+- GitHub-hosted runners on `ubuntu-latest`, Node.js 20 & Python 3.11 toolchains, `actions/setup-node` / `setup-python`.
+- `node:test`, `assert`, `undici` MockAgent for deterministic unit tests covering workflow scripts.
+- Composite actions to encapsulate bash + Node glue with clear inputs/outputs.
+- `actionlint` and `npm run vendor:verify` enforced in CI to catch workflow syntax issues and manifest drift.
+- `act` smoke tests gated by opt-in label to verify happy paths (`line-event`, `manus-progress`) using mocked secrets.
 
-1. **ワークフロー棚卸しと責任者定義**
-   - 各ワークフローに任意の `x-owner` メタデータ（例: `ops`, `devops`）を追加。
-   - Node 20 + `yaml` パッケージで Markdown の一覧表を生成し、`docs/automation/WORKFLOWS.md` としてコミット。
-   - `.sdd/steering/tech.md` から棚卸しドキュメントへリンクを張る。
+## 3. Detailed Approach (mapped to requirements)
 
-2. **Supabase ヘルパーのベンドル化**
-   - `scripts/vendor/supabase/` と `scripts/vendor/google/` に既存のヘルパースクリプトを配置。
-   - `scripts/vendor/manifest.json` に元リポジトリ・コミットハッシュ・各ファイルの SHA-256 を記録。
-   - `npm run vendor:sync`（`scripts/vendor/sync.mjs`）で同期し、CI では `npm run vendor:verify` でチェックサムを検証。
-   - `line-event.yml` から `curl` ステップを削除し、ベンドル済みスクリプトを直接参照する。
+### 3.1 Workflow Inventory & Ownership (AC1)
+- Extend `scripts/automation/generate-workflow-inventory.mjs` to include triggers, `permissions`, owning team (`x-owner`), and links to validation/config manifests.
+- Regenerate `docs/automation/WORKFLOWS.md` and add a CI guard (new job inside `node-tests.yml`) that fails if the checked-in table diverges from script output.
+- Update `.sdd/steering/tech.md` to link the inventory so on-call engineers have a single source of truth.
 
-3. **ルーター統合**
-   - 正規ルーターを `webhook-handler.yml` に統一。`webhook-event-router.yml` にのみ存在する機能（TypeScript ルーター呼び出し等）はモジュール化して移植。
-   - 旧ワークフローはアーカイブまたは削除し、単一エントリポイントであることをドキュメント化。
-   - `/agent` コマンドや重大障害時の `gh` CLI エスカレーションを継続サポート。
+### 3.2 Vendored Helper Packaging (AC2)
+- Maintain helpers in `scripts/vendor/*` with entries in `scripts/vendor/manifest.json` recording source URL & SHA-256; add `manifest.lock.json` to pin digest, file size, and sync timestamp.
+- Expand `scripts/vendor/sync.mjs` and `npm run vendor:verify` to diff against the lock file and fail CI if vendored files change without manifest updates.
+- Update `line-event.yml` and `manus-progress.yml` to invoke helpers exclusively via `node scripts/vendor/...` (already partially in place) and document refresh workflow in the runbook.
 
-4. **事前設定バリデーション**
-   - `.github/actions/validate-config/action.yml` を定義し、`node scripts/checks/validate-config.mjs` を実行。
-   - `config/workflows/required-secrets.json` にワークフロー単位の必須 secrets/vars を記載。
-   - 欠如したキーを検知した場合は、設定手順へのリンク付きメッセージで失敗。
+### 3.3 Router Consolidation (AC3)
+- Keep `webhook-handler.yml` as the single router: ensure redundant routers (`webhook-event-router.yml`, legacy jobs) are deleted or archived.
+- Refactor router steps to call `node scripts/webhook-router.mjs <event> <action>`, passing payload context via environment (labels, comment body, issue number). Add unit tests for routing rules in `tests/actions/webhook-router.test.mjs`.
+- Document routing policy (supported events, fallback behavior) inside `docs/automation/WORKFLOWS.md` and the runbook.
 
-5. **堅牢なログ永続化**
-   - ログ commit ロジックを `.github/actions/persist-progress`（シェル + `node scripts/logs/archive.mjs`）に集約。
-   - git push が弾かれた場合は `tmp/logs` 以下に退避し、`actions/upload-artifact`（保持期間 90 日）へアップロード。
-   - `rotate-logs.yml` を強化し、可能であれば GitHub API で古い Artifact も削除。
+### 3.4 Pre-flight Config Validation (AC4)
+- Expand `config/workflows/required-secrets.json` with descriptions, support for alternative groups, and references to runtime parameter IDs.
+- Evolve `.github/actions/validate-config` so each workflow step enumerates missing items with remediation hints and fails before expensive jobs run. Respect `SKIP_CONFIG_VALIDATION=true` for controlled bypass.
+- Introduce `.github/actions/check-runtime-config` (wrapper around the CLI below) to surface aggregated results and GitHub Step Summary tables.
 
-6. **自動テスト / CI 強化**
-   - `yaml`, `tsx`, `uvu` などを `devDependencies` に追加し、スクリプト単体テストを整備。
-   - `tests/actions/` に Supabase / Sheets / Manus のモック HTTP を用意し、`undici` MockAgent で外部依存を隔離。
-   - 既存 `node-tests.yml` を拡張、または `workflow-scripts.yml` を新設して `npm test` / `npm run test:actions` を実行。
-   - ラベル `ci-smoke` 付与 PR 向けに `act` でのスモークテストジョブを追加し、`line-event` のハッピーパスを検証。
+### 3.5 Failure-Safe Log Persistence (AC5)
+- Harden `.github/actions/persist-progress` to:
+  1. Stage provided log files and attempt commit/push using the workflow token or PAT (document required scopes).
+  2. On failure, call `node scripts/logs/archive.mjs` to bundle files under `tmp/log-artifacts/<timestamp>` and upload via `actions/upload-artifact@v4` with configurable retention (default 90 days).
+  3. Emit `GITHUB_STEP_SUMMARY` and `::notice::` output with retrieval instructions.
+- Update workflows (`line-event`, `manus-progress`, `rotate-logs`, `economic-circuit-breaker`) to call the composite with meaningful commit messages and artifact labels.
+- Add rotation guidance (artifact pruning, repo cleanup) to the runbook.
 
-7. **ドキュメント / オンボーディング**
-   - `docs/RUNBOOK.md` にベンダー同期手順、ルーター保守、ログ Artifact 取得方法を追記。
-   - `.sdd/steering/tech.md` から棚卸しドキュメントへのクロスリンクを設定。
+### 3.6 Automated Checks & Coverage (AC6)
+- Ensure `node-tests.yml` runs `npm test`, `npm run test:actions`, `npm run lint`, `npm run vendor:verify`, and `actionlint`. Require this workflow on PRs.
+- Add fixtures & tests covering: Supabase/Sheets helpers (mock fetch), `scripts/logs/archive.mjs`, config validation CLI, router dispatch, and metrics aggregation.
+- Add optional `ci-smoke-act.yml` triggered by `ci-smoke` label that runs `act` for the two primary workflows with sanitized secrets to catch regression in job wiring.
 
-## 検討した代替案
-- **npm パッケージ化:** ビルド・公開パイプラインが増え更新が遅延するため却下。ベンドル化の方が監査しやすい。
-- **Supabase ストレージへのログ退避:** 追加認証が不要な GitHub Artifact へ退避する方針を優先し、将来検討とする。
-- **ルーターの多重運用:** 保守コストと挙動乖離を避けるため単一ルートに統一。
+### 3.7 External Maintenance Runbook (AC7)
+- Author `docs/runbooks/line-actions.md` covering: Git worktree clone, flag toggles (`gh variable set`/`gh secret set`), degraded mode recovery, running verification scripts locally, retrieving artifacts, and escalation paths.
+- Cross-link from `.sdd/steering/tech.md`, `README.md`, and workflow failure notices (Step Summary + notifications).
+- Provide runbook checklists for quarterly review and onboarding of subcontractors.
 
-## リスクと緩和策
-- **リスク:** ブランチプロテクションで Actions の push が拒否され続ける。
-  - **緩和:** PAT + 環境プロテクションの手順を明文化し、失敗時は Artifact 退避でログ欠損を防ぐ。
-- **リスク:** ベンドルスクリプトが上流と乖離。
-  - **緩和:** CI でチェックサム検証を行い、リリースチェックリストに同期作業を組み込む。
-- **リスク:** 設定検証で secrets 漏れが頻発。
-  - **緩和:** セットアップ手順を整備し、緊急時は `SKIP_CONFIG_VALIDATION` フラグで回避可能にする。
-- **リスク:** テスト追加で CI 時間が増える。
-  - **緩和:** Node テストジョブを並列化し、スモークテストはラベル付き PR のみで実行。
+### 3.8 Runtime Parameter Registry & CLI (AC8)
+- Create `config/workflows/runtime-parameters.json` enumerating operational flags (e.g., `MANUS_ENABLED`, `DEGRADED_MODE`, `GEMINI_COST_PER_CALL`, webhook URLs) with fields: `id`, `type`, `required`, `default`, `location` (`secret` or `variable`), `owner`, `description`.
+- Implement `scripts/checks/verify-runtime-config.mjs` to compare registry expectations against current env (`gh variable list`, `gh secret list`, or provided JSON). Output machine-readable status plus GitHub Summary.
+- Wrap the CLI in `.github/actions/check-runtime-config` for CI and local use; expose via `npm run runtime:verify`.
+- Update `docs/operations/runtime-config.md` with table exports and instructions for updating registry entries.
 
-## テスト戦略
-- **ユニットテスト:** Node `--test` で Supabase / Sheets / Manus ヘルパー、設定バリデータ、ログアーカイバ、ルーター処理をモック HTTP 付きで検証。
-- **結合テスト:** `act` を用いたワークフロースモークテストで `line-event` エンドツーエンドを外部通信なしに確認。
-- **リグレッション:** CI で `npm run vendor:verify` を実行し、ベンドルファイル改変を即検知。
-- **セキュリティ:** `actionlint` によるワークフロー lint を導入し、統合後の YAML を検証。
+### 3.9 Metrics & Observability (AC9)
+- Standardize Gemini metrics: extend `scripts/automation/run-gemini-log-summary.mjs` to persist sanitized output and record status/latency/cost in JSONL under `logs/metrics/gemini/<date>.jsonl`.
+- Add `scripts/automation/report-gemini-metrics.mjs` aggregation (already present) to compute success rate, latency percentiles, cost totals, and anomaly tags. Produce Markdown/CSV artifacts and optional Slack-friendly summary.
+- Update `gemini-metrics` workflows to run nightly, upload artifacts through `persist-progress`, and link metrics to Ops dashboards. Document retention & rotation strategy.
 
-## デプロイ / 移行手順
-1. ドキュメントとスクリプト（`docs/automation/WORKFLOWS.md`、ベンダーマニフェスト、設定検証アクション）を追加。
-2. `line-event.yml` 等から `curl` 依存を除去し、ベンドル済みスクリプトへ置換。
-3. ルーターを移行し、`webhook-event-router.yml` を削除またはアーカイブ。
-4. `line-event.yml`、`manus-progress.yml` などログを push するワークフローへ新コンポジットアクションを組み込み。
-5. CI パイプライン（`node-tests.yml`、`workflow-scripts.yml`）を更新し、`contents:write` 付き PAT を保護環境で利用可能にする。
-6. リリースノートで変更を周知し、Ops/Compliance に Artifact 退避ポリシーをレビューしてもらう。
+## 4. Data Models & Contracts
+- **Workflow Inventory (`docs/automation/WORKFLOWS.md`)**: Deterministic Markdown generated from JSON snapshot, including columns `{workflow, file, owner, triggers, permissions, config reference}`.
+- **Vendor Manifest (`scripts/vendor/manifest.json` + `manifest.lock.json`)**: Array of `{id, source, target, sha256, size, last_synced_at}` entries. `npm run vendor:verify` recomputes digests and fails on mismatch.
+- **Runtime Parameter Registry (`config/workflows/runtime-parameters.json`)**: 
+  ```json
+  {
+    "parameters": [
+      {
+        "id": "MANUS_ENABLED",
+        "type": "boolean",
+        "required": true,
+        "default": "true",
+        "location": "variable",
+        "owner": "ops",
+        "description": "Toggle Manus dispatch in production workflows."
+      }
+    ]
+  }
+  ```
+- **LINE Event Payload (`tmp/event.json`)**: Stored JSON including `event_id`, `received_at`, `events[]` with `type`, `timestamp`, `source.userId`, sanitized before Supabase insert (`scripts/vendor/supabase/upsert-line-event.js`).
+- **Progress Event Payload (`tmp/progress-event.json`)**: Contains Manus response fields (`decision`, `retry_after_seconds`, `plan_variant`) consumed by `scripts/vendor/supabase/upsert-progress-event.js`.
+- **Gemini Metrics (`logs/metrics/gemini/*.jsonl`)**: JSONL entries with `run_id`, `timestamp`, `status`, `duration_ms`, `latency_ms`, `cost_estimate`, `logs_count`, `model`.
+- **Log Artifacts (`tmp/log-artifacts/<timestamp>`)**: TAR/zip-friendly directory produced by `scripts/logs/archive.mjs` for artifact upload; naming scheme `<label>-<yyyymmddhhmmss>`.
 
-## 承認待ち事項
-- ベンダーマニフェスト更新のオーナーを DevOps が担うことの確認。
-- Artifact 退避ポリシーに対する Ops / Compliance の最終承認。
-- `contents:write` を付与した PAT / トークンスコープを Repo Admin が準備できるかの確認。
+## 5. Risks & Mitigations
+- **Insufficient token scope to push logs**: Mitigate by documenting PAT requirements, using environment-protected secrets, and relying on artifact fallback when push fails.
+- **Vendored script drift or tampering**: Lock digests, enforce `vendor:verify` in CI, and document sync cadence in the runbook.
+- **Runtime parameter rot**: Schedule nightly `runtime:verify` workflow posting failures to Ops channel; embed reminders in onboarding checklist.
+- **`act` smoke tests flaking**: Keep optional, cache Docker images, and allow retry; do not block PRs on failures without reproduction.
+- **Artifact retention not meeting compliance**: Default retention to 90 days, surface metadata in summary, and confirm with Compliance before rollout.
+- **Google/Supabase schema changes**: Add unit tests that stub API responses and run contract checks (`npm run test:actions`), ensuring failures are caught before deployment.
 
-ステークホルダー承認後、`/sdd-tasks` に進み実装タスクへ分解する。
+## 6. Testing Strategy
+- **Unit tests (`npm test`)**: Cover vendor sync utilities, config validators, log archiver, metrics collectors, and router decision logic with fixtures under `tests/node` and `tests/actions`.
+- **Composite action tests (`npm run test:actions`)**: Use `execa`+snapshot assertions to validate `.github/actions/validate-config`, `.github/actions/persist-progress`, and the new `check-runtime-config`.
+- **Static analysis**: `actionlint`, `npm run lint`, `npm run vendor:verify`, secret-scanner if available.
+- **Integration / Smoke**: Optional `act` workflow (label-gated) executing `line-event.yml` in normal/degraded modes and `manus-progress.yml` to ensure repo-dispatched payloads succeed without external fetches.
+- **Manual verification**: Runbook checklist for external operators to rehearse degraded-mode flip, secret verification CLI, and artifact retrieval at least once per quarter.
+
+## 7. Deployment & Migration Plan
+1. **Vendor hardening**: Introduce `manifest.lock.json`, update `scripts/vendor/sync.mjs`, and regenerate vendored helpers. Run `npm run vendor:verify`.
+2. **Inventory & docs**: Regenerate workflow inventory, link from steering doc, and add CI guard.
+3. **Router cleanup**: Update `webhook-handler.yml` to rely on `scripts/webhook-router.mjs`, remove legacy router workflows, add tests.
+4. **Validation upgrades**: Enhance `validate-config`, add runtime parameter registry + CLI + composite, and wire into critical workflows.
+5. **Persistence improvements**: Update `persist-progress` and retrofit workflows to use it consistently; document PAT requirements.
+6. **Metrics & telemetry**: Finalize Gemini metrics aggregation, ensure artifacts uploaded via new persistence path, and add scheduling.
+7. **Runbook & onboarding**: Publish external maintenance runbook, parameter table, and link from notifications.
+8. **CI uplift**: Enforce expanded CI steps, optionally add `act` smoke job, and update status checks.
+9. **Sign-off**: Run through runbook dry-run with Ops and Compliance; record approvals and archive design in `sdd-archive`.
+
+## 8. Alternatives Considered
+- **Shipping helpers as a private npm package**: Rejected due to additional supply-chain risk and need for registry availability during outages; vendoring keeps repo self-contained.
+- **Persisting logs directly to Supabase**: Deferred because it complicates PHI handling and token scopes; GitHub Artifacts satisfy retention/compliance with minimal risk.
+- **Multiple routers per domain**: Rejected to avoid split-brain routing logic and duplicated validation; single router simplifies maintenance and auditing.
+
+## 9. Dependencies & Follow-ups
+- Dedicated Actions PAT with `contents:write` scope stored in environment-protected secret.
+- Confirmation from Compliance on artifact retention (target 90 days) and runtime parameter documentation format.
+- Ops team to own runtime parameter registry and review runbook quarterly.
+- Schedule periodic vendor manifest refresh (e.g., monthly) and record in release checklist.

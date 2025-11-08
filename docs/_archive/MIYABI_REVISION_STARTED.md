@@ -4,7 +4,7 @@
 
 ### 1. Issue作成完了
 - Issue #1: プロジェクト全体の推敲と改善
-- URL: https://github.com/mo666-med/cursorvers_line-discord/issues/1
+- URL: https://github.com/mo666-med/cursorvers_line_free_dev/issues/1
 
 ### 2. Miyabi設定の追加完了
 - `.claude/`ディレクトリとエージェント設定を追加
@@ -63,9 +63,9 @@ Miyabiが自動的に以下を実施します：
 
 ## 🔗 リンク
 
-- Issue: https://github.com/mo666-med/cursorvers_line-discord/issues/1
-- リポジトリ: https://github.com/mo666-med/cursorvers_line-discord
-- Actions: https://github.com/mo666-med/cursorvers_line-discord/actions
+- Issue: https://github.com/mo666-med/cursorvers_line_free_dev/issues/1
+- リポジトリ: https://github.com/mo666-med/cursorvers_line_free_dev
+- Actions: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 
 ## ⚠️ 注意事項
 

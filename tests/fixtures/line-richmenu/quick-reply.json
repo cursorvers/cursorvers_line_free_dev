@@ -1,0 +1,10 @@
+[
+  {
+    "type": "action",
+    "action": {
+      "type": "message",
+      "label": "詳細を見る",
+      "text": "詳細を見せて"
+    }
+  }
+]

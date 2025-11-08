@@ -1,0 +1,55 @@
+name: CI Smoke (act)
+x-owner: devops
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  act-smoke:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'pull_request' &&
+        contains(github.event.pull_request.labels.*.name, 'ci-smoke')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm install || echo "No dependencies to install"
+
+      - name: Install act
+        run: |
+          set -euo pipefail
+          ACT_VERSION="v0.2.60"
+          curl -sSL "https://github.com/nektos/act/releases/download/${ACT_VERSION}/act_Linux_x86_64.tar.gz" -o act.tar.gz
+          sudo tar -xzf act.tar.gz -C /usr/local/bin act
+          rm act.tar.gz
+          act --version
+
+      - name: Dry-run line-event workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          act workflow_dispatch \
+            -W .github/workflows/line-event.yml \
+            -n \
+            --container-architecture linux/amd64
+
+      - name: Dry-run manus-progress workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          act workflow_dispatch \
+            -W .github/workflows/manus-progress.yml \
+            -n \
+            --container-architecture linux/amd64

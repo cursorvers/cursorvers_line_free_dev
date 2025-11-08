@@ -17,7 +17,8 @@
 - **[MANUS_API.md](MANUS_API.md)** - Manus API連動ガイド
 
 ### 運用
-- **[RUNBOOK.md](RUNBOOK.md)** - 運用手順書（緊急停止、復旧、ロールバック）
+- **[runbooks/line-actions.md](runbooks/line-actions.md)** - LINE Actions 専用 Runbook（フラグ切替、縮退復旧、ログ/メトリクス運用）
+- **[RUNBOOK.md](RUNBOOK.md)** - 旧版 Runbook（緊急停止、復旧、ロールバック）
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - トラブルシューティングガイド
 
 ### その他
@@ -68,4 +69,3 @@ supabase secrets set FEATURE_BOT_ENABLED=false --project-ref haaxgwyimoqzzxzdaee
   - 一時的なファイルをアーカイブ
   - 統合ドキュメントを作成
   - ドキュメントインデックスを作成
-

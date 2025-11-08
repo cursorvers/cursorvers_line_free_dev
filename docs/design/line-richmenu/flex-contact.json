@@ -1,0 +1,75 @@
+{
+  "type": "flex",
+  "altText": "お問い合わせメニュー",
+  "contents": {
+    "type": "bubble",
+    "size": "mega",
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "paddingAll": "24px",
+      "backgroundColor": "#0F1630",
+      "contents": [
+        {
+          "type": "text",
+          "text": "お問い合わせありがとうございます",
+          "size": "xl",
+          "weight": "bold",
+          "color": "#FFFFFF"
+        },
+        {
+          "type": "text",
+          "text": "以下から該当する項目を選んでいただければ、担当が最短でご返信します。",
+          "wrap": true,
+          "margin": "md",
+          "color": "#D4E2FF"
+        },
+        {
+          "type": "box",
+          "layout": "vertical",
+          "spacing": "md",
+          "margin": "lg",
+          "contents": [
+            {
+              "type": "button",
+              "style": "primary",
+              "color": "#5B9BFF",
+              "action": {
+                "type": "message",
+                "label": "個人開発を相談する",
+                "text": "個人の開発サポートについて相談したい"
+              }
+            },
+            {
+              "type": "button",
+              "style": "primary",
+              "color": "#42C3FF",
+              "action": {
+                "type": "message",
+                "label": "法人向けのご相談",
+                "text": "法人/チーム向けの導入支援について知りたい"
+              }
+            },
+            {
+              "type": "button",
+              "style": "secondary",
+              "color": "#24304E",
+              "action": {
+                "type": "message",
+                "label": "その他・自由記入",
+                "text": "その他の相談内容: "
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "※ 自動送信メッセージの後に担当が確認し、通常24時間以内に返信いたします。",
+          "size": "sm",
+          "color": "#A5B4D6",
+          "wrap": true
+        }
+      ]
+    }
+  }
+}

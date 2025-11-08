@@ -1,0 +1,64 @@
+name: Note Event Handler
+x-owner: devops
+
+on:
+  repository_dispatch:
+    types: [note_event]
+  workflow_dispatch:
+    inputs:
+      payload_path:
+        description: 'Path to note webhook payload JSON'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  handle-note-event:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Persist note payload
+        id: note
+        run: |
+          set -euo pipefail
+          mkdir -p tmp
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            printf '%s\n' '${{ toJson(github.event.client_payload) }}' > tmp/note-event.json
+          else
+            PAYLOAD_PATH="${{ github.event.inputs.payload_path }}"
+            if [ -n "$PAYLOAD_PATH" ] && [ -f "$PAYLOAD_PATH" ]; then
+              cp "$PAYLOAD_PATH" tmp/note-event.json
+            else
+              cat <<'JSON' > tmp/note-event.json
+{
+  "note_event_id": "sample-note-event",
+  "event_type": "viewed_note",
+  "note_user_id": "note-user-1",
+  "user_hash": "hash-user-1",
+  "received_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+JSON
+            fi
+          fi
+          echo "payload_path=tmp/note-event.json" >> "$GITHUB_OUTPUT"
+
+      - name: Handle note event
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        run: |
+          node scripts/orchestration/handle-note-event.mjs --event "${{ steps.note.outputs.payload_path }}"

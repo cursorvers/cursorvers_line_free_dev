@@ -4,7 +4,7 @@
  */
 
 const DEFAULT_BASE_URL = "https://api.manus.ai";
-const USER_AGENT = "cursorvers-line-discord/1.0.0";
+const USER_AGENT = "cursorvers-line-free-dev/1.0.0";
 
 function trim(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -50,7 +50,7 @@ async function parseResponseBody(response) {
   }
 }
 
-async function requestManus({ apiKey, baseUrl, path, method, body, userAgent }) {
+export async function requestManus({ apiKey, baseUrl, path, method, body, userAgent }) {
   if (!apiKey) {
     throw new Error("MANUS_API_KEY is not configured");
   }
@@ -125,6 +125,17 @@ export async function cancelManusTask(taskId, overrides = {}) {
     baseUrl: config.baseUrl,
     path: `/v1/tasks/${encodeURIComponent(taskId)}`,
     method: "DELETE",
+    userAgent: config.userAgent,
+  });
+}
+
+export async function fetchManusConfig({ path = "/v1/config/line", overrides = {} } = {}) {
+  const config = resolveConfig(overrides);
+  return await requestManus({
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
+    path,
+    method: "GET",
     userAgent: config.userAgent,
   });
 }

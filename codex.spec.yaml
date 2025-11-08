@@ -1,0 +1,194 @@
+# Codex Spec - Event Rules and Constraints
+# This file defines event handling rules, constraints, and delivery logic
+# for LINE and note events in a unified specification format.
+
+version: "1.0.0"
+description: "LINE / note orchestration rules for Cursorvers"
+
+events:
+  add_line:
+    description: "LINE友だち追加"
+    source: "line"
+    rules:
+      - id: "welcome_flow"
+        when: "event == 'add_line'"
+        actions:
+          - type: "set_tag"
+            tag: "conversion_invited"
+            value: true
+          - type: "send_message"
+            template: "scenario_add_line"
+        constraints:
+          - type: "phi_filter"
+            enabled: true
+          - type: "verified_domain"
+            enabled: true
+
+  cmd_detail:
+    description: "開発事例の案内"
+    source: "line"
+    rules:
+      - id: "detail_template"
+        when: "event == 'cmd_detail'"
+        actions:
+          - type: "send_message"
+            template: "scenario_cmd_detail"
+        constraints:
+          - type: "phi_filter"
+            enabled: true
+
+  cmd_gift:
+    description: "限定プレゼント案内"
+    source: "line"
+    rules:
+      - id: "gift_template"
+        when: "event == 'cmd_gift'"
+        actions:
+          - type: "send_message"
+            template: "scenario_cmd_gift"
+        limits:
+          - type: "once_per_user"
+        constraints:
+          - type: "phi_filter"
+            enabled: true
+
+  cmd_contact:
+    description: "お問い合わせ応答"
+    source: "line"
+    rules:
+      - id: "contact_template"
+        when: "event == 'cmd_contact'"
+        actions:
+          - type: "send_message"
+            template: "scenario_cmd_contact"
+        constraints:
+          - type: "phi_filter"
+            enabled: true
+
+  line_message:
+    description: "LINEテキストメッセージ"
+    source: "line"
+    rules:
+      - id: "free_text_router"
+        when: "event == 'line_message'"
+        actions:
+          - type: "process_message"
+            handler: "gpt_analysis"
+        constraints:
+          - type: "phi_filter"
+            enabled: true
+
+  note_viewed:
+    description: "note記事閲覧"
+    source: "note"
+    rules:
+      - id: "note_view_tag"
+        when: "event == 'note_viewed'"
+        actions:
+          - type: "update_tag"
+            tag: "note_viewed"
+            value: true
+        constraints:
+          - type: "verified_domain"
+            enabled: true
+
+  note_payment_completed:
+    description: "note決済完了"
+    source: "note"
+    rules:
+      - id: "note_payment"
+        when: "event == 'note_payment_completed'"
+        actions:
+          - type: "set_tag"
+            tag: "payment_completed"
+            value: true
+          - type: "set_tag"
+            tag: "paid_active"
+            value: true
+          - type: "send_message"
+            template: "payment_thanks"
+        constraints:
+          - type: "phi_filter"
+            enabled: true
+
+constraints:
+  phi_filter:
+    description: "PHI（個人情報）パターン検出"
+    enabled: true
+    patterns:
+      - type: "email"
+        regex: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+      - type: "phone"
+        regex: "0\\d{1,4}-\\d{1,4}-\\d{4}"
+      - type: "credit_card"
+        regex: "\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}"
+    action_on_detect: "remove_and_warn"
+
+  verified_domain:
+    description: "Verified Domain検証"
+    enabled: true
+    allowed_domains:
+      - "cursorvers.com"
+      - "manus.im"
+      - "manus.ai"
+    action_on_unverified: "reject"
+
+  broadcast_limit:
+    description: "ブロードキャスト送信上限"
+    enabled: true
+    max_per_user_per_month: 3
+    action_on_exceed: "skip"
+
+tags:
+  conversion_invited:
+    description: "友だち登録済み"
+    type: "boolean"
+    default: false
+
+  note_viewed:
+    description: "note記事閲覧済み"
+    type: "boolean"
+    default: false
+
+  payment_completed:
+    description: "決済完了済み"
+    type: "boolean"
+    default: false
+
+  paid_active:
+    description: "有料会員アクティブ"
+    type: "boolean"
+    default: false
+
+  last_broadcast_date:
+    description: "最後のブロードキャスト送信日"
+    type: "date"
+    default: null
+
+  broadcast_count_this_month:
+    description: "今月のブロードキャスト送信回数"
+    type: "integer"
+    default: 0
+
+delivery:
+  line:
+    enabled: true
+    webhook_url: "${LINE_WEBHOOK_URL}"
+    retry_policy:
+      max_retries: 3
+      backoff: "exponential"
+
+  discord:
+    enabled: false
+    webhook_url: "${DISCORD_WEBHOOK_URL}"
+    retry_policy:
+      max_retries: 3
+      backoff: "exponential"
+
+logging:
+  enabled: true
+  destination: "supabase"
+  table: "event_logs"
+  artifact_fallback: true
+  retention_days: 90
+

@@ -16,6 +16,37 @@
   // パネルのサイズ設定
   "workbench.panel.bottom.size": 300,
   
+  // 日本語入力・変換設定
+  "editor.unicodeHighlight.ambiguousCharacters": false,
+  "editor.unicodeHighlight.invisibleCharacters": false,
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": true,
+  "editor.acceptSuggestionOnCommitCharacter": true,
+  "editor.wordBasedSuggestions": "off",
+  "editor.suggest.snippetsPreventQuickSuggestions": false,
+  "editor.quickSuggestions": {
+    "other": true,
+    "comments": false,
+    "strings": false
+  },
+  // IME（入力メソッド）設定
+  "editor.inlineSuggest.enabled": true,
+  "editor.suggest.showWords": false,
+  "editor.suggest.showSnippets": true,
+  "editor.suggest.localityBonus": true,
+  // 日本語入力のための設定
+  "editor.suggest.filterGraceful": true,
+  "editor.suggest.maxVisibleSuggestions": 12,
+  "editor.suggest.preview": true,
+  "terminal.integrated.env.osx": {
+    "LANG": "ja_JP.UTF-8",
+    "LC_ALL": "ja_JP.UTF-8"
+  },
+  "terminal.integrated.env.linux": {
+    "LANG": "ja_JP.UTF-8",
+    "LC_ALL": "ja_JP.UTF-8"
+  },
+  
   // チャットパネルの設定（Cursor固有）
   // 注意: Cursorのチャット欄は独立したパネルなので、ターミナルを直接表示することはできません
   // 代わりに、ターミナルをチャット欄の下に配置する設定を推奨します

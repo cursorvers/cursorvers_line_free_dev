@@ -1,5 +1,5 @@
 {
-  "name": "cursorvers-line-discord",
+  "name": "cursorvers-line-free-dev",
   "version": "1.0.0",
   "description": "LINE友だち登録システム - GitHub Actions中心運用",
   "type": "module",
@@ -10,10 +10,15 @@
     "test:feature-flags": "node --test tests/node/feature-flags.test.mjs",
     "test:actions": "node --test tests/actions/**/*.test.mjs",
     "lint": "npm run test:actions",
+    "lint:spec": "node scripts/orchestration/validate-spec.mjs",
     "vendor:sync": "node scripts/vendor/sync.mjs",
     "vendor:verify": "node scripts/vendor/sync.mjs --verify",
     "workflows:inventory": "node scripts/automation/generate-workflow-inventory.mjs",
-    "codex-agent": "node scripts/codex-agent.js"
+    "codex-agent": "node scripts/codex-agent.js",
+    "line:templates": "node scripts/automation/build-line-templates.mjs",
+    "line:flex": "node scripts/automation/send-line-flex.mjs",
+    "line:scenario": "node scripts/automation/send-line-scenario.mjs",
+    "runtime:verify": "node scripts/checks/run-runtime-verify.mjs"
   },
   "keywords": [
     "line",
@@ -23,6 +28,9 @@
   ],
   "author": "mo666-med",
   "license": "MIT",
-  "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "js-yaml": "^4.1.0",
+    "uri-js": "^4.4.1"
+  }
 }

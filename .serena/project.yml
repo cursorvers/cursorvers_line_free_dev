@@ -80,5 +80,5 @@ excluded_tools: []
 # (contrary to the memories, which are loaded on demand).
 initial_prompt: ""
 
-project_name: "cursorvers_line-discord"
+project_name: "cursorvers_line_free_dev"
 included_optional_tools: []

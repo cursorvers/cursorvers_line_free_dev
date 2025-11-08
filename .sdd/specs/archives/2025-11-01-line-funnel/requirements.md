@@ -8,7 +8,7 @@
 ## Desired Outcome
 - note 経由で友だち追加した LINE 利用者が、セグメントされた配信やイベント告知を受け、40% 程度が有料コンサルティングへ転換できる運用を実現する。
 - Front Door の署名検証と個人情報サニタイズが強化され、GitHub Actions が Plan JSON を唯一の真実として実行し、Manus は開発／最終段階のみで補助的に動作する。
-- GitHub Actions ダッシュボード (https://github.com/mo666-med/cursorvers_line-discord/actions) から全ワークフローの状態を監査でき、予算や安全ガードレールを常に遵守できる。
+- GitHub Actions ダッシュボード (https://github.com/mo666-med/cursorvers_line_free_dev/actions) から全ワークフローの状態を監査でき、予算や安全ガードレールを常に遵守できる。
 
 ## Acceptance Criteria
 - [x] **LINE Webhook 処理**: Front Door が LINE の HMAC 署名を検証し、ユーザー ID を塩付き SHA-256 でマスクした上で GitHub `repository_dispatch` を発火する。署名不正時は 403 を返却しログに記録する。

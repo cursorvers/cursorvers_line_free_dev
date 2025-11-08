@@ -1,0 +1,272 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Codex Spec Schema",
+  "description": "JSON Schema for codex.spec.yaml validation",
+  "type": "object",
+  "required": ["version", "events", "constraints", "tags"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "events": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "object",
+          "required": ["description", "source", "rules"],
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "enum": ["line", "note"]
+            },
+            "rules": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "actions"],
+                "anyOf": [
+                  { "required": ["condition"] },
+                  { "required": ["when"] }
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "when": {
+                    "type": "string",
+                    "description": "Condition expression for rule matching"
+                  },
+                  "condition": {
+                    "type": "string"
+                  },
+                  "actions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["type"],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": ["set_tag", "update_tag", "send_message", "process_message"]
+                        },
+                        "tag": {
+                          "type": "string"
+                        },
+                        "value": {},
+                        "template": {
+                          "type": "string"
+                        },
+                        "handler": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "limits": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": ["once_per_user", "rate_limit"]
+                        },
+                        "window_days": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  },
+                  "constraints": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["type", "enabled"],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": ["phi_filter", "verified_domain", "broadcast_limit"]
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "phi_filter": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "patterns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["type", "regex"],
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "regex": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "action_on_detect": {
+              "type": "string"
+            }
+          }
+        },
+        "verified_domain": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "allowed_domains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "action_on_unverified": {
+              "type": "string"
+            }
+          }
+        },
+        "broadcast_limit": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "max_per_user_per_month": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "action_on_exceed": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "tags": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "object",
+          "required": ["description", "type"],
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["boolean", "string", "integer", "date"]
+            },
+            "default": {}
+          }
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "webhook_url": {
+              "type": "string"
+            },
+            "retry_policy": {
+              "type": "object",
+              "properties": {
+                "max_retries": {
+                  "type": "integer"
+                },
+                "backoff": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "discord": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "webhook_url": {
+              "type": "string"
+            },
+            "retry_policy": {
+              "type": "object",
+              "properties": {
+                "max_retries": {
+                  "type": "integer"
+                },
+                "backoff": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "artifact_fallback": {
+          "type": "boolean"
+        },
+        "retention_days": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}
+
+

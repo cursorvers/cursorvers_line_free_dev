@@ -1,13 +1,4 @@
 #!/usr/bin/env node
-/**
- * Webhook Event Router
- *
- * Routes GitHub webhook events to simple state transitions so that
- * Miyabi's status dashboard reflects the current workflow.
- */
-
-import { Octokit } from '@octokit/rest';
-
 const argv = process.argv.slice(2);
 
 if (argv.length < 2) {
@@ -33,7 +24,13 @@ if (!repository) {
 }
 
 const [owner, repo] = repository.split('/');
-const octokit = new Octokit({ auth: token });
+const GITHUB_API = 'https://api.github.com';
+const DEFAULT_HEADERS = {
+  Authorization: `Bearer ${token}`,
+  'User-Agent': 'cursorvers-line-discord-webhook-router',
+  Accept: 'application/vnd.github+json',
+  'X-GitHub-Api-Version': '2022-11-28',
+};
 
 const STATE_LABELS = [
   '📥 state:pending',
@@ -59,12 +56,42 @@ const labelPayload = (() => {
   }
 })();
 
-async function setIssueState(issueNumber, nextState) {
-  const { data: issue } = await octokit.issues.get({
-    owner,
-    repo,
-    issue_number: issueNumber,
+async function githubRequest(method, endpoint, { body, allowedStatuses = [200, 201, 202, 204] } = {}) {
+  const url = `${GITHUB_API}${endpoint}`;
+  const headers = { ...DEFAULT_HEADERS };
+  if (body) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
   });
+
+  if (!allowedStatuses.includes(response.status)) {
+    const text = await response.text();
+    throw new Error(`${method} ${endpoint} failed with ${response.status}: ${text}`);
+  }
+
+  if (response.status === 204 || response.status === 205) {
+    return { status: response.status, data: null };
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return { status: response.status, data: null };
+  }
+
+  const json = await response.json();
+  return { status: response.status, data: json };
+}
+
+async function setIssueState(issueNumber, nextState) {
+  const { data: issue } = await githubRequest(
+    'GET',
+    `/repos/${owner}/${repo}/issues/${issueNumber}`
+  );
 
   const currentLabels = issue.labels.map((label) => (typeof label === 'string' ? label : label.name ?? ''));
   const hasState = (state) => currentLabels.includes(state);
@@ -73,8 +100,16 @@ async function setIssueState(issueNumber, nextState) {
 
   for (const label of labelsToRemove) {
     try {
-      await octokit.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: label });
-      console.log(`Removed state label: ${label}`);
+      const result = await githubRequest(
+        'DELETE',
+        `/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
+        { allowedStatuses: [200, 204, 404] }
+      );
+      if (result.status === 404) {
+        console.log(`State label ${label} already absent for issue #${issueNumber}`);
+      } else {
+        console.log(`Removed state label: ${label}`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`Failed to remove label ${label}:`, message);
@@ -82,7 +117,11 @@ async function setIssueState(issueNumber, nextState) {
   }
 
   if (nextState && !hasState(nextState)) {
-    await octokit.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: [nextState] });
+    await githubRequest(
+      'POST',
+      `/repos/${owner}/${repo}/issues/${issueNumber}/labels`,
+      { body: { labels: [nextState] } }
+    );
     console.log(`Set issue #${issueNumber} state → ${nextState}`);
   } else if (!nextState) {
     console.log(`Cleared state labels for issue #${issueNumber}`);
@@ -107,6 +146,27 @@ export function determineStateFromLabels(labels) {
   }
 
   return null;
+}
+
+export function parseStateCommand(body = '') {
+  if (typeof body !== 'string') return null;
+  const trimmed = body.trim();
+  if (!trimmed.startsWith('/state')) return null;
+  const parts = trimmed.split(/\s+/);
+  if (parts.length < 2) {
+    return { requested: null, state: null };
+  }
+  const lower = parts[1].toLowerCase();
+  const mapping = {
+    pending: '📥 state:pending',
+    analyzing: '🔍 state:analyzing',
+    implementing: '🏗️ state:implementing',
+    reviewing: '👀 state:reviewing',
+    blocked: '🚫 state:blocked',
+    paused: '⏸️ state:paused',
+    done: '✅ state:done',
+  };
+  return { requested: lower, state: mapping[lower] ?? null };
 }
 
 async function handleIssueEvent() {
@@ -167,43 +227,34 @@ async function handleCommentEvent() {
     return;
   }
 
-  if (!body.startsWith('/state')) {
+  const parsed = parseStateCommand(body);
+  if (!parsed) {
     console.log('Comment does not contain a state command. Nothing to do.');
     return;
   }
 
-  const [, requested] = body.split(/\s+/);
-  if (!requested) {
-    console.log('State command missing argument.');
-    return;
-  }
-
-  const lower = requested.toLowerCase();
-  const mapping = {
-    pending: '📥 state:pending',
-    analyzing: '🔍 state:analyzing',
-    implementing: '🏗️ state:implementing',
-    reviewing: '👀 state:reviewing',
-    blocked: '🚫 state:blocked',
-    paused: '⏸️ state:paused',
-    done: '✅ state:done',
-  };
-
-  const next = mapping[lower];
+  const { requested, state: next } = parsed;
   if (!next) {
-    console.log(`Unknown state requested: ${requested}`);
+    console.log(`Unknown state requested: ${requested ?? 'missing'}`);
+    if (requested) {
+      await octokit.issues.createComment({
+        owner,
+        repo,
+        issue_number: issueNumber,
+        body: `❌ Unknown state: \`${requested}\`\n\nAvailable states:\n- pending\n- analyzing\n- implementing\n- reviewing\n- blocked\n- paused\n- done`,
+      });
+    }
     return;
   }
 
   await setIssueState(issueNumber, next);
   const actor = process.env.COMMENT_AUTHOR ?? 'unknown';
 
-  await octokit.issues.createComment({
-    owner,
-    repo,
-    issue_number: issueNumber,
-    body: `State updated to **${next}** by @${actor}`,
-  });
+  await githubRequest(
+    'POST',
+    `/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+    { body: { body: `State updated to **${next}** by @${actor}` }, allowedStatuses: [201] }
+  );
 }
 
 async function main() {

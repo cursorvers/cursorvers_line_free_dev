@@ -19,6 +19,7 @@
 1. Reader discovers note article → taps CTA → lands on LINE add-friend prompt → auto-registration flow logs contact in Google Sheets.
 2. Registered contact receives automated notifications (new articles, supplementary materials) plus targeted announcements (events, retainer offers).
 3. Interested contact escalates to consultation booking or service inquiry via LINE flows routed to operations.
+4. 2025 リニューアル方針: note で学習の「入口」、LINE で合図と分岐、Discord で学習本体を完結。Classroom オペレーションに合わせコマンド体系（#詳しく/#参加/#完了/#受講開始/#つまずき 等）を定義し、タグ (`lead_free`, `trial_active`, `paid_active`, `alumni`, `conversion_invited`) に基づくセグメント管理を行う。
 
 ## Pain Points / Risks
 - Manual maintenance becomes brittle as operations scale; need automation with minimal human babysitting.
@@ -39,6 +40,7 @@
 - Current session directive focused on GitHub Actions reconnaissance; stakeholder KPIs/segmentation details remain unprovided.
 - 2025-??-??: 再度ビジネス要件（KPI詳細、主要ユーザー導線、運用責任分担、リスク背景）を日本語でヒアリング依頼済み。回答待ちのため製品方針の精緻化は保留。
 - 2025-??-??: Geminiログ要約PoCの目的・評価指標（工数削減率、異常検知率、失敗率/応答時間、APIコスト）と想定利用者（オンコールOps／週次レビュー担当エンジニア）を確認。PoC期間は既存手動レビューと併用し、出力は必ず人が検証する方針。
+- 2025-11-06: note→LINE→Discord の本番導線を Spec-Driven Codex で再設定する要求を受領。販促メッセージは「行動発火時のみ」「paid_active には送らない」などビジネスルールが提示され、イベント定義・配信ルール・検証ケース・受入基準が明文化された。未回答: KPI の具体値（note→LINE 転換率の最新値、`trial_active`→`paid_active` の目標）、Discord 連携 API の SLA、note webhook の確定スキーマ。
 
 ## Session Summary & Next Steps
 - Captured product vision (note → LINE → consulting funnel) and provisional conversion target (40% note-to-LINE opt-in).
@@ -49,3 +51,4 @@
 - Gemini PoCによりログレビュー負荷軽減と異常検知支援を評価する枠組みを確立（要約活用フロー、Secrets管理、評価レポート雛形）。
 - Open items before `/sdd-requirements`: align on detailed KPI stack (beyond 40%), finalize message cadence and segmentation rules, confirm Google Sheets data-handling policy, prioritize automation scenarios for MVP, schedule implementation readiness tasks (Edge deploy, Actions wiring, secret provisioning) referenced in the handover plan, and validate GitHub Actions coverage aligns with stakeholder priorities.
 - Pending stakeholder replies: note/LINEコンバージョン以外の優先指標、既存LINE登録者のセグメントと改善ポイント、直近の運用課題やリスク事例、日常運用チームの権限範囲（フラグ切替など）を確認する必要あり。回答到着までは要件深化を停止。
+- 次回 `/sdd-requirements` 着手時には、今回提示されたイベント表・ルール YAML・検証ケース (V1–V12)・DoD をベースに仕様を固め、未記載の成功指標／Discord 連携仕様を補完すること。

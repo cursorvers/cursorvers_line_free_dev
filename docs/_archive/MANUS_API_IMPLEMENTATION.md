@@ -3,7 +3,7 @@
 ## ✅ Issue作成完了
 
 - **Issue #2**: Manus API連動の実装
-- **URL**: https://github.com/mo666-med/cursorvers_line-discord/issues/2
+- **URL**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/2
 - **ラベル**: `🔌 api`, `🏗️ state:implementing`, `⚠️ priority:P1-High`
 
 ## 📋 実装計画
@@ -59,9 +59,9 @@ Miyabiのエージェントが以下を実装します：
 
 ## 🔗 リンク
 
-- Issue: https://github.com/mo666-med/cursorvers_line-discord/issues/2
-- 実装計画: https://github.com/mo666-med/cursorvers_line-discord/blob/main/docs/MANUS_API_INTEGRATION_PLAN.md
-- Actions: https://github.com/mo666-med/cursorvers_line-discord/actions
+- Issue: https://github.com/mo666-med/cursorvers_line_free_dev/issues/2
+- 実装計画: https://github.com/mo666-med/cursorvers_line_free_dev/blob/main/docs/MANUS_API_INTEGRATION_PLAN.md
+- Actions: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 
 ## ⚠️ 注意事項
 

@@ -71,5 +71,5 @@ Miyabi > Issue #2を実行して、結果を確認したい
 
 - **環境変数**: `OPENAI_API_KEY`が必要
 - **モデル**: `OPENAI_MODEL`（デフォルト: `gpt-5`）
-- **リポジトリ**: `mo666-med/cursorvers_line-discord`
+- **リポジトリ**: `mo666-med/cursorvers_line_free_dev`
 

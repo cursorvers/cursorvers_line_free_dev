@@ -7,4 +7,5 @@ test('generateWorkflowInventory returns owner metadata from workflows', async ()
   const lineEvent = result.rows.find((row) => row.file.endsWith('line-event.yml'));
   assert.ok(lineEvent, 'line-event.yml row is present');
   assert.equal(lineEvent.owner, 'devops');
+  assert.match(lineEvent.permissions ?? '', /contents:\s*write/, 'line-event.yml permissions include contents: write');
 });

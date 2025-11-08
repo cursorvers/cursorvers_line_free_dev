@@ -29,7 +29,7 @@ GitHub Actionsワークフローは、Issueラベルが追加されてから**�
 
 ### 確認方法
 
-1. **GitHub Actionsページ**: https://github.com/mo666-med/cursorvers_line-discord/actions
+1. **GitHub Actionsページ**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
    - フィルタ: workflow="autonomous-agent.yml" event="issues"
    - Issue #1に関連する実行を確認
 
@@ -72,7 +72,7 @@ GitHub Actionsワークフローは、Issueラベルが追加されてから**�
 ## 📝 次のステップ
 
 1. **数分待つ**（GitHub Actionsがイベントを処理するまで）
-2. **GitHub Actionsページで確認**: https://github.com/mo666-med/cursorvers_line-discord/actions
+2. **GitHub Actionsページで確認**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 3. **Issueのコメントを確認**: Issue #1にGPT-5による分析結果が追加される
 
 ## ⚠️ 注意事項

@@ -2,9 +2,18 @@
 // Handles signature verification, payload sanitization, dedupe caching, and
 // dispatching to GitHub repository_dispatch.
 
-import { createHash, createHmac } from "https://deno.land/std@0.224.0/node/crypto.ts";
+import { createHmac } from "node:crypto";
 import type { KvClient } from "./kv.ts";
 import { getKv } from "./kv.ts";
+import { deriveLineSpecEvent } from "../../scripts/orchestration/line-event-mapper.js";
+// @ts-ignore
+import {
+  createDedupKey,
+  detectEventType,
+  hashUserId,
+  sanitizePayload,
+  resolveDedupeTtl,
+} from "../../scripts/orchestration/relay-sanitizer.mjs";
 
 interface RelayEnv {
   GH_OWNER: string;
@@ -50,167 +59,8 @@ export function verifySignature(body: string, signature: string | null, env: Rel
   return false;
 }
 
-export function hashUserId(userId: string, salt?: string): string {
-  const resolvedSalt = salt ?? "";
-  const hash = createHash("sha256");
-  hash.update(resolvedSalt);
-  hash.update(":");
-  hash.update(userId ?? "");
-  return hash.digest("hex").slice(0, 16);
-}
 
-export function sanitizePayload(payload: unknown, eventType: EventType, env: RelayEnv) {
-  if (eventType === "manus_progress" && typeof payload === "object" && payload) {
-    const data = payload as Record<string, unknown>;
-    return {
-      progress_id: data.progress_id ?? data.task_id ?? null,
-      decision: data.decision ?? data.plan_delta?.decision ?? "unknown",
-      plan_variant: data.plan_variant ?? data.context?.plan_variant ?? "production",
-      retry_after_seconds: data.retry_after_seconds ?? data.plan_delta?.retry_after_seconds ?? null,
-      manus_points_consumed: data.manus_points_consumed ?? data.metrics?.manus_points ?? null,
-      metadata: {
-        step_id: data.step_id ?? null,
-        event_type: data.event_type ?? null,
-        manus_run_id: data.manus_run_id ?? null,
-        context: data.context ?? null,
-        preview: data.preview ?? null,
-        error: data.error ?? null,
-      },
-    };
-  }
 
-  if (eventType === "line_event" && typeof payload === "object" && payload) {
-    const redact = (env as Record<string, string | undefined>).REDACT_LINE_MESSAGE === "true";
-    const salt = env.HASH_SALT ?? "";
-    const data = payload as { destination?: string; events?: Array<Record<string, unknown>> };
-
-    return {
-      destination: data.destination ?? null,
-      events: (data.events ?? []).map((event) => {
-        const source = event.source as { type?: string; userId?: string } | undefined;
-        const hashedId = source?.userId ? hashUserId(source.userId, salt) : null;
-        const message = event.message as { type?: string; id?: string; text?: string } | undefined;
-        return {
-          type: event.type ?? "unknown",
-          timestamp: event.timestamp ?? null,
-          source: {
-            type: source?.type ?? "unknown",
-            userId: hashedId,
-          },
-          replyToken: event.replyToken ?? null,
-          message: message
-            ? {
-                type: message.type ?? null,
-                id: message.id ?? null,
-                text: redact ? "[redacted]" : message.text ?? null,
-              }
-            : null,
-        };
-      }),
-    };
-  }
-
-  return payload;
-}
-
-export function createDedupKey(
-  eventType: EventType,
-  payload: unknown,
-  env: RelayEnv,
-  signature: string | null,
-  rawBody: string,
-): string {
-  const hash = createHash("sha256");
-  hash.update(eventType);
-
-  if (eventType === "line_event" && payload && typeof payload === "object") {
-    const data = payload as { events?: Array<Record<string, unknown>> };
-    const salt = env.HASH_SALT ?? "";
-    const event = data.events?.[0] ?? {};
-    const source = event.source as { userId?: string } | undefined;
-    const message = event.message as { id?: string } | undefined;
-    hash.update(hashUserId(source?.userId ?? "unknown", salt));
-    hash.update("|");
-    hash.update(String(event.type ?? "unknown"));
-    hash.update("|");
-    hash.update(String(event.timestamp ?? ""));
-    hash.update("|");
-    hash.update(String(message?.id ?? ""));
-    hash.update("|");
-    hash.update(String(event.replyToken ?? ""));
-    return hash.digest("hex");
-  }
-
-  if (eventType === "manus_progress" && payload && typeof payload === "object") {
-    const data = payload as Record<string, unknown>;
-    hash.update(String(data.progress_id ?? data.task_id ?? "unknown"));
-    hash.update("|");
-    hash.update(String(data.decision ?? data.plan_delta?.decision ?? "unknown"));
-    hash.update("|");
-    hash.update(String(data.plan_variant ?? data.context?.plan_variant ?? "production"));
-    hash.update("|");
-    hash.update(String(data.step_id ?? ""));
-    return hash.digest("hex");
-  }
-
-  hash.update(signature ?? "");
-  hash.update("|");
-  hash.update(rawBody);
-  return hash.digest("hex");
-}
-
-export async function markEventAsSeen(
-  key: string,
-  ttlSeconds: number,
-  kvFactory?: () => Promise<KvClient | null>,
-): Promise<boolean> {
-  const now = Date.now();
-  const expiry = now + ttlSeconds * 1000;
-  const factory = kvFactory ?? defaultKvFactory;
-  const kv = await factory();
-
-  if (kv) {
-    const existing = await kv.get<boolean>(["dedupe", key]);
-    if (existing?.value === true && existing.expiration && existing.expiration > now) {
-      return false;
-    }
-    await kv.set(["dedupe", key], true, { expireIn: ttlSeconds * 1000 });
-    return true;
-  }
-
-  const current = memoryDedupeCache.get(key);
-  if (current && current > now) {
-    return false;
-  }
-  memoryDedupeCache.set(key, expiry);
-  return true;
-}
-
-async function defaultKvFactory(): Promise<KvClient | null> {
-  try {
-    return await getKv();
-  } catch (error) {
-    log("warn", "Unable to open KV store", { error: error instanceof Error ? error.message : String(error) });
-    return null;
-  }
-}
-
-function detectEventType(payload: unknown): EventType {
-  if (payload && typeof payload === "object") {
-    const data = payload as Record<string, unknown>;
-    if (Array.isArray(data.events)) return "line_event";
-    if (data.progress_id || data.event_type || data.task_id) return "manus_progress";
-  }
-  return "unknown";
-}
-
-function resolveDedupeTtl(env: RelayEnv): number {
-  const parsed = Number(env.DEDUPE_TTL_SECONDS);
-  if (Number.isFinite(parsed) && parsed > 0) {
-    return parsed;
-  }
-  return DEFAULT_DEDUPE_TTL;
-}
 
 export default {
   async fetch(req: Request, env: RelayEnv): Promise<Response> {
@@ -253,8 +103,12 @@ export default {
       });
     }
 
-    const dedupeKey = createDedupKey(eventType, payload, env, signature, rawBody);
-    const ttl = resolveDedupeTtl(env);
+    const dedupeKey = createDedupKey(eventType, payload, {
+      hashSalt: env.HASH_SALT ?? "",
+      signature,
+      rawBody,
+    });
+    const ttl = resolveDedupeTtl(env.DEDUPE_TTL_SECONDS, DEFAULT_DEDUPE_TTL);
     const isFresh = await markEventAsSeen(dedupeKey, ttl);
 
     if (!isFresh) {
@@ -265,7 +119,15 @@ export default {
       });
     }
 
-    const sanitized = sanitizePayload(payload, eventType, env);
+    const sanitized = sanitizePayload(payload, eventType, {
+      hashSalt: env.HASH_SALT ?? "",
+      redactLineMessage: (env as Record<string, string | undefined>).REDACT_LINE_MESSAGE === "true",
+      deriveLineEvent: (rawEvent: Record<string, unknown>) => deriveLineSpecEvent(rawEvent),
+    });
+    const clientPayload =
+      sanitized && typeof sanitized === "object"
+        ? { ...(sanitized as Record<string, unknown>), dedupe_key: dedupeKey }
+        : { value: sanitized, dedupe_key: dedupeKey };
     log("info", "Dispatching event to GitHub", { eventType, dedupeKey });
 
     const response = await fetch(
@@ -279,8 +141,7 @@ export default {
         },
         body: JSON.stringify({
           event_type: eventType,
-          client_payload: sanitized,
-          dedupe_key: dedupeKey,
+          client_payload: clientPayload,
         }),
       },
     );

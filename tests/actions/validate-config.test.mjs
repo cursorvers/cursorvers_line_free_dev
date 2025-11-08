@@ -12,6 +12,15 @@ test('validateWorkflowConfig reports missing secrets', async () => {
   });
   assert.equal(result.ok, false);
   assert.ok(result.missing.includes('SUPABASE_URL'));
+  assert.ok(result.missingDetails.some((detail) => detail.key === 'SUPABASE_URL'));
+  const alt = result.missingAlternatives[0];
+  assert.ok(Array.isArray(alt));
+  assert.ok(alt.includes('NOTIFY_WEBHOOK_URL'));
+  assert.ok(Array.isArray(result.entries));
+  const supabaseEntry = result.entries.find((entry) => entry.requirement.key === 'SUPABASE_URL');
+  assert.ok(supabaseEntry);
+  assert.equal(supabaseEntry.requirement.parameter, 'SUPABASE_URL');
+  assert.equal(supabaseEntry.present, false);
 });
 
 test('validateWorkflowConfig passes when requirements met', async () => {
@@ -26,8 +35,10 @@ test('validateWorkflowConfig passes when requirements met', async () => {
       MANUS_API_KEY: 'key',
       MANUS_BASE_URL: 'https://manus',
       GEMINI_API_KEY: 'token',
+      LINE_CHANNEL_ACCESS_TOKEN: 'token-line',
       NOTIFY_WEBHOOK_URL: 'https://webhook',
     },
   });
   assert.equal(result.ok, true);
+  assert.ok(result.entries.every((entry) => typeof entry.present === 'boolean'));
 });

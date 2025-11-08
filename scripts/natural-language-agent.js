@@ -15,7 +15,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.LLM_API_KEY;
 const OPENAI_ENDPOINT = process.env.OPENAI_ENDPOINT || process.env.LLM_ENDPOINT || 'https://api.openai.com/v1/chat/completions';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-5';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const REPOSITORY = process.env.REPOSITORY || 'mo666-med/cursorvers_line-discord';
+const REPOSITORY = process.env.REPOSITORY || 'mo666-med/cursorvers_line_free_dev';
 
 async function callOpenAI(messages) {
   return new Promise((resolve, reject) => {

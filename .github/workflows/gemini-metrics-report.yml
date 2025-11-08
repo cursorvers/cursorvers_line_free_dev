@@ -1,0 +1,56 @@
+name: Gemini Metrics Report
+x-owner: devops
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Aggregate Gemini metrics
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/gemini
+          node scripts/automation/report-gemini-metrics.mjs \
+            --input logs/metrics/gemini \
+            --output tmp/gemini/metrics-summary.json \
+            --markdown
+
+      - name: Summarize results
+        run: |
+          SUMMARY_JSON=tmp/gemini/metrics-summary.json
+          SUMMARY_MD=tmp/gemini/metrics-summary.json.md
+          if [ -f "$SUMMARY_MD" ]; then
+            echo "### Gemini Metrics Summary" >> "$GITHUB_STEP_SUMMARY"
+            cat "$SUMMARY_MD" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f "$SUMMARY_JSON" ]; then
+            jq '.' "$SUMMARY_JSON"
+          else
+            echo "No metrics summary generated."
+          fi
+
+      - name: Upload metrics summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-metrics-summary
+          path: |
+            tmp/gemini/metrics-summary.json
+            tmp/gemini/metrics-summary.json.md
+          if-no-files-found: warn

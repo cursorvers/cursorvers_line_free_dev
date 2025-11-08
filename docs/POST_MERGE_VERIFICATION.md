@@ -101,7 +101,7 @@ RUN_ID=$(gh run list --workflow=line-event.yml --limit 1 --json databaseId --jq 
 echo "実行ID: $RUN_ID"
 
 # ログURLを記録
-echo "ログURL: https://github.com/mo666-med/cursorvers_line-discord/actions/runs/$RUN_ID"
+echo "ログURL: https://github.com/mo666-med/cursorvers_line_free_dev/actions/runs/$RUN_ID"
 ```
 
 ### ステップ4: ログローテーション設定の確認

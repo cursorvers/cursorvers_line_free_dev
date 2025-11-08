@@ -64,7 +64,7 @@ Goodbye!
 ```bash
 # 環境変数を設定
 export ISSUE_NUMBER=3
-export REPOSITORY=mo666-med/cursorvers_line-discord
+export REPOSITORY=mo666-med/cursorvers_line_free_dev
 export GITHUB_TOKEN=$(gh auth token)
 export OPENAI_API_KEY=$(gh secret get OPENAI_API_KEY --json value -q .value)
 export OPENAI_MODEL=gpt-5
@@ -98,7 +98,7 @@ export OPENAI_API_KEY=$(gh secret get OPENAI_API_KEY --json value -q .value)
 
 # その他の環境変数
 export OPENAI_MODEL=$(gh variable get OPENAI_MODEL --json value -q .value || echo "gpt-5")
-export REPOSITORY=mo666-med/cursorvers_line-discord
+export REPOSITORY=mo666-med/cursorvers_line_free_dev
 ```
 
 ## 🎯 実用的な使い方
@@ -112,7 +112,7 @@ export REPOSITORY=mo666-med/cursorvers_line-discord
 
 # または、直接実行
 export ISSUE_NUMBER=3
-export REPOSITORY=mo666-med/cursorvers_line-discord
+export REPOSITORY=mo666-med/cursorvers_line_free_dev
 export GITHUB_TOKEN=$(gh auth token)
 export OPENAI_API_KEY=$(gh secret get OPENAI_API_KEY --json value -q .value)
 export OPENAI_MODEL=gpt-5
@@ -125,7 +125,7 @@ node scripts/codex-agent.js
 for issue in 1 2 3; do
   echo "Processing Issue #$issue..."
   export ISSUE_NUMBER=$issue
-  export REPOSITORY=mo666-med/cursorvers_line-discord
+  export REPOSITORY=mo666-med/cursorvers_line_free_dev
   export GITHUB_TOKEN=$(gh auth token)
   export OPENAI_API_KEY=$(gh secret get OPENAI_API_KEY --json value -q .value)
   export OPENAI_MODEL=gpt-5
@@ -140,7 +140,7 @@ done
 - **Miyabi CLI**: `npx miyabi --help`
 - **Status確認**: `npx miyabi status`
 - **Codex Agent**: `scripts/codex-agent.js`
-- **Issue #3**: https://github.com/mo666-med/cursorvers_line-discord/issues/3
+- **Issue #3**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/3
 
 ## ✅ 次のステップ
 

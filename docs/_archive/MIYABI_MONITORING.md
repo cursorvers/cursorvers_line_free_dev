@@ -158,7 +158,7 @@ gh issue view 1 --comments --json comments --jq '.comments[-1] | {created: .crea
 npx miyabi status
 
 # 出力例:
-# 📊 Agentic OS Status - mo666-med/cursorvers_line-discord
+# 📊 Agentic OS Status - mo666-med/cursorvers_line_free_dev
 # 
 # ┌──────────────────┬───────┬────────────┐
 # │ State            │ Count │ Status     │
@@ -222,9 +222,9 @@ npx miyabi status --json 2>/dev/null || echo "  Status unavailable"
 
 ## 🔗 便利なリンク
 
-- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line-discord/actions
-- **Issue #1**: https://github.com/mo666-med/cursorvers_line-discord/issues/1
-- **Pull Requests**: https://github.com/mo666-med/cursorvers_line-discord/pulls
+- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
+- **Issue #1**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/1
+- **Pull Requests**: https://github.com/mo666-med/cursorvers_line_free_dev/pulls
 
 ## 💡 ヒント
 

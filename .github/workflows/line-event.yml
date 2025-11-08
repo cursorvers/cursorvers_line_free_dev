@@ -5,6 +5,12 @@ on:
   repository_dispatch:
     types: [line_event]
   workflow_dispatch:
+    inputs:
+      payload_path:
+        description: 'Path to event payload JSON file (relative to repo root)'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -18,6 +24,10 @@ env:
   PRODUCTION_PLAN_PATH: orchestration/plan/production/current_plan.json
   DEGRADED_PLAN_PATH: orchestration/plan/production/degraded_plan.json
   DEGRADED_FLAG_PATH: orchestration/plan/production/degraded.flag
+  LINE_CASE_STUDIES_URL: ${{ vars.LINE_CASE_STUDIES_URL }}
+  LINE_GUIDE_URL: ${{ vars.LINE_GUIDE_URL }}
+  LINE_GIFT_URL: ${{ vars.LINE_GIFT_URL }}
+  LINE_PREMIUM_URL: ${{ vars.LINE_PREMIUM_URL }}
 
 jobs:
   handle-line-event:
@@ -52,6 +62,42 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Fetch Manus LINE Config
+        id: manus-config
+        continue-on-error: true
+        env:
+          MANUS_API_KEY: ${{ secrets.MANUS_API_KEY }}
+          MANUS_BASE_URL: ${{ vars.MANUS_BASE_URL }}
+          MANUS_LINE_CONFIG_PATH: ${{ vars.MANUS_LINE_CONFIG_PATH }}
+        run: |
+          if [ -z "$MANUS_API_KEY" ]; then
+            echo "ℹ️ MANUS_API_KEY not set. Skipping Manus config fetch."
+            exit 0
+          fi
+          node scripts/manus/export-config.mjs \
+            --output tmp/manus-line-config.json \
+            --path "${MANUS_LINE_CONFIG_PATH:-/v1/config/line}" || {
+            echo "⚠️ Failed to fetch Manus config. Continuing with defaults."
+            exit 0
+          }
+
+      - name: Build LINE Templates
+        continue-on-error: true
+        env:
+          LINE_CASE_STUDIES_URL: ${{ env.LINE_CASE_STUDIES_URL }}
+          LINE_GUIDE_URL: ${{ env.LINE_GUIDE_URL }}
+          LINE_GIFT_URL: ${{ env.LINE_GIFT_URL }}
+          LINE_PREMIUM_URL: ${{ env.LINE_PREMIUM_URL }}
+        run: |
+          if command -v npm &> /dev/null && [ -f package.json ]; then
+            npm run line:templates || {
+              echo "⚠️ Template build failed. Continuing without templates."
+              exit 0
+            }
+          else
+            echo "ℹ️ npm not available or package.json missing. Skipping template build."
+          fi
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -66,28 +112,80 @@ jobs:
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             printf '%s\n' '${{ toJson(github.event.client_payload) }}' > tmp/event.json
           else
-            # workflow_dispatch: create a minimal test payload
-            TIMESTAMP=$(date -u +%s)
-            jq -n --arg ts "$TIMESTAMP" '{
-              "event_id": "test-\($ts)",
-              "received_at": now | todateiso8601,
-              "signature_valid": true,
-              "dedupe_key": "test-dedupe-key",
-              "events": [{
-                "type": "follow",
-                "timestamp": (now * 1000 | floor),
-                "source": {
-                  "type": "user",
-                  "userId": "test-user-id"
-                }
-              }]
-            }' > tmp/event.json
+            # workflow_dispatch: use provided payload_path or create default
+            PAYLOAD_PATH="${{ github.event.inputs.payload_path }}"
+            if [ -n "$PAYLOAD_PATH" ] && [ -f "$PAYLOAD_PATH" ]; then
+              echo "📄 Using provided payload file: $PAYLOAD_PATH"
+              cp "$PAYLOAD_PATH" tmp/event.json
+            else
+              # Create a minimal test payload
+              echo "📝 Creating default test payload"
+              TIMESTAMP=$(date -u +%s)
+              jq -n --arg ts "$TIMESTAMP" '{
+                "event_id": "test-\($ts)",
+                "received_at": now | todateiso8601,
+                "signature_valid": true,
+                "dedupe_key": "test-dedupe-key",
+                "events": [{
+                  "type": "follow",
+                  "timestamp": (now * 1000 | floor),
+                  "source": {
+                    "type": "user",
+                    "userId": "test-user-id"
+                  }
+                }]
+              }' > tmp/event.json
+            fi
           fi
           EVENT_TYPE=$(jq -r '.events[0].type // "unknown"' tmp/event.json)
           USER_COUNT=$(jq '[.events[].source.userId] | unique | length' tmp/event.json 2>/dev/null || echo "0")
           echo "event_type=$EVENT_TYPE" >> "$GITHUB_OUTPUT"
           echo "user_count=$USER_COUNT" >> "$GITHUB_OUTPUT"
           echo "payload_path=tmp/event.json" >> "$GITHUB_OUTPUT"
+
+      - name: Evaluate orchestration spec constraints
+        run: |
+          mkdir -p tmp/orchestration
+          node scripts/orchestration/evaluate-line-event.mjs \
+            --event "${{ steps.event.outputs.payload_path }}" \
+            --spec codex.spec.yaml \
+            --output tmp/orchestration/spec-evaluation.json || {
+            echo "⚠️ Spec evaluation failed. Continuing without template dispatch."
+            exit 0
+          }
+
+      - name: Dispatch LINE replies
+        continue-on-error: true
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          DEVELOPMENT_MODE: ${{ vars.DEVELOPMENT_MODE }}
+          LINE_CASE_STUDIES_URL: ${{ env.LINE_CASE_STUDIES_URL }}
+          LINE_GUIDE_URL: ${{ env.LINE_GUIDE_URL }}
+          LINE_GIFT_URL: ${{ env.LINE_GIFT_URL }}
+          LINE_PREMIUM_URL: ${{ env.LINE_PREMIUM_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LINE_CHANNEL_ACCESS_TOKEN:-}" ]; then
+            echo "ℹ️ LINE channel access token not configured. Skipping template dispatch."
+            exit 0
+          fi
+          if [ ! -f tmp/orchestration/spec-evaluation.json ]; then
+            echo "ℹ️ Spec evaluation file not found. Skipping template dispatch."
+            exit 0
+          fi
+          DRY_RUN=""
+          if [ "${DEVELOPMENT_MODE}" = "true" ]; then
+            DRY_RUN="--dry-run"
+          fi
+          node scripts/orchestration/reply-line-templates.mjs \
+            --event "${{ steps.event.outputs.payload_path }}" \
+            --evaluation tmp/orchestration/spec-evaluation.json \
+            --templates config/line/templates \
+            --token "$LINE_CHANNEL_ACCESS_TOKEN" \
+            $DRY_RUN || {
+            echo "⚠️ Template dispatch failed. Continuing workflow."
+            exit 0
+          }
 
       - name: Ensure Plan Directories
         run: |
@@ -131,11 +229,19 @@ jobs:
 
       - name: Generate PlanDelta (Development Only)
         if: vars.DEVELOPMENT_MODE == 'true'
+        continue-on-error: true
         run: |
+          if [ ! -f scripts/plan/generate-plan-delta.js ]; then
+            echo "⚠️ generate-plan-delta.js not found. Skipping plan delta generation."
+            exit 0
+          fi
           node scripts/plan/generate-plan-delta.js \
             --event tmp/event.json \
             --plan "$PLAN_CURRENT_PATH" \
-            --delta "$PLAN_DELTA_PATH"
+            --delta "$PLAN_DELTA_PATH" || {
+            echo "⚠️ Plan delta generation failed. Continuing workflow."
+            exit 0
+          }
 
       - name: Load Selected Plan (Production)
         if: vars.DEVELOPMENT_MODE != 'true'
@@ -265,7 +371,7 @@ jobs:
         uses: ./.github/actions/persist-progress
         with:
           path: ${{ steps.line_log.outputs.path }}
-          commit-message: chore: log line event
+          commit-message: "chore: log line event"
           artifact-label: line-event
 
       - name: Gemini Log Summary
@@ -278,19 +384,19 @@ jobs:
           set -euo pipefail
           mkdir -p tmp/gemini
           START_MS=$(python - <<'PY'
-import time
-print(int(time.time() * 1000))
-PY
-)
+            import time
+            print(int(time.time() * 1000))
+          PY
+          )
           node scripts/automation/run-gemini-log-summary.mjs \
             --input logs/progress \
             --output tmp/gemini/log-summary.json \
             --limit 50 || true
           END_MS=$(python - <<'PY'
-import time
-print(int(time.time() * 1000))
-PY
-)
+            import time
+            print(int(time.time() * 1000))
+          PY
+          )
           DURATION_MS=$((END_MS - START_MS))
           if [ -f tmp/gemini/log-summary.json ]; then
             STATUS=$(jq -r '.status // "unknown"' tmp/gemini/log-summary.json 2>/dev/null || echo "unknown")
@@ -337,35 +443,37 @@ PY
           set -euo pipefail
           mkdir -p "$(dirname "$METRICS_PATH")"
           python - <<'PY' >> "$METRICS_PATH"
-import json
-import os
-from datetime import datetime, timezone
+            import json
+            import os
+            from datetime import datetime, timezone
 
-def parse_int(value):
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return 0
 
-def parse_float(value):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
+            def parse_int(value):
+                try:
+                    return int(float(value))
+                except (TypeError, ValueError):
+                    return 0
 
-record = {
-    "run_id": f"{os.environ.get('GITHUB_RUN_ID')}:{os.environ.get('GITHUB_RUN_ATTEMPT')}",
-    "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-    "status": os.environ.get('GEMINI_STATUS') or 'unavailable',
-    "duration_ms": parse_int(os.environ.get('GEMINI_DURATION')),
-    "latency_ms": parse_int(os.environ.get('GEMINI_LATENCY')),
-    "logs_count": parse_int(os.environ.get('GEMINI_LOGS')),
-    "cost_estimate": parse_float(os.environ.get('GEMINI_COST')),
-    "model": os.environ.get('GEMINI_MODEL') or '',
-}
-print(json.dumps(record))
-PY
 
+            def parse_float(value):
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    return 0.0
+
+
+            record = {
+                "run_id": f"{os.environ.get('GITHUB_RUN_ID')}:{os.environ.get('GITHUB_RUN_ATTEMPT')}",
+                "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+                "status": os.environ.get('GEMINI_STATUS') or 'unavailable',
+                "duration_ms": parse_int(os.environ.get('GEMINI_DURATION')),
+                "latency_ms": parse_int(os.environ.get('GEMINI_LATENCY')),
+                "logs_count": parse_int(os.environ.get('GEMINI_LOGS')),
+                "cost_estimate": parse_float(os.environ.get('GEMINI_COST')),
+                "model": os.environ.get('GEMINI_MODEL') or '',
+            }
+            print(json.dumps(record))
+          PY
       - name: Upload Gemini Log Summary Artifact
         if: always() && steps.gemini.outputs.status
         uses: actions/upload-artifact@v4
@@ -385,6 +493,7 @@ PY
       - name: Notify stakeholders
         if: always()
         continue-on-error: true
+        timeout-minutes: 5
         env:
           NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
           FALLBACK_WEBHOOK_URL: ${{ secrets.PROGRESS_WEBHOOK_URL }}

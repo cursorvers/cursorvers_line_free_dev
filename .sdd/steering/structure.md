@@ -12,6 +12,8 @@
   - `scripts/automation/` – Utility scripts invoked from Actions（例: Geminiログ要約PoC）。
   - `scripts/checks/` – Secrets/環境検証用のCLI（`verify-secrets` など）。
   - `scripts/vendor/` – Supabase / Google / Manus 向け vendored helper群。
+  - `docs/runbooks/line-actions.md` – 外部委託向け運用ハンドブック。シグナル/コマンド体系、フラグ切替、ログ/Artifact取得を記載。
+  - `docs/OPS_COMPLIANCE_NOTIFICATION.md` – Ops/Compliance 向け通知テンプレート。
   - `Cursorvers_LINEsystem/` – Nested Node/TypeScript project (appears legacy scaffold; confirm ongoing usage).
   - `logs/` – Progress JSON archives produced by workflows.
   - `tests/` – Python cost estimator tests plus Node feature flag unit tests.
@@ -40,7 +42,7 @@
 
 ## Observed Debt / Follow-ups
 - Repository contains legacy directories (`Cursorvers_LINEsystem`) and large `node_modules/` folders; need decision on de-duplication or archive.
-- Tests limited (cost estimator, feature flags, relay); no integration coverage for Sheets/Supabase scripts or workflow dry-runs.
+- Tests limited (cost estimator, feature flags, relay); 新規に Gemini メトリクス集計／Manus API 問い合わせの Node テストを追加済みだが、LINE コマンドルールや Discord 連携の統合テストは未整備。
 - Need clarity on deployment pipeline for `functions/relay` (Edge hosting target not documented in repo).
 - Secrets/vars expectations scattered across workflows; consolidate into single reference doc.
 - Confirm Google Sheets schema alignment with automation (column count mismatch risk noted in script comment).

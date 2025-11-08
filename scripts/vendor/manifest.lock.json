@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "generated_at": "2025-11-06T03:58:16.883Z",
+  "items": [
+    {
+      "id": "supabase-upsert-line-event",
+      "target": "scripts/vendor/supabase/upsert-line-event.js",
+      "sha256": "71af51752ffed6d1e02577d3b6d15eeb1291d2529ed64ac5a1385bcf771e9b4c",
+      "size": 8820,
+      "last_synced_at": "2025-11-06T03:58:16.882Z"
+    },
+    {
+      "id": "supabase-upsert-progress-event",
+      "target": "scripts/vendor/supabase/upsert-progress-event.js",
+      "sha256": "0dc10cccd4dee7679f9c363e4972471ff650ba910aa345b54a5aa59668187ff0",
+      "size": 6657,
+      "last_synced_at": "2025-11-06T03:58:16.883Z"
+    },
+    {
+      "id": "sheets-upsert-line-member",
+      "target": "scripts/vendor/google/upsert-line-member.js",
+      "sha256": "de93639afe11312f16431b1399bbea509d27d510daa419d895cf0150f2714423",
+      "size": 6964,
+      "last_synced_at": "2025-11-06T03:58:16.883Z"
+    }
+  ]
+}

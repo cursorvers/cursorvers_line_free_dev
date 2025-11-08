@@ -188,7 +188,20 @@ fi
 
 echo ""
 
-# 7. 結果サマリー
+echo "### 7. Runtime Parameter Registry"
+echo ""
+if node scripts/checks/verify-runtime-config.mjs; then
+  echo ""
+  echo "  ✅ runtime parameter registry satisfied"
+else
+  echo ""
+  echo "  ❌ Runtime parameter registry check failed"
+  ((ERRORS++))
+fi
+
+echo ""
+
+# 8. 結果サマリー
 echo "## 📊 Verification Summary"
 echo ""
 

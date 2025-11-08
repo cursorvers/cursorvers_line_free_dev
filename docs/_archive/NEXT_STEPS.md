@@ -3,7 +3,7 @@
 ## 現在の状況
 - ✅ Gitリポジトリを初期化しました
 - ✅ Miyabiが新しいプロジェクト「Cursorvers_LINEsystem」を作成しました
-- ⚠️ 現在のプロジェクト（cursorvers_line-discord）にMiyabiを追加する必要があります
+- ⚠️ 現在のプロジェクト（cursorvers_line_free_dev）にMiyabiを追加する必要があります
 
 ## 選択肢
 
@@ -11,7 +11,7 @@
 
 ```bash
 # 1. まず、GitHubリポジトリを作成（まだ存在しない場合）
-gh repo create cursorvers_line-discord --public --source=. --remote=origin --push
+gh repo create cursorvers_line_free_dev --public --source=. --remote=origin --push
 
 # 2. 初期コミットを実行
 git add .
@@ -39,7 +39,7 @@ cd Cursorvers_LINEsystem
 
 ```bash
 # 1. GitHubリポジトリを作成（まだ存在しない場合）
-gh repo create cursorvers_line-discord --public --source=. --remote=origin
+gh repo create cursorvers_line_free_dev --public --source=. --remote=origin
 
 # 2. 初期コミットとプッシュ
 git add .
@@ -56,7 +56,7 @@ npx miyabi
 
 1. **GitHubリポジトリの作成**
    ```bash
-   gh repo create cursorvers_line-discord --public --source=. --remote=origin
+   gh repo create cursorvers_line_free_dev --public --source=. --remote=origin
    ```
 
 2. **初期コミット**
@@ -77,5 +77,5 @@ npx miyabi
 ## 注意事項
 
 - 新しく作成された`Cursorvers_LINEsystem`ディレクトリは、現在のプロジェクトとは別のプロジェクトです
-- 既存のプロジェクト（cursorvers_line-discord）にMiyabiを追加する場合は、まずGitHubリポジトリを作成する必要があります
+- 既存のプロジェクト（cursorvers_line_free_dev）にMiyabiを追加する場合は、まずGitHubリポジトリを作成する必要があります
 

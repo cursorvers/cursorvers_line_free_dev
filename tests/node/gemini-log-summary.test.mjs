@@ -44,7 +44,7 @@ test('runGeminiLogSummary skips when API key missing', async () => {
   const result = await runGeminiLogSummary({
     inputDir: 'tests/fixtures/logs',
     outputPath: output,
-    apiKey: undefined,
+    apiKey: null,
   });
   assert.equal(result.status, 'skipped_missing_key');
   assert.equal(result.cost_estimate, 0);

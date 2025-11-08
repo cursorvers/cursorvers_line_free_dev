@@ -105,9 +105,9 @@ gh issue view 3 --comments
 
 ## 📚 参考
 
-- **Issue #3**: https://github.com/mo666-med/cursorvers_line-discord/issues/3
+- **Issue #3**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/3
 - **ワークフロー**: `.github/workflows/autonomous-agent.yml`
-- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line-discord/actions
+- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 
 ## ⚠️ 注意事項
 

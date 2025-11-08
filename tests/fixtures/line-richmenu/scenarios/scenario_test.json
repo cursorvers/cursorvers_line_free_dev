@@ -1,0 +1,10 @@
+{
+  "description": "Quick reply scenario fixture",
+  "messages": [
+    {
+      "type": "text",
+      "text": "テストメッセージ",
+      "quickReply": "../quick-reply.json"
+    }
+  ]
+}

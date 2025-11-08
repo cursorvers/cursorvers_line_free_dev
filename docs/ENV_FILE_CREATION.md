@@ -7,7 +7,7 @@
 プロジェクトルートに`.env`ファイルを作成：
 
 ```bash
-cd /Users/masayuki/Dev/cursorvers_line-discord
+cd /Users/masayuki/Dev/cursorvers_line_free_dev
 nano .env
 ```
 
@@ -20,7 +20,7 @@ OPENAI_API_KEY=sk-...
 ### 方法2: コマンドで作成
 
 ```bash
-cd /Users/masayuki/Dev/cursorvers_line-discord
+cd /Users/masayuki/Dev/cursorvers_line_free_dev
 echo 'OPENAI_API_KEY=sk-...' > .env
 ```
 

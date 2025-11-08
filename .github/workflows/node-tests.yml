@@ -33,8 +33,20 @@ jobs:
       - name: Run action script tests
         run: npm run test:actions
 
+      - name: Run lint suite
+        run: npm run lint
+
+      - name: Validate codex spec
+        run: npm run lint:spec
+
+      - name: Verify runtime configuration registry
+        run: npm run runtime:verify
+
       - name: Verify vendor checksums
         run: npm run vendor:verify
+
+      - name: Verify workflow inventory
+        run: npm run workflows:check
 
   actionlint:
     runs-on: ubuntu-latest
@@ -46,29 +58,3 @@ jobs:
 
       - name: Lint workflows with actionlint
         uses: rhysd/actionlint@v1
-
-  act-smoke:
-    if: >
-      github.event_name == 'pull_request' &&
-      contains(github.event.pull_request.labels.*.name, 'ci-smoke')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: npm install || echo "No dependencies to install"
-
-      - name: Install act
-        run: |
-          set -euo pipefail
-          curl -sSL https://github.com/nektos/act/releases/download/v0.2.58/act_Linux_x86_64.tar.gz -o act.tar.gz
-          sudo tar -xzf act.tar.gz -C /usr/local/bin act
-          rm act.tar.gz
-
-      - name: Run act smoke test for line-event
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: act workflow_dispatch -W .github/workflows/line-event.yml -n --container-architecture linux/amd64

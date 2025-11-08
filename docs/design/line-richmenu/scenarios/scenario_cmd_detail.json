@@ -1,0 +1,12 @@
+{
+  "description": "開発事例案内のレスポンス",
+  "messages": [
+    {
+      "type": "text",
+      "text": "最新の開発事例と導入プロセスをまとめました。リンクから詳細をご覧ください！"
+    },
+    {
+      "flex": "../flex-welcome.json"
+    }
+  ]
+}

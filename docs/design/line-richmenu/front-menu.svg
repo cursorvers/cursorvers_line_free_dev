@@ -1,0 +1,70 @@
+<svg width="2500" height="843" viewBox="0 0 2500 843" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-gradient" x1="0" y1="0" x2="0" y2="843" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0F1630"/>
+      <stop offset="1" stop-color="#050713"/>
+    </linearGradient>
+    <linearGradient id="card-pink" x1="190" y1="80" x2="810" y2="763" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF8DF9"/>
+      <stop offset="1" stop-color="#C045FF"/>
+    </linearGradient>
+    <linearGradient id="card-blue" x1="960" y1="80" x2="1580" y2="763" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6FE6FF"/>
+      <stop offset="1" stop-color="#3D68FF"/>
+    </linearGradient>
+    <linearGradient id="card-cyan" x1="1730" y1="80" x2="2350" y2="763" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A6FFE4"/>
+      <stop offset="1" stop-color="#42C3FF"/>
+    </linearGradient>
+    <filter id="menu-shadow" x="-40" y="-40" width="2580" height="923" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="40" flood-color="#080B1B" flood-opacity="0.6"/>
+    </filter>
+    <linearGradient id="stroke-gradient" x1="0" y1="0" x2="0" y2="763" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="2500" height="843" rx="48" fill="url(#bg-gradient)"/>
+
+  <!-- Cards -->
+  <g filter="url(#menu-shadow)">
+    <g transform="translate(160 80)">
+      <rect width="660" height="683" rx="36" fill="rgba(12,16,37,0.85)" stroke="url(#stroke-gradient)" stroke-width="4"/>
+      <rect x="4" y="4" width="652" height="675" rx="32" fill="url(#card-pink)" fill-opacity="0.22"/>
+      <!-- Icon gift -->
+      <rect x="210" y="140" width="240" height="180" rx="32" fill="none" stroke="white" stroke-width="18" opacity="0.9"/>
+      <path d="M210 220H450" stroke="white" stroke-width="18" opacity="0.9"/>
+      <path d="M330 140V320" stroke="white" stroke-width="18" opacity="0.9"/>
+      <path d="M330 140C270 140 242 92 296 80C342 70 378 102 386 140H330Z" fill="white" opacity="0.9"/>
+      <path d="M330 140C390 140 418 92 364 80C318 70 282 102 274 140H330Z" fill="white" opacity="0.7"/>
+      <text x="330" y="420" text-anchor="middle" font-size="44" font-family="\"Noto Sans JP\", sans-serif" fill="#FFFFFF" font-weight="700">LINE限定</text>
+      <text x="330" y="480" text-anchor="middle" font-size="32" font-family="\"Noto Sans JP\", sans-serif" fill="#FFFFFF" opacity="0.9">無料プレゼント</text>
+      <text x="330" y="540" text-anchor="middle" font-size="26" font-family="\"Noto Sans JP\", sans-serif" fill="#FFFFFF" opacity="0.75">限定コードと受け取り手順</text>
+    </g>
+
+    <g transform="translate(920 80)">
+      <rect width="660" height="683" rx="36" fill="rgba(12,16,37,0.85)" stroke="url(#stroke-gradient)" stroke-width="4"/>
+      <rect x="4" y="4" width="652" height="675" rx="32" fill="url(#card-blue)" fill-opacity="0.22"/>
+      <!-- Icon example -->
+      <rect x="210" y="150" width="240" height="160" rx="24" fill="none" stroke="white" stroke-width="14" opacity="0.9"/>
+      <rect x="240" y="180" width="180" height="100" rx="18" fill="white" opacity="0.9"/>
+      <path d="M240 240L420 180" stroke="#4B63FF" stroke-width="12" opacity="0.8"/>
+      <path d="M240 220L420 260" stroke="#4B63FF" stroke-width="12" opacity="0.8"/>
+      <text x="330" y="420" text-anchor="middle" font-size="44" font-family="\"Noto Sans JP\", sans-serif" fill="#FFFFFF" font-weight="700">EXAMPLE</text>
+      <text x="330" y="480" text-anchor="middle" font-size="32" font-family="\"Noto Sans JP\", sans-serif" fill="#FFFFFF" opacity="0.9">開発事例／導入例</text>
+      <text x="330" y="540" text-anchor="middle" font-size="26" font-family="\"Noto Sans JP\", sans-serif" fill="#FFFFFF" opacity="0.75">成果とワークフロー公開</text>
+    </g>
+
+    <g transform="translate(1680 80)">
+      <rect width="660" height="683" rx="36" fill="rgba(12,16,37,0.85)" stroke="url(#stroke-gradient)" stroke-width="4"/>
+      <rect x="4" y="4" width="652" height="675" rx="32" fill="url(#card-cyan)" fill-opacity="0.22"/>
+      <!-- Icon contact -->
+      <rect x="210" y="150" width="240" height="180" rx="28" fill="none" stroke="white" stroke-width="16" opacity="0.9"/>
+      <path d="M210 190L330 270C340 278 356 278 366 270L450 210" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      <text x="330" y="420" text-anchor="middle" font-size="44" font-family="\"Noto Sans JP\", sans-serif" fill="#FFFFFF" font-weight="700">CONTACT</text>
+      <text x="330" y="480" text-anchor="middle" font-size="32" font-family="\"Noto Sans JP\", sans-serif" fill="#FFFFFF" opacity="0.9">お問い合わせ</text>
+      <text x="330" y="540" text-anchor="middle" font-size="26" font-family="\"Noto Sans JP\", sans-serif" fill="#FFFFFF" opacity="0.75">AI伴走・相談はこちら</text>
+    </g>
+  </g>
+</svg>

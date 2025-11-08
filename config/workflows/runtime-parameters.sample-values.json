@@ -1,0 +1,17 @@
+{
+  "LINE_CHANNEL_ACCESS_TOKEN": "sample-token",
+  "LINE_CASE_STUDIES_URL": "https://example.com/case-studies",
+  "LINE_GUIDE_URL": "https://example.com/guide",
+  "LINE_GIFT_URL": "https://example.com/gift",
+  "LINE_PREMIUM_URL": "https://example.com/premium",
+  "MANUS_API_KEY": "sample-manus-key",
+  "MANUS_BASE_URL": "https://api.manus.ai",
+  "MANUS_LINE_CONFIG_PATH": "/v1/config/line",
+  "SUPABASE_URL": "https://example.supabase.co",
+  "SUPABASE_SERVICE_ROLE_KEY": "sample-supabase-key",
+  "GOOGLE_SERVICE_ACCOUNT_JSON": "{\"type\":\"service_account\"}",
+  "GOOGLE_SHEET_ID": "sample-sheet-id",
+  "GEMINI_API_KEY": "sample-gemini-key",
+  "PROGRESS_WEBHOOK_URL": "https://example.com/webhook/progress",
+  "NOTIFY_WEBHOOK_URL": "https://example.com/webhook/notify"
+}

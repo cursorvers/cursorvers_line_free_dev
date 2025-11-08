@@ -32,10 +32,10 @@ Issue #3を更新して、**Manus APIを使用してLINE Developers Consoleに�
 
 ## 🔗 リンク
 
-- **Issue #3**: https://github.com/mo666-med/cursorvers_line-discord/issues/3
+- **Issue #3**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/3
 - **LINE Developers Console**: https://manager.line.biz/account/@529ybhfo
 - **ウェルカムメッセージ設定**: https://manager.line.biz/account/@529ybhfo/autoresponse/welcome
-- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line-discord/actions
+- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 
 ## ✅ 次のステップ
 

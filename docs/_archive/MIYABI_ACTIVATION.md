@@ -11,7 +11,7 @@
 ### Miyabi Status
 
 ```
-📊 Agentic OS Status - mo666-med/cursorvers_line-discord
+📊 Agentic OS Status - mo666-med/cursorvers_line_free_dev
 
 ┌──────────────────┬───────┬────────────┐
 │ State            │ Count │ Status     │
@@ -89,7 +89,7 @@ gh issue view 1 --comments
 ## 📝 次のステップ
 
 1. **数分待つ**（GitHub Actionsがイベントを処理するまで）
-2. **GitHub Actionsページで確認**: https://github.com/mo666-med/cursorvers_line-discord/actions
+2. **GitHub Actionsページで確認**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 3. **Issueのコメントを確認**: Issue #1にGPT-5による分析結果が追加される
 
 Miyabiがアクティブになり、Issue #1の処理が開始されました！

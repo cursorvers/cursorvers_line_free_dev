@@ -3,19 +3,19 @@
   "items": [
     {
       "id": "supabase-upsert-line-event",
-      "source": "https://raw.githubusercontent.com/mo666-med/cursorvers_line-discord/6bf29f72f6cd5bc91ceb11bf00e0d0b15ac3c004/scripts/supabase/upsert-line-event.js",
+      "source": "https://raw.githubusercontent.com/mo666-med/cursorvers_line_free_dev/6bf29f72f6cd5bc91ceb11bf00e0d0b15ac3c004/scripts/supabase/upsert-line-event.js",
       "target": "scripts/vendor/supabase/upsert-line-event.js",
       "sha256": "71af51752ffed6d1e02577d3b6d15eeb1291d2529ed64ac5a1385bcf771e9b4c"
     },
     {
       "id": "supabase-upsert-progress-event",
-      "source": "https://raw.githubusercontent.com/mo666-med/cursorvers_line-discord/6bf29f72f6cd5bc91ceb11bf00e0d0b15ac3c004/scripts/supabase/upsert-progress-event.js",
+      "source": "https://raw.githubusercontent.com/mo666-med/cursorvers_line_free_dev/6bf29f72f6cd5bc91ceb11bf00e0d0b15ac3c004/scripts/supabase/upsert-progress-event.js",
       "target": "scripts/vendor/supabase/upsert-progress-event.js",
       "sha256": "0dc10cccd4dee7679f9c363e4972471ff650ba910aa345b54a5aa59668187ff0"
     },
     {
       "id": "sheets-upsert-line-member",
-      "source": "https://raw.githubusercontent.com/mo666-med/cursorvers_line-discord/6bf29f72f6cd5bc91ceb11bf00e0d0b15ac3c004/scripts/sheets/upsert-line-member.js",
+      "source": "https://raw.githubusercontent.com/mo666-med/cursorvers_line_free_dev/6bf29f72f6cd5bc91ceb11bf00e0d0b15ac3c004/scripts/sheets/upsert-line-member.js",
       "target": "scripts/vendor/google/upsert-line-member.js",
       "sha256": "de93639afe11312f16431b1399bbea509d27d510daa419d895cf0150f2714423"
     }

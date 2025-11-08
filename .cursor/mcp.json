@@ -15,6 +15,10 @@
     },
     "supabase": {
       "url": "https://mcp.supabase.com/mcp?project_ref=haaxgwyimoqzzxzdaeep"
+    },
+    "serena": {
+      "disabled": true,
+      "description": "Serena MCP server disabled in this project to prevent automatic tab opening"
     }
   }
 }

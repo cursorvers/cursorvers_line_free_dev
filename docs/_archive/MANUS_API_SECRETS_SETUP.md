@@ -14,11 +14,11 @@
 
 ### 1. GitHub Secretsに設定
 
-**リポジトリ**: `mo666-med/cursorvers_line-discord`
+**リポジトリ**: `mo666-med/cursorvers_line_free_dev`
 
 ```bash
 # 現在のリポジトリで実行（既にリポジトリディレクトリにいる場合）
-cd /Users/masayuki/Dev/cursorvers_line-discord
+cd /Users/masayuki/Dev/cursorvers_line_free_dev
 
 # Manus APIキー
 gh secret set MANUS_API_KEY --body "your-manus-api-key"
@@ -52,8 +52,8 @@ gh variable set VERIFIED_DOMAIN --body "https://your-verified-domain.jp"
 
 ```bash
 # リポジトリを明示的に指定
-gh secret set MANUS_API_KEY --body "your-manus-api-key" --repo mo666-med/cursorvers_line-discord
-gh variable set MANUS_BASE_URL --body "https://api.manus.im" --repo mo666-med/cursorvers_line-discord
+gh secret set MANUS_API_KEY --body "your-manus-api-key" --repo mo666-med/cursorvers_line_free_dev
+gh variable set MANUS_BASE_URL --body "https://api.manus.im" --repo mo666-med/cursorvers_line_free_dev
 ```
 
 ## ワークフローでの使用方法

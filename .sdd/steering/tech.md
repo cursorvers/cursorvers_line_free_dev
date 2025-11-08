@@ -5,7 +5,7 @@
   - Front Door on Edge/Workers receives webhooks (LINE, Manus), performs signature verification, minimal payload sanitization, dispatches GitHub repository_dispatch.
   - GitHub Actions orchestrate planning, automation, safety checks, and ongoing operations (Cost Governor, monitoring, backups).
   - Manus reserved for narrow “last mile” external integrations when automation cannot stay within Actions/Edge (e.g., targeted Gmail or Calendar actions).
-  - Cursor IDE (Codex) drives specification, implementation, testing, PR lifecycle.
+  - Cursor IDE (Codex) drives specification, implementation, testing, PR lifecycle。2025-11 以降は Spec-Driven Codex に基づきイベント配信ルールを YAML 管理し、GitHub Actions/CLI テストで検証する方針。
 - LINE registration data to be written to Google Sheets; need connector (likely Manus or direct API via Actions) while avoiding PHI leakage.
 - Current repo implements the pattern: `functions/relay/index.ts` (Deno) feeds `line-event.yml` / `manus-progress.yml` workflows; Node/Python scripts called inside workflows handle Supabase upserts, Sheets sync, and Manus task creation.
 - Feature flags and degraded mode logic centralized in `scripts/lib/feature-flags.js` with associated unit tests, supporting toggles via GitHub `vars.*`.
@@ -14,7 +14,7 @@
 - Node.js 18+ (or Deno/Miniflare) for Edge/Workers functions, TypeScript preferred for clarity and linting.
 - Python 3.11 for orchestration helpers (cost estimation, validation scripts) and potential data tooling.
 - GitHub Actions with required concurrency limits per task_id, lint/unit/schema gates, and safety guardrail enforcement.
-- Storage currently Google Sheets; future database migration plan TBD.
+- Storage currently Google Sheets; future database migration plan TBD。Supabase は JSONL ログの集計・保全先として利用し、Discord 学習ログ用 API も GitHub Actions から呼び出す予定。
 - Supabase REST API leveraged directly from workflow scripts (`scripts/supabase/upsert-line-event.js`) with hashed user IDs; dedupe built via deterministic SHA-256 keys.
 - Google Sheets ledger updated through service-account JWT flow in `scripts/sheets/upsert-line-member.js`; expects header synchronization (`A:E` range).
 - Operational convention: when stakeholders request Manus/Supabase actions, attempt available execution paths (GitHub Actions, MCP, or CLI via scripts) before concluding非対応—document blockers only after trying feasible routes.
@@ -36,11 +36,15 @@
 ## GitHub Actions Snapshot
 - `line-event.yml` (LINE Event Handler) orchestrates inbound funnel automation: resolves normal/degraded plan assets via `vars.MANUS_ENABLED`, `vars.DEGRADED_MODE`, or `orchestration/plan/production/degraded.flag`; executes `orchestration/cost.py`; consumes vendored Supabase/Sheets helpers under `scripts/vendor/**`; upserts into Supabase (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`); updates Google Sheets when `GOOGLE_SERVICE_ACCOUNT_JSON` and `GOOGLE_SHEET_ID` exist; optionally dispatches Manus tasks when `vars.DEVELOPMENT_MODE` and `vars.MANUS_ENABLED` are true; commits JSON payloads under `logs/progress/`; and sends webhook notifications (`NOTIFY_WEBHOOK_URL` or fallback `PROGRESS_WEBHOOK_URL`).
 - `manus-progress.yml` persists Manus push telemetry (`repository_dispatch: manus_progress`), writes to Supabase, interprets retry/amend decisions, optionally triggers `scripts/manus/retry-task.mjs` (requires `MANUS_API_KEY`/`MANUS_BASE_URL`) when dev mode allows, and archives raw payloads via git commit.
-- `webhook-handler.yml` acts as a generalized GitHub event router with logging, state label routing via `scripts/webhook-router.mjs`, TODO stubs for agent workflows, and `gh` CLI escalations for critical workflow failures (`economic-circuit-breaker`, `agent-runner`, etc.).
+- `webhook-handler.yml` is the single GitHub event router: it logs high-level metadata, delegates issue/comment handling to `scripts/webhook-router.mjs`, and leaves non-issue events as telemetry-only until extended. Comment `/state <value>` commands flow through the same script.
 - `autonomous-agent.yml` watches issue labels, `/agent` comments, or manual dispatch to run `scripts/codex-agent.js`; depends on OpenAI-compatible secrets (`OPENAI_API_KEY` or `LLM_API_KEY`, `LLM_ENDPOINT`) and can push branches/PRs automatically.
 - Ancillary guardrails (`economic-circuit-breaker.yml`, `verify-secrets.yml`, `plan-validator.yml`, `rotate-logs.yml`, `weekly-kpi-report.yml`, etc.) enforce budget, secret hygiene, plan schema, repo log rotation, and reporting cadences—map their schedules and required inputs before altering the automation surface.
-- Shared CLI scripts under `scripts/` (Supabase, Sheets, Manus, plan tooling) are invoked extensively; interface changes must be versioned or coordinated to prevent workflow breakage.
-- 最新棚卸しは `docs/automation/WORKFLOWS.md` を参照（`npm run workflows:inventory` で更新）。
+- Shared CLI scripts under `scripts/` (Supabase, Sheets, Manus, plan tooling) are invoked extensively; interface changes must be versioned or coordinated to prevent workflow breakage。Discord 連携用アクション (`create_discord_private_log`, `push_material`) は新設予定で、Secrets/環境変数の洗い出しが必要。
+- ベンダースクリプトのリフレッシュ手順は `docs/automation/VENDOR_REFRESH.md` を参照し、`npm run vendor:sync` 実行後に `manifest.lock.json` を必ず更新・レビューする。
+- ログ永続化のフロー、必要な PAT、Artifact 退避の扱いは `docs/automation/LOG_PERSISTENCE.md` を参照。`persist-progress` はまず直接コミットを試み、失敗時に Artifact へ落とす。
+- Gemini 要約メトリクスの収集・集計は `docs/automation/GEMINI_METRICS.md` を参照。日次ジョブ `gemini-metrics-report.yml` が JSON/Markdown のサマリを生成し、`logs/metrics/gemini/` 以下に JSONL を蓄積する。
+- ランタイムパラメータの一覧と検証手順は `docs/operations/runtime-config.md` に集約。`npm run runtime:verify` で現在値をチェックし、`check-runtime-config` コンポジットを各ワークフローのプロローグに組み込む。
+- 最新棚卸しは [docs/automation/WORKFLOWS.md](../docs/automation/WORKFLOWS.md) を参照（`npm run workflows:inventory` で更新）し、各ワークフローのオーナー / パーミッション / トリガーを確認。
 - `manus-task-runner.yml` schedules weekly Manus task dispatches (Mon 11:30 JST), mirrors production plan into `orchestration/plan/current_plan.json`, and exits early when `vars.MANUS_ENABLED` is not `true`.
 - `economic-circuit-breaker.yml` bootstraps `yq` with remote `wget`, estimates Anthropic/Firebase costs via placeholder logic, and scrapes GitHub minutes with `gh api`; tightening dependencies and real billing integration remain TODO.
 - LINEイベントワークフローには Geminiログ要約ステップを追加（`scripts/automation/run-gemini-log-summary.mjs`）。Sanitize済みログを Gemini API へ送信し、`tmp/gemini/log-summary.json` と Artifact に保存。失敗時は `status=error` で継続し、メトリクスは `tmp/gemini/metrics.jsonl`（`gemini-metrics` Artifact）へ追記。
@@ -54,8 +58,8 @@
 - Determine lifecycle policy for workflow-generated Git commits (`logs/progress`) to avoid repository bloat.
 - Clarify ownership and maintenance expectations for legacy `Cursorvers_LINEsystem/` subproject and duplicated `node_modules/`.
 - Document resilience for the remote `curl` fetch in `line-event.yml` (cache or vendor scripts) to reduce supply-chain and offline-runner risk.
-- Reconcile dual webhook routers to prevent duplicated routing logic or inconsistent automation behaviors.
 - Capture required token scopes/branch protections so workflows that push commits or PRs do not fail under tightened repository policies.
 - Consider vendoring pinned CLI binaries (`yq`, remote scripts) referenced in workflows to limit supply-chain exposure.
 - Establish archival/rotation process for `logs/progress/` commits pushed by workflows to manage repository size and branch protection interactions.
 - モデル連携PoCの評価軸（失敗率・応答時間・APIコスト）を自動集計する仕組みは未整備。Geminiステップが増えることでネットワーク障害やレイテンシ増大が起きた際の監視/アラートを追加検討。
+- note webhook → LINE イベントの導線設計と Discord API 呼び出しの SLA/リトライ戦略が未定義。Spec 作成時にテクニカル要件を確定させること。

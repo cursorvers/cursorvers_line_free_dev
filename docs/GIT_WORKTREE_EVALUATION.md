@@ -3,7 +3,7 @@
 ## 📋 評価概要
 
 **評価日時**: 2025-11-01  
-**対象**: cursorvers_line-discordプロジェクト  
+**対象**: cursorvers_line_free_devプロジェクト  
 **参考**: [Git Worktree公式ドキュメント](https://git-scm.com/docs/git-worktree)
 
 ## 🔍 現在のプロジェクト状況
@@ -28,10 +28,10 @@
 # 別の作業ツリー: 開発実験
 
 # 開発実験用の作業ツリーを作成
-git worktree add ../cursorvers_line-discord-dev manus-retry
+git worktree add ../cursorvers_line_free_dev-dev manus-retry
 
 # 緊急修正用の作業ツリーを作成
-git worktree add ../cursorvers_line-discord-hotfix -b hotfix-emergency
+git worktree add ../cursorvers_line_free_dev-hotfix -b hotfix-emergency
 ```
 
 **メリット：**
@@ -44,12 +44,12 @@ git worktree add ../cursorvers_line-discord-hotfix -b hotfix-emergency
 **適用例：**
 ```bash
 # 現在の作業を中断せずに緊急修正
-git worktree add ../cursorvers_line-discord-emergency -b emergency-fix main
-cd ../cursorvers_line-discord-emergency
+git worktree add ../cursorvers_line_free_dev-emergency -b emergency-fix main
+cd ../cursorvers_line_free_dev-emergency
 # 緊急修正を実施
 git commit -m "Emergency fix"
 git push
-cd ../cursorvers_line-discord
+cd ../cursorvers_line_free_dev
 # 元の作業に戻る（状態は保持されたまま）
 ```
 
@@ -63,10 +63,10 @@ cd ../cursorvers_line-discord
 **適用例：**
 ```bash
 # Manus API実験用の作業ツリー
-git worktree add ../cursorvers_line-discord-manus-experiment -b manus-experiment
+git worktree add ../cursorvers_line_free_dev-manus-experiment -b manus-experiment
 
 # GPT-5実験用の作業ツリー
-git worktree add ../cursorvers_line-discord-gpt5-experiment -b gpt5-experiment
+git worktree add ../cursorvers_line_free_dev-gpt5-experiment -b gpt5-experiment
 ```
 
 **メリット：**
@@ -88,8 +88,8 @@ git worktree add ../cursorvers_line-discord-gpt5-experiment -b gpt5-experiment
 # mainブランチで作業
 
 # 開発段階用（別の作業ツリー）
-git worktree add ../cursorvers_line-discord-dev development
-cd ../cursorvers_line-discord-dev
+git worktree add ../cursorvers_line_free_dev-dev development
+cd ../cursorvers_line_free_dev-dev
 # DEVELOPMENT_MODE=trueで開発実験
 ```
 
@@ -109,12 +109,12 @@ cd ../cursorvers_line-discord-dev
 # 現在の作業を続行
 
 # Manus APIテスト用（別の作業ツリー）
-git worktree add ../cursorvers_line-discord-manus-test manus-retry
-cd ../cursorvers_line-discord-manus-test
+git worktree add ../cursorvers_line_free_dev-manus-test manus-retry
+cd ../cursorvers_line_free_dev-manus-test
 # Manus APIテストを実施
 # テスト完了後、作業ツリーを削除
-cd ../cursorvers_line-discord
-git worktree remove ../cursorvers_line-discord-manus-test
+cd ../cursorvers_line_free_dev
+git worktree remove ../cursorvers_line_free_dev-manus-test
 ```
 
 **メリット：**
@@ -131,8 +131,8 @@ git worktree remove ../cursorvers_line-discord-manus-test
 # 現在の作業を継続（メインワークツリー）
 
 # 緊急修正用（別の作業ツリー）
-git worktree add ../cursorvers_line-discord-hotfix -b hotfix-production main
-cd ../cursorvers_line-discord-hotfix
+git worktree add ../cursorvers_line_free_dev-hotfix -b hotfix-production main
+cd ../cursorvers_line_free_dev-hotfix
 # 緊急修正を実施
 git commit -m "Hotfix: production issue"
 git push origin hotfix-production
@@ -175,17 +175,17 @@ git push origin hotfix-production
 
 1. **開発実験用**
    ```bash
-   git worktree add ../cursorvers_line-discord-experiment -b experiment-branch
+   git worktree add ../cursorvers_line_free_dev-experiment -b experiment-branch
    ```
 
 2. **緊急修正用**
    ```bash
-   git worktree add ../cursorvers_line-discord-hotfix -b hotfix-branch main
+   git worktree add ../cursorvers_line_free_dev-hotfix -b hotfix-branch main
    ```
 
 3. **Manus APIテスト用**
    ```bash
-   git worktree add ../cursorvers_line-discord-manus-test -b manus-test
+   git worktree add ../cursorvers_line_free_dev-manus-test -b manus-test
    ```
 
 ## 🚀 実装手順
@@ -194,7 +194,7 @@ git push origin hotfix-production
 
 ```bash
 # 開発実験用の作業ツリーを作成
-git worktree add ../cursorvers_line-discord-dev -b development-experiment
+git worktree add ../cursorvers_line_free_dev-dev -b development-experiment
 
 # リスト確認
 git worktree list
@@ -203,7 +203,7 @@ git worktree list
 ### ステップ2: 作業ツリーでの作業
 
 ```bash
-cd ../cursorvers_line-discord-dev
+cd ../cursorvers_line_free_dev-dev
 # 開発実験を実施
 # コミット、プッシュなど通常のgit操作
 ```
@@ -212,10 +212,10 @@ cd ../cursorvers_line-discord-dev
 
 ```bash
 # 作業ツリーから移動
-cd ../cursorvers_line-discord
+cd ../cursorvers_line_free_dev
 
 # 作業ツリーを削除
-git worktree remove ../cursorvers_line-discord-dev
+git worktree remove ../cursorvers_line_free_dev-dev
 ```
 
 ## 🔄 git-worktreeとGitHub Actionsのすみ分け
@@ -275,10 +275,10 @@ git worktree remove ../cursorvers_line-discord-dev
 **使用例：**
 ```bash
 # 開発実験用の作業ツリーを作成
-git worktree add ../cursorvers_line-discord-dev -b development-experiment
+git worktree add ../cursorvers_line_free_dev-dev -b development-experiment
 
 # コード編集、テスト実行など
-cd ../cursorvers_line-discord-dev
+cd ../cursorvers_line_free_dev-dev
 # 開発作業を実施...
 ```
 
@@ -347,8 +347,8 @@ GitHub Actions（クラウド）
 **具体例：**
 ```bash
 # 1. ローカルで開発実験（git-worktree）
-git worktree add ../cursorvers_line-discord-dev -b manus-experiment
-cd ../cursorvers_line-discord-dev
+git worktree add ../cursorvers_line_free_dev-dev -b manus-experiment
+cd ../cursorvers_line_free_dev-dev
 # コード編集...
 git commit -m "Add Manus API test"
 git push origin manus-experiment

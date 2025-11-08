@@ -4,22 +4,23 @@
 
 このドキュメントは、Codex（AIエージェント）がManus APIを操作してタスクを実行する際の指示書です。
 
-## ⚠️ 重要な制限事項
+## ⚠️ 制限事項（更新: 制限解除済み）
 
-**Codex環境の制限**:
-- Codex環境では**外部ネットワーク自体が遮断されている**
-- 実際に`api.manus.ai`へは到達できず`getaddrinfo ENOTFOUND`エラーとなる
-- Codex環境から直接Manus APIを呼び出すことは**できない**
+**Codex環境の制限（過去の記述）**:
+- ~~Codex環境では**外部ネットワーク自体が遮断されている**~~ → **解除済み**
+- ~~実際に`api.manus.ai`へは到達できず`getaddrinfo ENOTFOUND`エラーとなる~~ → **解除済み**
+- ~~Codex環境から直接Manus APIを呼び出すことは**できない**~~ → **解除済み**
 
-**解決策**:
+**現在の状態（制限解除後）**:
+- ✅ **すべての外部ネットワーク接続が許可**されています
+- ✅ **直接Manus APIを呼び出すことが可能**です
+- ✅ **MCP経由、GitHub Actions経由、ローカル環境すべてで実行可能**です
+
+**実行方法（すべて利用可能）**:
+- ✅ **直接接続**: Codex環境から直接Manus APIを呼び出し可能
 - ✅ **MCP経由**: CursorのMCP（Model Context Protocol）を使用
 - ✅ **GitHub Actions経由**: GitHub Actionsなどネットワーク許可のある経路から実行
 - ✅ **ローカル環境**: ユーザーのローカルマシンから直接実行
-
-**このドキュメントで説明する方法**:
-- MCP経由での実行方法
-- GitHub Actions経由での実行方法
-- ローカル環境での実行方法
 
 ### 役割分担
 
@@ -364,7 +365,7 @@ async function requestUserApproval({ reason, preview, approvalToken }) {
   // GitHub Issueにコメント
   await gh.issues.createComment({
     owner: 'mo666-med',
-    repo: 'cursorvers_line-discord',
+    repo: 'cursorvers_line_free_dev',
     issue_number: currentIssueNumber,
     body: `🔐 **承認が必要です**\n\n**理由**: ${reason}\n\n**プレビュー**:\n\`\`\`\n${preview}\n\`\`\`\n\n**承認**: /approve ${approvalToken}\n**拒否**: /reject ${approvalToken}`
   });

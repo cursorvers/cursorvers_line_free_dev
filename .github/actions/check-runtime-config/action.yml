@@ -1,0 +1,24 @@
+name: Check Runtime Configuration
+description: Validate runtime parameters against the registry.
+inputs:
+  registry-path:
+    description: Override path to runtime-parameters.json.
+    required: false
+  values-json:
+    description: Path to JSON file containing parameter overrides.
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Verify runtime parameters
+      shell: bash
+      run: |
+        set -euo pipefail
+        ARGS=()
+        if [ -n "${{ inputs.registry-path }}" ]; then
+          ARGS+=("--registry" "${{ inputs.registry-path }}")
+        fi
+        if [ -n "${{ inputs.values-json }}" ]; then
+          ARGS+=("--values" "${{ inputs.values-json }}")
+        fi
+        node scripts/checks/verify-runtime-config.mjs "${ARGS[@]}"

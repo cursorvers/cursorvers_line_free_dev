@@ -55,10 +55,10 @@
 
 ## 🔗 リンク
 
-- **Issue #3**: https://github.com/mo666-med/cursorvers_line-discord/issues/3
-- **Issue #1**: https://github.com/mo666-med/cursorvers_line-discord/issues/1
-- **Issue #2**: https://github.com/mo666-med/cursorvers_line-discord/issues/2
-- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line-discord/actions
+- **Issue #3**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/3
+- **Issue #1**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/1
+- **Issue #2**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/2
+- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 
 **結論**: Miyabiは現在、Issue #1、#2、#3を処理していません。ワークフローの問題により実行が停止している可能性があります。
 

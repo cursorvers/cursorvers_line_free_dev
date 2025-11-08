@@ -1,7 +1,7 @@
 # Miyabi追加後の次のステップ
 
 ## 現在の状況
-- ✅ GitHubリポジトリを作成済み: https://github.com/mo666-med/cursorvers_line-discord
+- ✅ GitHubリポジトリを作成済み: https://github.com/mo666-med/cursorvers_line_free_dev
 - ✅ 初期コミット完了
 - ✅ Miyabiの解析完了
 - ⚠️ `Cursorvers_LINEsystem`がembedded git repositoryとして追加されている警告あり
@@ -86,6 +86,6 @@ cp -r Cursorvers_LINEsystem/.claude . 2>/dev/null || echo ".claudeディレク�
 
 ## 参考リンク
 
-- GitHubリポジトリ: https://github.com/mo666-med/cursorvers_line-discord
+- GitHubリポジトリ: https://github.com/mo666-med/cursorvers_line_free_dev
 - Miyabiのドキュメント: https://github.com/mo666-med/Miyabi
 

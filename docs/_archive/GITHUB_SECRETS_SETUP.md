@@ -2,7 +2,7 @@
 
 ## 🔗 設定ページ
 
-**GitHub Secrets設定ページ**: https://github.com/mo666-med/cursorvers_line-discord/settings/secrets/actions
+**GitHub Secrets設定ページ**: https://github.com/mo666-med/cursorvers_line_free_dev/settings/secrets/actions
 
 ## 📋 設定手順
 
@@ -10,7 +10,7 @@
 
 上記のURLにアクセスするか、以下の手順でアクセス：
 
-1. GitHubリポジトリ: https://github.com/mo666-med/cursorvers_line-discord
+1. GitHubリポジトリ: https://github.com/mo666-med/cursorvers_line_free_dev
 2. **Settings**タブをクリック
 3. 左サイドバーで **Secrets and variables** → **Actions** をクリック
 4. **Secrets**タブを選択

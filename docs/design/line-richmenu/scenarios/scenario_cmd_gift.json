@@ -1,0 +1,12 @@
+{
+  "description": "LINE限定プレゼントの案内",
+  "messages": [
+    {
+      "type": "text",
+      "text": "限定プレゼントの受け取りページです。パスワードを控えておいてくださいね！"
+    },
+    {
+      "flex": "../flex-gift.json"
+    }
+  ]
+}

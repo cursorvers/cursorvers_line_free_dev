@@ -1,0 +1,13 @@
+{
+  "description": "友だち追加時の初回レスポンス",
+  "messages": [
+    {
+      "type": "text",
+      "text": "ご登録ありがとうございます！以下のメニューから知りたい内容をお選びください🙌",
+      "quickReply": "../quick-reply.json"
+    },
+    {
+      "flex": "../flex-welcome.json"
+    }
+  ]
+}

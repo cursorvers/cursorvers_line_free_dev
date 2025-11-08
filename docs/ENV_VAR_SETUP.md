@@ -37,6 +37,7 @@ GitHub Actions から参照するシークレット一覧です。CLI 例は `gh
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase サービスロールキー | `gh secret set SUPABASE_SERVICE_ROLE_KEY --body "$(cat service-role.key)"` |
 | `SUPABASE_URL` | Supabase プロジェクトURL (必要に応じて) | `gh secret set SUPABASE_URL --body "https://xyz.supabase.co"` |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Sheets 連携用 Service Account JSON | `gh secret set GOOGLE_SERVICE_ACCOUNT_JSON --body "$(cat sa.json)"` |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging APIの返信用アクセストークン | `gh secret set LINE_CHANNEL_ACCESS_TOKEN --body "XXXXXXXX"` |
 
 Secrets が設定済みかは次のコマンドで確認できます（値は表示されません）：
 
@@ -56,6 +57,14 @@ gh variable set MANUS_ENABLED --body "true"
 gh variable set MANUS_BASE_URL --body "https://api.manus.ai"
 gh variable set DEGRADED_MODE --body "false"
 gh variable set SUPABASE_URL --body "https://xyz.supabase.co"
+gh variable set LINE_CASE_STUDIES_URL --body "https://example.com/case-studies"
+gh variable set LINE_GUIDE_URL --body "https://example.com/guide"
+gh variable set LINE_GIFT_URL --body "https://example.com/gift"
+gh variable set LINE_PREMIUM_URL --body "https://example.com/premium"
+gh variable set MANUS_LINE_CONFIG_PATH --body "/v1/config/line"
+gh variable set LINE_MAX_BROADCASTS_PER_MONTH --body "3"
+gh variable set LINE_PROMO_COOLDOWN_DAYS --body "30"
+gh variable set LINE_PROMO_TEMPLATES --body "scenario_cmd_gift"
 ```
 
 本番運用に切り替える際は `DEVELOPMENT_MODE=false`、`MANUS_ENABLED=false` に変更してください。変数一覧は `gh variable list` で確認できます。
@@ -82,6 +91,12 @@ Front Door (Supabase Edge Function) では次のシークレットを利用し�
 ```bash
 # Secretsと環境変数の確認
 ./scripts/verify-secrets.sh
+
+# Runtimeパラメータ検証（registryベース）
+npm run runtime:verify
+
+# 実際のSecrets/Variablesを検証したい場合
+RUNTIME_CONFIG_VALUES=env npm run runtime:verify
 
 # フィーチャーフラグの動作確認（両モード）
 npm run test:feature-flags

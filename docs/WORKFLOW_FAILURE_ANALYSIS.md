@@ -48,9 +48,9 @@ Run ID: 18990075425
 
 ## 🔗 関連リンク
 
-- **実行ログ**: https://github.com/mo666-med/cursorvers_line-discord/actions/runs/18990079345/job/54241179742
+- **実行ログ**: https://github.com/mo666-med/cursorvers_line_free_dev/actions/runs/18990079345/job/54241179742
 - **失敗したワークフロー**: Run ID 18990075425
-- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line-discord/actions
+- **GitHub Actions**: https://github.com/mo666-med/cursorvers_line_free_dev/actions
 
 ## ✅ 次のステップ
 

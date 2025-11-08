@@ -19,7 +19,7 @@ gh secret set LLM_ENDPOINT --body "https://api.openai.com/v1/chat/completions"
 gh secret set LLM_API_KEY --body "sk-..."
 ```
 
-**設定場所**: https://github.com/mo666-med/cursorvers_line-discord/settings/secrets/actions
+**設定場所**: https://github.com/mo666-med/cursorvers_line_free_dev/settings/secrets/actions
 
 ### Manus API設定
 
@@ -81,7 +81,7 @@ gh variable set GPT_ENABLED --body "false"
 gh variable set MANUS_ENABLED --body "false"
 ```
 
-**設定場所**: https://github.com/mo666-med/cursorvers_line-discord/settings/variables/actions
+**設定場所**: https://github.com/mo666-med/cursorvers_line_free_dev/settings/variables/actions
 
 ## 3. Front Door（Supabase Edge Function）デプロイ
 

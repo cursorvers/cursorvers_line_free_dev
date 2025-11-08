@@ -3,7 +3,7 @@
 ## 🔍 問題の症状
 
 - **他のCursorプロジェクトでは日本語入力が正常に動作する**
-- **このプロジェクト（cursorvers_line-discord）のみで日本語が「coinbase」や「bebased」に置換される**
+- **このプロジェクト（cursorvers_line_free_dev）のみで日本語が「coinbase」や「bebased」に置換される**
 - プロジェクト固有の設定が原因の可能性が高い
 
 ## ✅ 対処方法
@@ -91,7 +91,7 @@ MCPサーバーを一時的に無効化して確認：
 ```bash
 # ワークスペース設定をリセット（注意: このプロジェクトの設定が消えます）
 rm -rf .vscode/settings.json
-rm -rf cursorvers_line-discord.code-workspace
+rm -rf cursorvers_line_free_dev.code-workspace
 ```
 
 #### 方法2: Cursorのワークスペースストレージをクリア
@@ -112,7 +112,7 @@ rm -rf ~/Library/Application\ Support/Cursor/User/workspaceStorage/*
 #### 手順
 
 1. **Cursorを閉じる**
-2. **`.vscode/settings.json`と`cursorvers_line-discord.code-workspace`をバックアップ**
+2. **`.vscode/settings.json`と`cursorvers_line_free_dev.code-workspace`をバックアップ**
 3. **ファイルを削除**
 4. **Cursorでプロジェクトを再度開く**
 5. **必要な設定のみ再追加**
@@ -139,7 +139,7 @@ rm -rf ~/Library/Application\ Support/Cursor/User/workspaceStorage/*
 
 ```bash
 # プロジェクト固有の設定ファイルを確認
-ls -la .vscode/ cursorvers_line-discord.code-workspace .cursor/
+ls -la .vscode/ cursorvers_line_free_dev.code-workspace .cursor/
 
 # MCP設定を確認
 cat .cursor/mcp.json

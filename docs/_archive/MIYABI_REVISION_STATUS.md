@@ -10,7 +10,7 @@
 
 ### Issue #1の状態
 - **タイトル**: プロジェクト全体の推敲と改善
-- **URL**: https://github.com/mo666-med/cursorvers_line-discord/issues/1
+- **URL**: https://github.com/mo666-med/cursorvers_line_free_dev/issues/1
 - **状態**: OPEN
 - **ラベル**: 
   - `📚 type:docs`
@@ -95,9 +95,9 @@ Miyabiのエージェントが自動的に以下を実施します：
 
 ## 🔗 リンク
 
-- Issue: https://github.com/mo666-med/cursorvers_line-discord/issues/1
-- Actions: https://github.com/mo666-med/cursorvers_line-discord/actions
-- Projects: https://github.com/mo666-med/cursorvers_line-discord/projects
+- Issue: https://github.com/mo666-med/cursorvers_line_free_dev/issues/1
+- Actions: https://github.com/mo666-med/cursorvers_line_free_dev/actions
+- Projects: https://github.com/mo666-med/cursorvers_line_free_dev/projects
 
 ## 💡 次のアクション
 

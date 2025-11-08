@@ -1,8 +1,8 @@
-# cursorvers_line-discord - Claude Code Context
+# cursorvers_line_free_dev - Claude Code Context
 
 ## プロジェクト概要
 
-**cursorvers_line-discord** - Miyabiフレームワークで構築された自律型開発プロジェクト
+**cursorvers_line_free_dev** - Miyabiフレームワークで構築された自律型開発プロジェクト
 
 このプロジェクトは識学理論(Shikigaku Theory)とAI Agentsを組み合わせた自律型開発環境で運用されています。
 
@@ -130,7 +130,7 @@ npx miyabi status --watch  # リアルタイム監視
 ## プロジェクト構造
 
 ```
-cursorvers_line-discord/
+cursorvers_line_free_dev/
 ├── .claude/               # Claude Code設定
 │   ├── agents/           # Agent定義
 │   ├── commands/         # カスタムコマンド
