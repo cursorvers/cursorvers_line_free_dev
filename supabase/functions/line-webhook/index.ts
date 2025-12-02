@@ -9,7 +9,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // lib モジュール
-import { DISCORD_INVITE_URL, COURSE_KEYWORDS, type DiagnosisKeyword } from "./lib/constants.ts";
+import { DISCORD_INVITE_URL, CONTACT_FORM_URL, SERVICES_LP_URL, COURSE_KEYWORDS, type DiagnosisKeyword } from "./lib/constants.ts";
 import { runPromptPolisher } from "./lib/prompt-polisher.ts";
 import { runRiskChecker } from "./lib/risk-checker.ts";
 import { buildCourseEntryMessage } from "./lib/course-router.ts";
@@ -175,14 +175,58 @@ async function replyText(replyToken: string, text: string, quickReply?: QuickRep
 // 診断キーワード選択用のクイックリプライを生成
 function buildDiagnosisQuickReply(): QuickReply {
   return {
-    items: COURSE_KEYWORDS.map((keyword) => ({
-      type: "action" as const,
-      action: {
-        type: "message" as const,
-        label: keyword.replace("診断", ""), // ラベルは短く
-        text: keyword,
+    items: [
+      // 診断キーワード
+      ...COURSE_KEYWORDS.map((keyword) => ({
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: keyword.replace("診断", ""), // ラベルは短く
+          text: keyword,
+        },
+      })),
+      // お問い合わせボタン
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "お問い合わせ",
+          text: "お問い合わせ",
+        },
       },
-    })),
+    ],
+  };
+}
+
+// サービス一覧用のクイックリプライを生成（コミュニティは別メニューに集約）
+function buildServicesQuickReply(): QuickReply {
+  return {
+    items: [
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "プロンプト整形",
+          text: "プロンプト整形の使い方",
+        },
+      },
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "リスクチェック",
+          text: "リスクチェックの使い方",
+        },
+      },
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "サービス詳細（Web）",
+          text: "サービス詳細を見る",
+        },
+      },
+    ],
   };
 }
 
@@ -330,7 +374,7 @@ async function handlePromptPolisher(
   userId: string,
   replyToken?: string
 ): Promise<void> {
-  const rawInput = trimmed.replace(/^磨いて:|^polish:/, "").trim();
+  const rawInput = trimmed.replace(/^洗練:|^polish:/, "").trim();
 
   if (rawInput.length > MAX_INPUT_LENGTH) {
     if (replyToken) {
@@ -436,7 +480,7 @@ async function handleEvent(event: LineEvent): Promise<void> {
   // ========================================
   
   // Prompt Polisher
-  if (trimmed.startsWith("磨いて:") || trimmed.startsWith("polish:")) {
+  if (trimmed.startsWith("洗練:") || trimmed.startsWith("polish:")) {
     await handlePromptPolisher(trimmed, lineUserId, userId, replyToken);
     return;
   }
@@ -583,19 +627,111 @@ async function handleEvent(event: LineEvent): Promise<void> {
   }
 
   // ========================================
-  // 4) ヘルプメッセージ
+  // 4) 「お問い合わせ」→ 問い合わせフォーム
+  // ========================================
+  if (trimmed === "お問い合わせ" || trimmed === "問い合わせ") {
+    if (replyToken) {
+      await replyText(replyToken, [
+        "📧 お問い合わせ",
+        "",
+        "ご質問・ご相談は以下のフォームからお願いします。",
+        "",
+        "▼ お問い合わせフォーム",
+        CONTACT_FORM_URL,
+      ].join("\n"));
+    }
+    return;
+  }
+
+  // ========================================
+  // 5) 「サービス一覧」→ サービス選択メニュー
+  // ========================================
+  if (trimmed === "サービス一覧") {
+    if (replyToken) {
+      await replyText(replyToken, [
+        "✨ Cursorvers Edu サービス",
+        "",
+        "LINE上で使えるツールと、",
+        "詳細ページへのリンクをご用意しています。",
+        "",
+        "▼ 下のボタンから選んでください",
+      ].join("\n"), buildServicesQuickReply());
+    }
+    return;
+  }
+
+  // ========================================
+  // 6) 「サービス詳細」→ LP へのリンク
+  // ========================================
+  if (trimmed === "サービス詳細を見る") {
+    if (replyToken) {
+      await replyText(replyToken, [
+        "📖 サービス詳細ページ",
+        "",
+        "各プランの詳細・料金はこちらでご確認いただけます。",
+        "",
+        "▼ サービス一覧（Web）",
+        SERVICES_LP_URL,
+      ].join("\n"));
+    }
+    return;
+  }
+
+  // ========================================
+  // 7) 「プロンプト整形の使い方」
+  // ========================================
+  if (trimmed === "プロンプト整形の使い方") {
+    if (replyToken) {
+      await replyText(replyToken, [
+        "🔧 プロンプト整形の使い方",
+        "",
+        "「洗練:」の後に文章を入力すると、",
+        "AIが医療安全を考慮した構造化プロンプトに変換します。",
+        "",
+        "【例】",
+        "洗練:60歳男性の糖尿病患者の食事指導について教えて",
+        "",
+        "↑このように入力してみてください！",
+      ].join("\n"));
+    }
+    return;
+  }
+
+  // ========================================
+  // 8) 「リスクチェックの使い方」
+  // ========================================
+  if (trimmed === "リスクチェックの使い方") {
+    if (replyToken) {
+      await replyText(replyToken, [
+        "🛡️ リスクチェックの使い方",
+        "",
+        "「check:」の後に文章を入力すると、",
+        "AIが医療広告・個人情報・医学的妥当性などの",
+        "リスクを分析します。",
+        "",
+        "【例】",
+        "check:この治療法で必ず治ります",
+        "",
+        "↑このように入力してみてください！",
+      ].join("\n"));
+    }
+    return;
+  }
+
+  // ========================================
+  // 9) ヘルプメッセージ
   // ========================================
   if (replyToken) {
     const helpMessage = [
       "Pocket Defense Tool",
       "",
       "■ プロンプト整形",
-      "「磨いて:」の後に文章を入力",
+      "「洗練:」の後に文章を入力",
       "",
       "■ リスクチェック",
       "「check:」の後に文章を入力",
       "",
-      "■ AI導入情報",
+      "■ AI導入情報・お問い合わせ",
       "下のボタンから選んでください ↓",
     ].join("\n");
 
