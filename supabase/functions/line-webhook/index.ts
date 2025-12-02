@@ -71,7 +71,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const MAX_POLISH_PER_DAY = Number(Deno.env.get("MAX_POLISH_PER_DAY") ?? "5");
+const MAX_POLISH_PER_HOUR = Number(Deno.env.get("MAX_POLISH_PER_HOUR") ?? "5");
 const MAX_INPUT_LENGTH = Number(Deno.env.get("MAX_INPUT_LENGTH") ?? "3000");
 
 if (!LINE_CHANNEL_ACCESS_TOKEN || !LINE_CHANNEL_SECRET) {
@@ -230,6 +230,22 @@ function buildServicesQuickReply(): QuickReply {
   };
 }
 
+// 「戻る」ボタン付きクイックリプライ（ツールモード用）
+function buildBackButtonQuickReply(): QuickReply {
+  return {
+    items: [
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "← 戻る",
+          text: "戻る",
+        },
+      },
+    ],
+  };
+}
+
 // LINE push（非同期で結果を送る用）
 async function pushText(lineUserId: string, text: string) {
   await fetch("https://api.line.me/v2/bot/message/push", {
@@ -302,25 +318,47 @@ async function logInteraction(opts: LogOptions) {
   }
 }
 
-// 当日の Prompt Polisher 利用回数をチェック
-async function getTodayPolishCount(userId: string): Promise<number> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayIso = today.toISOString();
+// 直近1時間の利用回数をチェック（汎用）
+async function getHourlyUsageCount(
+  userId: string, 
+  interactionType: string
+): Promise<{ count: number; nextAvailable: Date | null }> {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const oneHourAgoIso = oneHourAgo.toISOString();
 
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("interaction_logs")
-    .select("*", { count: "exact", head: true })
+    .select("created_at")
     .eq("user_id", userId)
-    .eq("interaction_type", "prompt_polisher")
-    .gte("created_at", todayIso);
+    .eq("interaction_type", interactionType)
+    .gte("created_at", oneHourAgoIso)
+    .order("created_at", { ascending: true });
 
   if (error) {
-    console.error("[line-webhook] getTodayPolishCount error", error);
-    return 0;
+    console.error(`[line-webhook] getHourlyUsageCount error for ${interactionType}:`, error);
+    return { count: 0, nextAvailable: null };
   }
 
-  return count ?? 0;
+  const count = data?.length ?? 0;
+  
+  // 5回以上使っている場合、最初の利用から1時間後を計算
+  let nextAvailable: Date | null = null;
+  if (count >= MAX_POLISH_PER_HOUR && data && data.length > 0) {
+    const oldestUsage = new Date(data[0].created_at);
+    nextAvailable = new Date(oldestUsage.getTime() + 60 * 60 * 1000);
+  }
+
+  return { count, nextAvailable };
+}
+
+// Prompt Polisher 用
+async function getHourlyPolishCount(userId: string) {
+  return getHourlyUsageCount(userId, "prompt_polisher");
+}
+
+// Risk Checker 用
+async function getHourlyRiskCheckCount(userId: string) {
+  return getHourlyUsageCount(userId, "risk_checker");
 }
 
 // =======================
@@ -425,10 +463,20 @@ async function handlePromptPolisher(
     return;
   }
 
-  const todayCount = await getTodayPolishCount(userId);
-  if (todayCount >= MAX_POLISH_PER_DAY) {
+  const { count: hourlyCount, nextAvailable } = await getHourlyPolishCount(userId);
+  if (hourlyCount >= MAX_POLISH_PER_HOUR) {
     if (replyToken) {
-      await replyText(replyToken, `本日の利用上限（${MAX_POLISH_PER_DAY}回）に達しました。`);
+      const waitMinutes = nextAvailable 
+        ? Math.max(1, Math.ceil((nextAvailable.getTime() - Date.now()) / 60000))
+        : 60;
+      await replyText(replyToken, [
+        `⏳ 利用上限に達しました（1時間に${MAX_POLISH_PER_HOUR}回まで）`,
+        "",
+        `約${waitMinutes}分後に再度ご利用いただけます。`,
+        "",
+        "💡 より多くご利用されたい方は、",
+        "Library Memberへのアップグレードをご検討ください。",
+      ].join("\n"));
     }
     return;
   }
@@ -466,6 +514,24 @@ async function handleRiskChecker(
   if (rawInput.length > MAX_INPUT_LENGTH) {
     if (replyToken) {
       await replyText(replyToken, `入力が長すぎます（${MAX_INPUT_LENGTH}文字以内）。`);
+    }
+    return;
+  }
+
+  const { count: hourlyCount, nextAvailable } = await getHourlyRiskCheckCount(userId);
+  if (hourlyCount >= MAX_POLISH_PER_HOUR) {
+    if (replyToken) {
+      const waitMinutes = nextAvailable 
+        ? Math.max(1, Math.ceil((nextAvailable.getTime() - Date.now()) / 60000))
+        : 60;
+      await replyText(replyToken, [
+        `⏳ 利用上限に達しました（1時間に${MAX_POLISH_PER_HOUR}回まで）`,
+        "",
+        `約${waitMinutes}分後に再度ご利用いただけます。`,
+        "",
+        "💡 より多くご利用されたい方は、",
+        "Library Memberへのアップグレードをご検討ください。",
+      ].join("\n"));
     }
     return;
   }
@@ -763,18 +829,17 @@ async function handleEvent(event: LineEvent): Promise<void> {
     if (replyToken) {
       await replyText(replyToken, [
         "🔧 プロンプト整形モード",
+        "⚡ GPT-5.1 × 専用プロンプトで生成",
         "",
         "整形したい文章をそのまま入力してください。",
-        "AIが医療安全を考慮した構造化プロンプトに変換します。",
+        "普通にAIに聞くより高品質な回答を引き出せる",
+        "構造化プロンプトに変換します。",
         "",
-        "📱 キーボードの出し方：",
-        "左下の「キーボード」アイコンをタップ",
+        "📱 左下の「キーボード」アイコンをタップ",
         "",
         "【入力例】",
-        "60歳男性の糖尿病患者の食事指導について教えて",
-        "",
-        "※「戻る」で終了",
-      ].join("\n"));
+        "糖尿病患者の食事指導について教えて",
+      ].join("\n"), buildBackButtonQuickReply());
     }
     return;
   }
@@ -789,19 +854,17 @@ async function handleEvent(event: LineEvent): Promise<void> {
     if (replyToken) {
       await replyText(replyToken, [
         "🛡️ リスクチェックモード",
+        "⚡ GPT-5.1 × 専用プロンプトで分析",
         "",
         "チェックしたい文章をそのまま入力してください。",
-        "AIが医療広告・個人情報・医学的妥当性などの",
+        "医療広告・個人情報・医学的妥当性などの",
         "リスクを分析します。",
         "",
-        "📱 キーボードの出し方：",
-        "左下の「キーボード」アイコンをタップ",
+        "📱 左下の「キーボード」アイコンをタップ",
         "",
         "【入力例】",
         "この治療法で必ず治ります",
-        "",
-        "※「戻る」で終了",
-      ].join("\n"));
+      ].join("\n"), buildBackButtonQuickReply());
     }
     return;
   }

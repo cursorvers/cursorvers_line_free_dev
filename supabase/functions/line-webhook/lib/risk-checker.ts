@@ -91,7 +91,7 @@ export async function runRiskChecker(
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-5.1",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: rawInput },
@@ -166,7 +166,7 @@ export async function runRiskChecker(
  * 出力を LINE メッセージ用にフォーマット
  */
 function formatOutput(results: RiskCheckResult[], summary: string): string {
-  const header = "【Risk Checker】\n文章のリスク分析結果：\n\n";
+  const header = "🛡️ Risk Checker\n⚡ GPT-5.1 × 専用プロンプトで分析\n\n";
   
   // カテゴリ名の日本語マッピング
   const categoryNames: Record<string, string> = {
