@@ -396,6 +396,7 @@ async function clearDiagnosisState(lineUserId: string): Promise<void> {
 
 // ツールモードを設定
 async function setToolMode(lineUserId: string, mode: UserMode): Promise<void> {
+  console.log("[line-webhook] Setting tool mode:", mode, "for user:", lineUserId);
   await updateUserState(lineUserId, { mode });
 }
 
@@ -516,32 +517,13 @@ async function handleEvent(event: LineEvent): Promise<void> {
   const trimmed = text.trim();
 
   // ========================================
-  // 0) 明示的プレフィックスコマンド（どの状態でも実行可能）
-  // ========================================
-  
-  // Prompt Polisher（プレフィックス付き）
-  if (trimmed.startsWith("洗練:") || trimmed.startsWith("polish:")) {
-    const rawInput = trimmed.replace(/^洗練:|^polish:/, "").trim();
-    await clearUserState(lineUserId); // モードをクリア
-    await handlePromptPolisher(rawInput, lineUserId, userId, replyToken);
-    return;
-  }
-
-  // Risk Checker（プレフィックス付き）
-  if (trimmed.startsWith("check:") || trimmed.startsWith("チェック:")) {
-    const rawInput = trimmed.replace(/^check:|^チェック:/, "").trim();
-    await clearUserState(lineUserId); // モードをクリア
-    await handleRiskChecker(rawInput, lineUserId, userId, replyToken);
-    return;
-  }
-
-  // ========================================
-  // 0.5) ツールモード中の処理
+  // 0) ツールモード中の処理（最優先）
   // ========================================
   const toolMode = await getToolMode(lineUserId);
+  console.log("[line-webhook] toolMode:", toolMode, "for user:", lineUserId);
   
   if (toolMode) {
-    // 「キャンセル」でモードを終了
+    // 「キャンセル」「戻る」でモードを終了
     if (trimmed === "キャンセル" || trimmed === "cancel" || trimmed === "戻る") {
       await clearUserState(lineUserId);
       if (replyToken) {
@@ -550,19 +532,39 @@ async function handleEvent(event: LineEvent): Promise<void> {
       return;
     }
 
-    // プロンプト整形モード
+    // プロンプト整形モード → 入力をそのままPolish
     if (toolMode === "polish") {
+      console.log("[line-webhook] Processing polish mode with input:", trimmed.substring(0, 50));
       await clearUserState(lineUserId); // 1回使ったらモード終了
       await handlePromptPolisher(trimmed, lineUserId, userId, replyToken);
       return;
     }
 
-    // リスクチェックモード
+    // リスクチェックモード → 入力をそのままチェック
     if (toolMode === "risk_check") {
+      console.log("[line-webhook] Processing risk_check mode with input:", trimmed.substring(0, 50));
       await clearUserState(lineUserId); // 1回使ったらモード終了
       await handleRiskChecker(trimmed, lineUserId, userId, replyToken);
       return;
     }
+  }
+
+  // ========================================
+  // 1) 明示的プレフィックスコマンド
+  // ========================================
+  
+  // Prompt Polisher（プレフィックス付き）
+  if (trimmed.startsWith("洗練:") || trimmed.startsWith("polish:")) {
+    const rawInput = trimmed.replace(/^洗練:|^polish:/, "").trim();
+    await handlePromptPolisher(rawInput, lineUserId, userId, replyToken);
+    return;
+  }
+
+  // Risk Checker（プレフィックス付き）
+  if (trimmed.startsWith("check:") || trimmed.startsWith("チェック:")) {
+    const rawInput = trimmed.replace(/^check:|^チェック:/, "").trim();
+    await handleRiskChecker(rawInput, lineUserId, userId, replyToken);
+    return;
   }
 
   // ========================================
