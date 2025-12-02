@@ -7,6 +7,9 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { runPromptPolisher } from "./lib/prompt-polisher.ts";
+import { runRiskChecker } from "./lib/risk-checker.ts";
+import { buildCourseEntryMessage } from "./lib/course-router.ts";
 
 // =======================
 // 型定義
@@ -315,11 +318,15 @@ async function handleEvent(event: LineEvent): Promise<void> {
     // 非同期で実際のPolisher処理を実行
     void (async () => {
       try {
-        // TODO: ./lib/prompt-polisher.ts に処理を切り出し、OpenAI API を呼び出す
-        // const polished = await runPromptPolisher(rawInput, { userId });
-        const polished =
-          "【Prompt Polisher】\n（まだ実装されていません。Phase 1 で OpenAI 連携を追加予定）\n\n入力されたメモを、医療安全とコンプライアンスを考慮した構造化プロンプトに変換します。";
-        await pushText(lineUserId, polished);
+        const result = await runPromptPolisher(rawInput);
+        if (result.success && result.polishedPrompt) {
+          await pushText(lineUserId, result.polishedPrompt);
+        } else {
+          await pushText(
+            lineUserId,
+            result.error ?? "プロンプト整形中にエラーが発生しました。"
+          );
+        }
       } catch (err) {
         console.error("[line-webhook] prompt_polisher error", err);
         await pushText(
@@ -362,11 +369,25 @@ async function handleEvent(event: LineEvent): Promise<void> {
 
     void (async () => {
       try {
-        // TODO: ./lib/risk-checker.ts に処理を切り出し、OpenAI API を呼び出す
-        // const result = await runRiskChecker(rawInput, { userId });
-        const dummy =
-          "【Risk Checker】\n（まだ実装されていません。Phase 2 で OpenAI 連携を追加予定）\n\n入力された文章のリスクカテゴリ（医療広告・個人情報・臨床的妥当性など）を判定します。";
-        await pushText(lineUserId, dummy);
+        const result = await runRiskChecker(rawInput);
+        if (result.success && result.formattedMessage) {
+          await pushText(lineUserId, result.formattedMessage);
+          
+          // riskFlags を記録（非同期で実行）
+          if (result.riskFlags && result.riskFlags.length > 0) {
+            await logInteraction({
+              userId,
+              interactionType: "risk_checker",
+              riskFlags: result.riskFlags,
+              inputLength: rawInput.length,
+            });
+          }
+        } else {
+          await pushText(
+            lineUserId,
+            result.error ?? "リスクチェック中にエラーが発生しました。"
+          );
+        }
       } catch (err) {
         console.error("[line-webhook] risk_checker error", err);
         await pushText(
@@ -376,6 +397,7 @@ async function handleEvent(event: LineEvent): Promise<void> {
       }
     })();
 
+    // 初回ログ（riskFlags は後から更新される）
     await logInteraction({
       userId,
       interactionType: "risk_checker",
@@ -388,11 +410,9 @@ async function handleEvent(event: LineEvent): Promise<void> {
   // 3) 診断キーワード（6種類のいずれかと完全一致）
   const courseKeyword = detectCourseKeyword(trimmed);
   if (courseKeyword) {
+    const courseMessage = buildCourseEntryMessage(courseKeyword);
     if (replyToken) {
-      await replyText(
-        replyToken,
-        `「${courseKeyword}」の診断フローへようこそ。\n\n（Phase 3 で詳細な質問フローと note 記事推薦を実装予定）\n\n現在は準備中です。近日公開をお待ちください。`
-      );
+      await replyText(replyToken, courseMessage);
     }
 
     await logInteraction({
