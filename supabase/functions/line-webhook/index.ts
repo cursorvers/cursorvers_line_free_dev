@@ -71,7 +71,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const MAX_POLISH_PER_HOUR = Number(Deno.env.get("MAX_POLISH_PER_HOUR") ?? "5");
+const MAX_POLISH_PER_HOUR = Number(Deno.env.get("MAX_POLISH_PER_HOUR") ?? "10");
 const MAX_INPUT_LENGTH = Number(Deno.env.get("MAX_INPUT_LENGTH") ?? "3000");
 
 if (!LINE_CHANNEL_ACCESS_TOKEN || !LINE_CHANNEL_SECRET) {
@@ -829,7 +829,6 @@ async function handleEvent(event: LineEvent): Promise<void> {
     if (replyToken) {
       await replyText(replyToken, [
         "🔧 プロンプト整形モード",
-        "⚡ GPT-5.1 × 専用プロンプトで生成",
         "",
         "整形したい文章をそのまま入力してください。",
         "普通にAIに聞くより高品質な回答を引き出せる",
@@ -854,7 +853,6 @@ async function handleEvent(event: LineEvent): Promise<void> {
     if (replyToken) {
       await replyText(replyToken, [
         "🛡️ リスクチェックモード",
-        "⚡ GPT-5.1 × 専用プロンプトで分析",
         "",
         "チェックしたい文章をそのまま入力してください。",
         "医療広告・個人情報・医学的妥当性などの",

@@ -85,7 +85,7 @@ export async function runPromptPolisher(
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-5.1",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: rawInput },
@@ -139,7 +139,7 @@ export async function runPromptPolisher(
  * 出力を LINE メッセージ用にフォーマット
  */
 function formatOutput(polishedPrompt: string): string {
-  const header = "🔧 Prompt Polisher\n⚡ GPT-5.1 × 専用プロンプトで生成\n\n";
+  const header = "🔧 Prompt Polisher\n\n";
   const footer = "\n\n---\n💡 このプロンプトをコピーして、お好みのAIに貼り付けてください。";
   
   // LINE の文字数制限（5000文字）を考慮
