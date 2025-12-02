@@ -324,11 +324,19 @@ async function getTodayPolishCount(userId: string): Promise<number> {
 }
 
 // =======================
-// 診断フロー状態管理
+// ユーザー状態管理（診断フロー & ツールモード）
 // =======================
 
-// 診断状態を取得
-async function getDiagnosisState(lineUserId: string): Promise<DiagnosisState | null> {
+// ユーザー状態の型（診断 or ツールモード）
+type UserMode = "polish" | "risk_check" | null;
+
+interface UserState {
+  mode?: UserMode;
+  diagnosis?: DiagnosisState;
+}
+
+// ユーザー状態を取得
+async function getUserState(lineUserId: string): Promise<UserState | null> {
   const { data, error } = await supabase
     .from("users")
     .select("diagnosis_state")
@@ -336,17 +344,17 @@ async function getDiagnosisState(lineUserId: string): Promise<DiagnosisState | n
     .maybeSingle();
 
   if (error) {
-    console.error("[line-webhook] getDiagnosisState error", error);
+    console.error("[line-webhook] getUserState error", error);
     return null;
   }
 
-  return data?.diagnosis_state as DiagnosisState | null;
+  return data?.diagnosis_state as UserState | null;
 }
 
-// 診断状態を更新
-async function updateDiagnosisState(
+// ユーザー状態を更新
+async function updateUserState(
   lineUserId: string,
-  state: DiagnosisState | null
+  state: UserState | null
 ): Promise<void> {
   const { error } = await supabase
     .from("users")
@@ -354,27 +362,60 @@ async function updateDiagnosisState(
     .eq("line_user_id", lineUserId);
 
   if (error) {
-    console.error("[line-webhook] updateDiagnosisState error", error);
+    console.error("[line-webhook] updateUserState error", error);
   }
 }
 
-// 診断状態をクリア
+// ユーザー状態をクリア
+async function clearUserState(lineUserId: string): Promise<void> {
+  await updateUserState(lineUserId, null);
+}
+
+// 診断状態を取得（後方互換）
+async function getDiagnosisState(lineUserId: string): Promise<DiagnosisState | null> {
+  const state = await getUserState(lineUserId);
+  return state?.diagnosis ?? null;
+}
+
+// 診断状態を更新（後方互換）
+async function updateDiagnosisState(
+  lineUserId: string,
+  diagnosisState: DiagnosisState | null
+): Promise<void> {
+  if (diagnosisState) {
+    await updateUserState(lineUserId, { diagnosis: diagnosisState });
+  } else {
+    await clearUserState(lineUserId);
+  }
+}
+
+// 診断状態をクリア（後方互換）
 async function clearDiagnosisState(lineUserId: string): Promise<void> {
-  await updateDiagnosisState(lineUserId, null);
+  await clearUserState(lineUserId);
+}
+
+// ツールモードを設定
+async function setToolMode(lineUserId: string, mode: UserMode): Promise<void> {
+  await updateUserState(lineUserId, { mode });
+}
+
+// ツールモードを取得
+async function getToolMode(lineUserId: string): Promise<UserMode> {
+  const state = await getUserState(lineUserId);
+  return state?.mode ?? null;
 }
 
 // =======================
 // 機能ハンドラー
 // =======================
 
-// Prompt Polisher ハンドラー
+// Prompt Polisher ハンドラー（プレフィックスありでもなしでも動作）
 async function handlePromptPolisher(
-  trimmed: string,
+  rawInput: string,
   lineUserId: string,
   userId: string,
   replyToken?: string
 ): Promise<void> {
-  const rawInput = trimmed.replace(/^洗練:|^polish:/, "").trim();
 
   if (rawInput.length > MAX_INPUT_LENGTH) {
     if (replyToken) {
@@ -413,14 +454,13 @@ async function handlePromptPolisher(
   await logInteraction({ userId, interactionType: "prompt_polisher", inputLength: rawInput.length });
 }
 
-// Risk Checker ハンドラー
+// Risk Checker ハンドラー（プレフィックスありでもなしでも動作）
 async function handleRiskChecker(
-  trimmed: string,
+  rawInput: string,
   lineUserId: string,
   userId: string,
   replyToken?: string
 ): Promise<void> {
-  const rawInput = trimmed.replace(/^check:|^チェック:/, "").trim();
 
   if (rawInput.length > MAX_INPUT_LENGTH) {
     if (replyToken) {
@@ -476,19 +516,53 @@ async function handleEvent(event: LineEvent): Promise<void> {
   const trimmed = text.trim();
 
   // ========================================
-  // 0) 優先コマンド（診断中でも実行可能）
+  // 0) 明示的プレフィックスコマンド（どの状態でも実行可能）
   // ========================================
   
-  // Prompt Polisher
+  // Prompt Polisher（プレフィックス付き）
   if (trimmed.startsWith("洗練:") || trimmed.startsWith("polish:")) {
-    await handlePromptPolisher(trimmed, lineUserId, userId, replyToken);
+    const rawInput = trimmed.replace(/^洗練:|^polish:/, "").trim();
+    await clearUserState(lineUserId); // モードをクリア
+    await handlePromptPolisher(rawInput, lineUserId, userId, replyToken);
     return;
   }
 
-  // Risk Checker
+  // Risk Checker（プレフィックス付き）
   if (trimmed.startsWith("check:") || trimmed.startsWith("チェック:")) {
-    await handleRiskChecker(trimmed, lineUserId, userId, replyToken);
+    const rawInput = trimmed.replace(/^check:|^チェック:/, "").trim();
+    await clearUserState(lineUserId); // モードをクリア
+    await handleRiskChecker(rawInput, lineUserId, userId, replyToken);
     return;
+  }
+
+  // ========================================
+  // 0.5) ツールモード中の処理
+  // ========================================
+  const toolMode = await getToolMode(lineUserId);
+  
+  if (toolMode) {
+    // 「キャンセル」でモードを終了
+    if (trimmed === "キャンセル" || trimmed === "cancel" || trimmed === "戻る") {
+      await clearUserState(lineUserId);
+      if (replyToken) {
+        await replyText(replyToken, "モードを終了しました。\n\n下のボタンから選んでください。", buildServicesQuickReply());
+      }
+      return;
+    }
+
+    // プロンプト整形モード
+    if (toolMode === "polish") {
+      await clearUserState(lineUserId); // 1回使ったらモード終了
+      await handlePromptPolisher(trimmed, lineUserId, userId, replyToken);
+      return;
+    }
+
+    // リスクチェックモード
+    if (toolMode === "risk_check") {
+      await clearUserState(lineUserId); // 1回使ったらモード終了
+      await handleRiskChecker(trimmed, lineUserId, userId, replyToken);
+      return;
+    }
   }
 
   // ========================================
@@ -678,41 +752,53 @@ async function handleEvent(event: LineEvent): Promise<void> {
   }
 
   // ========================================
-  // 7) 「プロンプト整形の使い方」
+  // 7) 「プロンプト整形の使い方」→ プロンプト整形モードに入る
   // ========================================
   if (trimmed === "プロンプト整形の使い方") {
+    // プロンプト整形モードを設定
+    await setToolMode(lineUserId, "polish");
+    
     if (replyToken) {
       await replyText(replyToken, [
-        "🔧 プロンプト整形の使い方",
+        "🔧 プロンプト整形モード",
         "",
-        "「洗練:」の後に文章を入力すると、",
+        "整形したい文章をそのまま入力してください。",
         "AIが医療安全を考慮した構造化プロンプトに変換します。",
         "",
-        "【例】",
-        "洗練:60歳男性の糖尿病患者の食事指導について教えて",
+        "📱 キーボードの出し方：",
+        "左下の「キーボード」アイコンをタップ",
         "",
-        "↑このように入力してみてください！",
+        "【入力例】",
+        "60歳男性の糖尿病患者の食事指導について教えて",
+        "",
+        "※「戻る」で終了",
       ].join("\n"));
     }
     return;
   }
 
   // ========================================
-  // 8) 「リスクチェックの使い方」
+  // 8) 「リスクチェックの使い方」→ リスクチェックモードに入る
   // ========================================
   if (trimmed === "リスクチェックの使い方") {
+    // リスクチェックモードを設定
+    await setToolMode(lineUserId, "risk_check");
+    
     if (replyToken) {
       await replyText(replyToken, [
-        "🛡️ リスクチェックの使い方",
+        "🛡️ リスクチェックモード",
         "",
-        "「check:」の後に文章を入力すると、",
+        "チェックしたい文章をそのまま入力してください。",
         "AIが医療広告・個人情報・医学的妥当性などの",
         "リスクを分析します。",
         "",
-        "【例】",
-        "check:この治療法で必ず治ります",
+        "📱 キーボードの出し方：",
+        "左下の「キーボード」アイコンをタップ",
         "",
-        "↑このように入力してみてください！",
+        "【入力例】",
+        "この治療法で必ず治ります",
+        "",
+        "※「戻る」で終了",
       ].join("\n"));
     }
     return;
