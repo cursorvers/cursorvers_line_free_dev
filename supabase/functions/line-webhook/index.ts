@@ -142,9 +142,28 @@ async function verifyLineSignature(
   return hashBase64 === signature;
 }
 
+// クイックリプライアイテムの型
+interface QuickReplyItem {
+  type: "action";
+  action: {
+    type: "message" | "postback";
+    label: string;
+    text?: string;
+    data?: string;
+  };
+}
+
+interface QuickReply {
+  items: QuickReplyItem[];
+}
+
 // LINE 返信（reply API）
-async function replyText(replyToken: string, text: string) {
+async function replyText(replyToken: string, text: string, quickReply?: QuickReply) {
   if (!replyToken) return;
+  const message: Record<string, unknown> = { type: "text", text };
+  if (quickReply) {
+    message.quickReply = quickReply;
+  }
   await fetch("https://api.line.me/v2/bot/message/reply", {
     method: "POST",
     headers: {
@@ -153,9 +172,23 @@ async function replyText(replyToken: string, text: string) {
     },
     body: JSON.stringify({
       replyToken,
-      messages: [{ type: "text", text }],
+      messages: [message],
     }),
   });
+}
+
+// 診断キーワード選択用のクイックリプライを生成
+function buildDiagnosisQuickReply(): QuickReply {
+  return {
+    items: COURSE_KEYWORDS.map((keyword) => ({
+      type: "action" as const,
+      action: {
+        type: "message" as const,
+        label: keyword.replace("診断", ""), // ラベルは短く
+        text: keyword,
+      },
+    })),
+  };
 }
 
 // LINE push（非同期で結果を送る用）
@@ -425,35 +458,24 @@ async function handleEvent(event: LineEvent): Promise<void> {
     return;
   }
 
-  // 4) それ以外 → ヘルプメッセージ
+  // 4) それ以外 → ヘルプメッセージ + クイックリプライ
   if (replyToken) {
-    await replyText(
-      replyToken,
-      [
-        "Cursorvers Pocket Defense Tool へようこそ！",
-        "",
-        "▼ ご利用いただける機能",
-        "",
-        "【プロンプト整形】",
-        "「磨いて:〇〇」または「polish:〇〇」",
-        "→ 雑なメモを構造化プロンプトに変換",
-        "",
-        "【リスクチェック】",
-        "「check:〇〇」または「チェック:〇〇」",
-        "→ 文章のリスクカテゴリを判定",
-        "",
-        "【診断キーワード】",
-        "以下のキーワードをそのまま送信：",
-        "・病院AIリスク診断",
-        "・SaMDスタートアップ診断",
-        "・医療データガバナンス診断",
-        "・臨床知アセット診断",
-        "・教育AI導入診断",
-        "・次世代AI実装診断",
-        "",
-        "詳しくは note.com/nice_wren7963 をご覧ください。",
-      ].join("\n")
-    );
+    const helpMessage = [
+      "Pocket Defense Tool へようこそ！",
+      "",
+      "■ プロンプト整形",
+      "「磨いて:」に続けて文章を入力",
+      "例）磨いて:患者の血圧が高い",
+      "",
+      "■ リスクチェック",
+      "「check:」に続けて文章を入力",
+      "例）check:この治療は効果抜群です",
+      "",
+      "■ AI導入診断",
+      "下のボタンから選択してください ↓",
+    ].join("\n");
+
+    await replyText(replyToken, helpMessage, buildDiagnosisQuickReply());
   }
 }
 
