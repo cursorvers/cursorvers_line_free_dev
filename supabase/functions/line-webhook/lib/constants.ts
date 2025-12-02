@@ -8,7 +8,7 @@ export const DISCORD_INVITE_URL = "https://discord.gg/hmMz3pHH";
 export const CONTACT_FORM_URL = "https://script.google.com/macros/s/AKfycbwDP0d67qtifyms2h67LawjNWJi_Lh44faPC7Z4axfS_Gdmjzcd50rcl_kmTYBTysKirQ/exec";
 
 // サービス詳細LP（GitHub Pages）
-export const SERVICES_LP_URL = "https://mo666-med.github.io/Cursorvers_HTML/Cursorvers_edu/services.html";
+export const SERVICES_LP_URL = "https://cursorvers.github.io/cursorvers-edu/services.html";
 
 // 診断キーワード
 export const COURSE_KEYWORDS = [
