@@ -22,6 +22,7 @@ import {
   buildQuestionMessage,
   buildConclusionMessage,
   buildDiagnosisStartMessage,
+  getTotalQuestions,
 } from "./lib/diagnosis-flow.ts";
 import { getArticlesByIds } from "./lib/note-recommendations.ts";
 
@@ -671,8 +672,11 @@ async function handleEvent(event: LineEvent): Promise<void> {
       answers: [...diagnosisState.answers, trimmed],
     };
 
-    // 4問回答完了 → 結論を表示
-    if (newState.answers.length >= 4) {
+    // 総質問数を取得
+    const totalQ = getTotalQuestions(newState.keyword);
+
+    // 全問回答完了 → 結論を表示
+    if (newState.answers.length >= totalQ) {
       const articleIds = getConclusion(newState);
       const articles = articleIds ? getArticlesByIds(articleIds) : [];
       
@@ -711,37 +715,34 @@ async function handleEvent(event: LineEvent): Promise<void> {
     await updateDiagnosisState(lineUserId, newState);
     const nextQuestion = getNextQuestion(newState);
     if (nextQuestion && replyToken) {
-      const { text: questionText, quickReply } = buildQuestionMessage(nextQuestion, newState.layer);
+      const { text: questionText, quickReply } = buildQuestionMessage(nextQuestion, newState.layer, totalQ);
       await replyText(replyToken, questionText, quickReply as QuickReply);
     }
     return;
   }
 
   // ========================================
-  // 2) 診断キーワード → 4層フロー or 即時記事表示
+  // 2) 診断キーワード → すべて3層フロー
   // ========================================
   const courseKeyword = detectCourseKeyword(trimmed);
   if (courseKeyword) {
-    // 「病院AIリスク診断」のみ4層フロー
-    if (courseKeyword === "病院AIリスク診断") {
-      const flow = getFlowForKeyword(courseKeyword);
-      if (flow) {
-        const startMessage = buildDiagnosisStartMessage(courseKeyword);
-        if (startMessage && replyToken) {
-          // 診断状態を初期化
-          const initialState: DiagnosisState = {
-            keyword: courseKeyword,
-            layer: 1,
-            answers: [],
-          };
-          await updateDiagnosisState(lineUserId, initialState);
-          await replyText(replyToken, startMessage.text, startMessage.quickReply as QuickReply);
-        }
-        return;
+    const flow = getFlowForKeyword(courseKeyword);
+    if (flow) {
+      const startMessage = buildDiagnosisStartMessage(courseKeyword);
+      if (startMessage && replyToken) {
+        // 診断状態を初期化
+        const initialState: DiagnosisState = {
+          keyword: courseKeyword,
+          layer: 1,
+          answers: [],
+        };
+        await updateDiagnosisState(lineUserId, initialState);
+        await replyText(replyToken, startMessage.text, startMessage.quickReply as QuickReply);
       }
+      return;
     }
 
-    // 他のキーワードは従来どおり即時記事表示
+    // フローが定義されていない場合のフォールバック（通常は発生しない）
     const courseMessage = buildCourseEntryMessage(courseKeyword);
     if (replyToken) {
       await replyText(replyToken, courseMessage);
