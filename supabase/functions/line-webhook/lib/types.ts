@@ -25,6 +25,7 @@ export interface NoteArticle {
   id: string;              // 内部ID（slug が分からない場合は任意の英数字）
   title: string;
   url?: string;            // slug が分かったら https://note.com/nice_wren7963/n/xxx を入れる
+  tags?: string[];         // タグ（診断フローの関心領域に対応）
 }
 
 export interface CourseRecommendation {

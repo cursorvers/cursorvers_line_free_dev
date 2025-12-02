@@ -24,7 +24,7 @@ import {
   buildDiagnosisStartMessage,
   getTotalQuestions,
 } from "./lib/diagnosis-flow.ts";
-import { getArticlesByIds } from "./lib/note-recommendations.ts";
+import { getArticlesByIds, getArticlesByTag } from "./lib/note-recommendations.ts";
 
 // =======================
 // 型定義
@@ -678,7 +678,14 @@ async function handleEvent(event: LineEvent): Promise<void> {
     // 全問回答完了 → 結論を表示
     if (newState.answers.length >= totalQ) {
       const articleIds = getConclusion(newState);
-      const articles = articleIds ? getArticlesByIds(articleIds) : [];
+      let articles = articleIds ? getArticlesByIds(articleIds) : [];
+      
+      // タグベースのフォールバック（記事IDが見つからない場合）
+      if (articles.length === 0) {
+        const interest = newState.answers[1]; // layer2の回答
+        articles = getArticlesByTag(interest, 3);
+        console.log(`[line-webhook] Using tag-based fallback for "${interest}", found ${articles.length} articles`);
+      }
       
       if (articles.length > 0) {
         const conclusionMessage = buildConclusionMessage(newState, articles);

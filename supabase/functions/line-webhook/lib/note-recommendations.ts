@@ -9,18 +9,20 @@ import type { CourseRecommendation, NoteArticle } from "./types.ts";
 const hospitalCourse: CourseRecommendation = {
   keyword: "病院AIリスク診断",
   articles: [
-    { id: "clinic_roi_2025", title: "【2025年最新版】診療所の医療AI導入—コスト、便益、ROIを徹底分析する経営者ガイド", url: "https://note.com/nice_wren7963/n/n04503e233d66" },
-    { id: "why_ai_fails", title: "【なぜ医療AIの導入は失敗するのか？】 「抵抗」を「推進力」に変える10の原則", url: "https://note.com/nice_wren7963/n/nc0d61899b04d" },
-    { id: "ehr_3sho2", title: "【オールインワンAI電子カルテと3省2ガイドライン】 Medlay AI Cloudを事例に読み解く安全導入の要点", url: "https://note.com/nice_wren7963/n/n292021a47632" },
-    { id: "ai_economics", title: "【医療AIの経済性評価】 その投資は本当に「価値」があるのか？", url: "https://note.com/nice_wren7963/n/n806443fb0964" },
-    { id: "regional_ai", title: "【AIは地域医療に何をもたらすか】 診療所・病院・在宅医療を繋ぐ「地域医療AI」の設計図", url: "https://note.com/nice_wren7963/n/nc39351e10d56" },
-    { id: "japan_reboot_2040", title: "【日本の医療、再生への大設計図】 2040年への計画と、AIが拓く新地平", url: "https://note.com/nice_wren7963/n/nd0a5e3b7dcb7" },
-    { id: "outreach", title: "【病院を受診する「前」から拾いにいく医療AI】 プライマリケアの未来を変える「予防的アウトリーチ」", url: "https://note.com/nice_wren7963/n/n6585b693b335" },
-    { id: "automation_n8n", title: "【診療所の業務自動化：n8nだけでは足りない理由】 Diff/SimAIで実現する「デジタル・フロントドア」戦略の設計図", url: "https://note.com/nice_wren7963/n/n437f83983fa7" },
-    { id: "ai_psy_therapy", title: "【AIセラピーの医療的価値とガバナンスフレームワーク】 臨床的有効性と倫理的課題の統合的検討", url: "https://note.com/nice_wren7963/n/n34b5abf063f4" },
-    { id: "hospital_perfect_answer", title: "【病院・診療所・在宅医療におけるAI導入の「正解」】 組織文化と技術の統合", url: "https://note.com/nice_wren7963/n/nc39351e10d56" },
-    { id: "state_of_ai_2025", title: "【マッキンゼー「State of AI 2025」の新規性を抉る】 「AIエージェント」はなぜスケールしないのか？", url: "https://note.com/nice_wren7963/n/naa570ded3bae" },
-    { id: "japan_ai_frontier", title: "【日本の医療AI、その最前線と未来図】 2024年の総括と2025年への展望", url: "https://note.com/nice_wren7963/n/n9623a4b0ca36" },
+    // タグを追加することで、新しい記事が自動的に診断結果に反映される
+    // tags の値は diagnosis-flow.ts の layer2 選択肢と一致させる
+    { id: "clinic_roi_2025", title: "【2025年最新版】診療所の医療AI導入—コスト、便益、ROIを徹底分析する経営者ガイド", url: "https://note.com/nice_wren7963/n/n04503e233d66", tags: ["コスト・投資対効果"] },
+    { id: "why_ai_fails", title: "【なぜ医療AIの導入は失敗するのか？】 「抵抗」を「推進力」に変える10の原則", url: "https://note.com/nice_wren7963/n/nc0d61899b04d", tags: ["コスト・投資対効果", "業務効率化・省力化"] },
+    { id: "ehr_3sho2", title: "【オールインワンAI電子カルテと3省2ガイドライン】 Medlay AI Cloudを事例に読み解く安全導入の要点", url: "https://note.com/nice_wren7963/n/n292021a47632", tags: ["規制・コンプライアンス", "セキュリティ・個人情報"] },
+    { id: "ai_economics", title: "【医療AIの経済性評価】 その投資は本当に「価値」があるのか？", url: "https://note.com/nice_wren7963/n/n806443fb0964", tags: ["コスト・投資対効果"] },
+    { id: "regional_ai", title: "【AIは地域医療に何をもたらすか】 診療所・病院・在宅医療を繋ぐ「地域医療AI」の設計図", url: "https://note.com/nice_wren7963/n/nc39351e10d56", tags: ["業務効率化・省力化", "医療の質・患者体験"] },
+    { id: "japan_reboot_2040", title: "【日本の医療、再生への大設計図】 2040年への計画と、AIが拓く新地平", url: "https://note.com/nice_wren7963/n/nd0a5e3b7dcb7", tags: ["規制・コンプライアンス"] },
+    { id: "outreach", title: "【病院を受診する「前」から拾いにいく医療AI】 プライマリケアの未来を変える「予防的アウトリーチ」", url: "https://note.com/nice_wren7963/n/n6585b693b335", tags: ["業務効率化・省力化", "医療の質・患者体験"] },
+    { id: "automation_n8n", title: "【診療所の業務自動化：n8nだけでは足りない理由】 Diff/SimAIで実現する「デジタル・フロントドア」戦略の設計図", url: "https://note.com/nice_wren7963/n/n437f83983fa7", tags: ["業務効率化・省力化"] },
+    { id: "ai_psy_therapy", title: "【AIセラピーの医療的価値とガバナンスフレームワーク】 臨床的有効性と倫理的課題の統合的検討", url: "https://note.com/nice_wren7963/n/n34b5abf063f4", tags: ["医療の質・患者体験"] },
+    { id: "hospital_perfect_answer", title: "【病院・診療所・在宅医療におけるAI導入の「正解」】 組織文化と技術の統合", url: "https://note.com/nice_wren7963/n/nc39351e10d56", tags: ["セキュリティ・個人情報", "業務効率化・省力化"] },
+    { id: "state_of_ai_2025", title: "【マッキンゼー「State of AI 2025」の新規性を抉る】 「AIエージェント」はなぜスケールしないのか？", url: "https://note.com/nice_wren7963/n/naa570ded3bae", tags: ["規制・コンプライアンス"] },
+    { id: "japan_ai_frontier", title: "【日本の医療AI、その最前線と未来図】 2024年の総括と2025年への展望", url: "https://note.com/nice_wren7963/n/n9623a4b0ca36", tags: ["規制・コンプライアンス", "医療の質・患者体験"] },
   ],
 };
 
@@ -164,4 +166,45 @@ export function getArticlesByIds(articleIds: string[]): NoteArticle[] {
     }
   }
   return articles;
+}
+
+/**
+ * タグに一致する記事を取得（新しい記事を追加するだけで自動反映）
+ * @param tag - 検索するタグ（例: "コスト・投資対効果"）
+ * @param limit - 最大取得件数（デフォルト: 3）
+ * @returns タグに一致する記事の配列
+ */
+export function getArticlesByTag(tag: string, limit: number = 3): NoteArticle[] {
+  const matchingArticles: NoteArticle[] = [];
+  
+  for (const course of COURSE_RECOMMENDATIONS) {
+    for (const article of course.articles) {
+      if (article.tags?.includes(tag)) {
+        matchingArticles.push(article);
+      }
+    }
+  }
+  
+  // 重複を除去（同じ記事が複数コースに含まれる場合）
+  const uniqueArticles = matchingArticles.filter(
+    (article, index, self) => self.findIndex((a) => a.id === article.id) === index
+  );
+  
+  return uniqueArticles.slice(0, limit);
+}
+
+/**
+ * 全記事を取得
+ */
+export function getAllArticles(): NoteArticle[] {
+  const allArticles: NoteArticle[] = [];
+  
+  for (const course of COURSE_RECOMMENDATIONS) {
+    allArticles.push(...course.articles);
+  }
+  
+  // 重複を除去
+  return allArticles.filter(
+    (article, index, self) => self.findIndex((a) => a.id === article.id) === index
+  );
 }

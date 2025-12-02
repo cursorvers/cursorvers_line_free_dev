@@ -474,6 +474,10 @@ export function getNextQuestion(
 
 /**
  * 結論を取得（layer2 の関心領域に基づく）
+ * 
+ * 優先順位:
+ * 1. conclusionsByInterest にハードコードされた記事ID
+ * 2. タグベースで動的に取得（将来的に記事が増えた場合に自動反映）
  */
 export function getConclusion(state: DiagnosisState): string[] | null {
   const flow = getFlowForKeyword(state.keyword);
@@ -486,7 +490,30 @@ export function getConclusion(state: DiagnosisState): string[] | null {
 
   // layer2 の回答（関心領域）で結論を決定
   const interest = state.answers[1];
-  return flow.conclusionsByInterest[interest] ?? null;
+  const hardcodedIds = flow.conclusionsByInterest[interest];
+  
+  // ハードコードされた記事IDがあればそれを返す
+  if (hardcodedIds && hardcodedIds.length > 0) {
+    return hardcodedIds;
+  }
+  
+  // フォールバック: タグベースで取得を試みる
+  // （将来的に conclusionsByInterest を空にして、タグベースに完全移行可能）
+  console.log(`[diagnosis-flow] No hardcoded articles for "${interest}", using tag-based fallback`);
+  return null; // タグベースは getArticlesByTag で直接取得
+}
+
+/**
+ * 結論をタグベースで取得するかどうかを判定
+ */
+export function shouldUseTagBasedConclusion(state: DiagnosisState): boolean {
+  const flow = getFlowForKeyword(state.keyword);
+  if (!flow) return false;
+  
+  const interest = state.answers[1];
+  const hardcodedIds = flow.conclusionsByInterest[interest];
+  
+  return !hardcodedIds || hardcodedIds.length === 0;
 }
 
 /**
