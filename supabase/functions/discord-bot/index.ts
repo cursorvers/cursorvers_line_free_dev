@@ -8,10 +8,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nacl from "https://esm.sh/tweetnacl@1.0.3";
 
-const DISCORD_PUBLIC_KEY = Deno.env.get("DISCORD_PUBLIC_KEY")!;
-const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN")!;
-const DISCORD_ROLE_ID = Deno.env.get("DISCORD_ROLE_ID")!;
-const SEC_BRIEF_CHANNEL_ID = Deno.env.get("SEC_BRIEF_CHANNEL_ID"); // #sec-briefチャンネルID
+// 環境変数（起動時に検証）
+const DISCORD_PUBLIC_KEY = Deno.env.get("DISCORD_PUBLIC_KEY") ?? "";
+const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
+const DISCORD_ROLE_ID = Deno.env.get("DISCORD_ROLE_ID") ?? "";
+const SEC_BRIEF_CHANNEL_ID = Deno.env.get("SEC_BRIEF_CHANNEL_ID") ?? "";
 
 // Discord Interaction型定義
 interface DiscordInteraction {
@@ -29,6 +30,12 @@ interface DiscordInteraction {
 }
 
 serve(async (req) => {
+  // 0. 環境変数の検証
+  if (!DISCORD_PUBLIC_KEY || !DISCORD_BOT_TOKEN) {
+    console.error("Missing required environment variables");
+    return new Response("Server configuration error", { status: 500 });
+  }
+
   // 1. Discordからの署名を検証 (必須)
   const signature = req.headers.get("X-Signature-Ed25519");
   const timestamp = req.headers.get("X-Signature-Timestamp");
