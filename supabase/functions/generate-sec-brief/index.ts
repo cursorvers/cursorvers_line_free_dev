@@ -88,8 +88,8 @@ function buildUserPrompt(combinedText: string, weekStart: string): string {
   return `次のテキストは、ある週に収集されたサイバーセキュリティニュースの日本語本文です。
 これらをまとめて読み、以下のJSONスキーマに従って出力してください。
 
-【重要】各トピックには必ず「元のニュースソース」と「公開日」を含めてください。
-情報源が不明な場合は「複数の報道」などと記載してください。
+【重要】各トピックには必ず「具体的なニュースソース」と「公開日」を含めてください。
+「複数の報道」「各種報道」などの曖昧な表現は禁止です。
 
 【JSONスキーマ】
 {
@@ -261,13 +261,33 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`Found ${rows.length} records for the past 7 days`);
 
-    // 本文を結合
-    const combinedText = rows
-      .map((r) => `【${r.subject || "No Subject"}】\n${r.raw_text}`)
-      .join("\n\n----\n\n");
-
     // 週の開始日を計算
     const weekStart = getWeekStart(now);
+
+    // 同じ週のブリーフが既に存在するかチェック
+    const { data: existingBrief } = await supabase
+      .from("sec_brief")
+      .select("id, status")
+      .eq("week_start", weekStart)
+      .maybeSingle();
+
+    if (existingBrief) {
+      console.log(`Brief already exists for week ${weekStart}: ${existingBrief.id} (${existingBrief.status})`);
+      return new Response(
+        JSON.stringify({
+          status: "skipped",
+          message: `Brief already exists for week ${weekStart}`,
+          existing_id: existingBrief.id,
+          existing_status: existingBrief.status,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // 本文を結合（メール日付も含める）
+    const combinedText = rows
+      .map((r) => `【${r.subject || "No Subject"}】(受信日: ${new Date(r.sent_at).toLocaleDateString("ja-JP")})\n${r.raw_text}`)
+      .join("\n\n----\n\n");
 
     // OpenAI API呼び出し
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
