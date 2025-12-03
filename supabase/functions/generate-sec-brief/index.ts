@@ -20,6 +20,8 @@ interface SecBriefTopic {
   id: string;
   category: SecBriefTopicCategory;
   title: string;
+  source_date: string;           // 元の報告日
+  sources: string[];             // 引用元（報告機関、CVE番号、報道元など）
   summary: string;
   impact_on_clinics: string;
   actions: string[];
@@ -39,17 +41,32 @@ const SYSTEM_PROMPT = `あなたは日本の医療機関向けサイバーセキ
 入力として、ある週に配信された複数のサイバーセキュリティニュースの本文テキストが与えられます。
 以下の制約条件を必ず守ってください。
 
+【絶対に出力してはいけない情報】
+- 「Health-ISAC」「H-ISAC」などの情報共有組織の名称
+- TLPコード（TLP:GREEN、TLP:AMBER等）
+- 「情報共有コミュニティ」「ISAC」などの表現
+
+【必ず出力する情報】
+- 元のニュースソース（公開情報）を必ず引用してください
+  例: 「CISA（米サイバーセキュリティ庁）」「CVE-2025-XXXX」「FBI/IC3」「○○社セキュリティアドバイザリ」「○○新聞報道」など
+- 各トピックの元の報告日または公開日
+
+【その他の制約】
 1. 原文の文章をコピーしてはいけません。必ず自分の言葉でパラフレーズしてください。
-2. 情報源の名称（Health-ISACなど）やTLPコード（TLP:GREEN等）は一切出してはいけません。
-3. 診療所〜中小病院の日本の医療機関にとって重要なトピックだけを最大4件選びます。
-4. 各トピックについて、「概要」「医療機関への影響」「今から2週間以内にやるべき行動」に分解してください。
-5. 出力は必ず後述のJSONスキーマに完全準拠させてください。文章だけの出力は不可です。
-6. body_markdownはDiscordに投稿できる形式で、見やすいMarkdownにしてください。`;
+2. 診療所〜中小病院の日本の医療機関にとって重要なトピックだけを最大4件選びます。
+3. 各トピックについて、「概要」「医療機関への影響」「今から2週間以内にやるべき行動」に分解してください。
+4. 出力は必ず後述のJSONスキーマに完全準拠させてください。
+5. body_markdownはDiscordに投稿できる形式で、見やすいMarkdownにしてください。
+   - 冒頭に「📋 本ブリーフは、公開されているサイバーセキュリティ情報をもとに、医療機関向けに編集したものです。」を含めてください。
+   - 各トピックに「📅 公開日」と「📰 情報源」を明記してください。`;
 
 // ユーザープロンプトテンプレート
 function buildUserPrompt(combinedText: string, weekStart: string): string {
-  return `次のテキストは、ある週に配信されたサイバーセキュリティニュースの日本語本文です。
+  return `次のテキストは、ある週に収集されたサイバーセキュリティニュースの日本語本文です。
 これらをまとめて読み、以下のJSONスキーマに従って出力してください。
+
+【重要】各トピックには必ず「元のニュースソース」と「公開日」を含めてください。
+情報源が不明な場合は「複数の報道」などと記載してください。
 
 【JSONスキーマ】
 {
@@ -60,13 +77,15 @@ function buildUserPrompt(combinedText: string, weekStart: string): string {
       "id": string,             // "t1", "t2" など
       "category": string,       // "remote_work" | "vendor_risk" | "vulnerability" | "network" | "payment" | "privacy" | "other"
       "title": string,          // トピックの見出し
+      "source_date": string,    // 元の公開日（例: "2025-11-28"）
+      "sources": string[],      // 情報源の配列（例: ["CISA警告", "CVE-2025-1234"]）
       "summary": string,        // 2〜3行の概要
       "impact_on_clinics": string, // 診療所・中小病院への影響
       "actions": string[]       // 今から2週間以内にやるべき具体的アクション（2〜4項目）
     }
   ],
   "mindmap": string,            // テキスト形式のマインドマップ（インデントで階層表現）
-  "body_markdown": string       // Discordに投稿する完成済みMarkdown（見やすく整形）
+  "body_markdown": string       // Discordに投稿する完成済みMarkdown（見やすく整形、情報源を明記）
 }
 
 【この週のニュース本文】
@@ -86,6 +105,68 @@ function getWeekStart(date: Date): string {
 
 // GitHub Actions cron用のAPIキー検証
 const GENERATE_API_KEY = Deno.env.get("GENERATE_SEC_BRIEF_API_KEY");
+
+// Discord設定
+const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN");
+const SEC_BRIEF_CHANNEL_ID = Deno.env.get("SEC_BRIEF_CHANNEL_ID");
+
+// Discordメッセージ分割（2000文字制限対応）
+function splitMessage(text: string, maxLength: number): string[] {
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLength) {
+      chunks.push(remaining);
+      break;
+    }
+
+    let splitIndex = remaining.lastIndexOf("\n", maxLength);
+    if (splitIndex === -1 || splitIndex < maxLength / 2) {
+      splitIndex = remaining.lastIndexOf(" ", maxLength);
+    }
+    if (splitIndex === -1 || splitIndex < maxLength / 2) {
+      splitIndex = maxLength;
+    }
+
+    chunks.push(remaining.substring(0, splitIndex));
+    remaining = remaining.substring(splitIndex).trimStart();
+  }
+
+  return chunks;
+}
+
+// Discordに自動投稿
+async function postToDiscord(bodyMarkdown: string): Promise<boolean> {
+  if (!DISCORD_BOT_TOKEN || !SEC_BRIEF_CHANNEL_ID) {
+    console.log("Discord credentials not set, skipping auto-publish");
+    return false;
+  }
+
+  const chunks = splitMessage(bodyMarkdown, 1900);
+
+  for (const chunk of chunks) {
+    const res = await fetch(
+      `https://discord.com/api/v10/channels/${SEC_BRIEF_CHANNEL_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content: chunk }),
+      }
+    );
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`Discord post failed: ${errorText}`);
+      return false;
+    }
+  }
+
+  return true;
+}
 
 serve(async (req: Request): Promise<Response> => {
   // CORSプリフライト対応
@@ -234,6 +315,28 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`Inserted sec_brief: ${insertedBrief.id}`);
 
+    // 自動でDiscordに投稿
+    let published = false;
+    const discordSuccess = await postToDiscord(brief.body_markdown);
+    
+    if (discordSuccess) {
+      // ステータスをpublishedに更新
+      const { error: updateError } = await supabase
+        .from("sec_brief")
+        .update({
+          status: "published",
+          published_at: new Date().toISOString(),
+        })
+        .eq("id", insertedBrief.id);
+
+      if (updateError) {
+        console.error("Status update error:", updateError);
+      } else {
+        published = true;
+        console.log(`Auto-published to Discord: ${brief.title}`);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         status: "success",
@@ -242,6 +345,7 @@ serve(async (req: Request): Promise<Response> => {
         week_start: brief.week_start,
         topics_count: brief.topics.length,
         source_count: sourceIds.length,
+        published: published,
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
