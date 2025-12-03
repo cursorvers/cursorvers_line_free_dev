@@ -1,0 +1,52 @@
+# Daily LINE brief delivery via Edge Function
+# Runs every day at 07:00 JST (22:00 UTC)
+
+name: LINE Daily Brief
+
+on:
+  schedule:
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger-daily-brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Trigger line-daily-brief Edge Function
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          LINE_DAILY_BRIEF_CRON_SECRET: ${{ secrets.LINE_DAILY_BRIEF_CRON_SECRET }}
+        run: |
+          echo "Triggering line-daily-brief Edge Function..."
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${SUPABASE_URL}/functions/v1/line-daily-brief" \
+            -H "Content-Type: application/json" \
+            -H "X-CRON-SECRET: ${LINE_DAILY_BRIEF_CRON_SECRET}" \
+            -d '{}')
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "Response: $BODY"
+          echo "HTTP Code: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "Error: Edge Function returned $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "✅ LINE Daily Brief triggered successfully"
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d '{"content": "⚠️ **line-daily-brief ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          fi

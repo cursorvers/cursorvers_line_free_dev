@@ -1,375 +1,405 @@
-// supabase/functions/line-daily-brief/index.ts
-// 毎日1回、LINE公式アカウントからカードを一斉配信する Edge Function
+/**
+ * LINE Daily Brief Edge Function
+ *
+ * Selects one card from line_cards and broadcasts via LINE Messaging API.
+ * Priority:
+ * 1. status = 'ready'
+ * 2. Themes with the lowest total delivery count
+ * 3. Cards with the lowest times_used in the selected theme
+ *
+ * POST /line-daily-brief
+ * Headers:
+ *   - X-CRON-SECRET: Secret key for scheduler authentication
+ *   - OR Authorization: Bearer <service_role_key>
+ */
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
-// ============================================
-// 型定義
-// ============================================
-
-type LineCardTheme =
-  | "ai_gov"
-  | "tax"
-  | "law"
-  | "biz"
-  | "career"
-  | "asset"
-  | "general";
+type CardTheme = "ai_gov" | "tax" | "law" | "biz" | "career" | "asset" | "general";
+type CardStatus = "ready" | "used" | "archived";
 
 interface LineCard {
   id: string;
   body: string;
-  theme: LineCardTheme;
+  theme: CardTheme;
   source_path: string;
-  source_line: number;
-  status: string;
   times_used: number;
-  last_used_at: string | null;
+  status: CardStatus;
 }
 
 interface ThemeStats {
-  theme: LineCardTheme;
-  total_used: number;
-  card_count: number;
+  theme: CardTheme;
+  total_times_used: number;
+  ready_count: number;
 }
 
-// ============================================
-// 環境変数
-// ============================================
+interface BroadcastResult {
+  success: boolean;
+  requestId?: string | null;
+  error?: string;
+}
 
-const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
-const CRON_SECRET = Deno.env.get("LINE_DAILY_BRIEF_CRON_SECRET");
+type LogLevel = "info" | "warn" | "error";
 
-// ============================================
-// カード選択ロジック
-// ============================================
+const REQUIRED_ENV_VARS = [
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "LINE_CHANNEL_ACCESS_TOKEN",
+] as const;
+
+const getEnv = (name: (typeof REQUIRED_ENV_VARS)[number]): string => {
+  const value = Deno.env.get(name);
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+};
+
+const SUPABASE_URL = getEnv("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = getEnv("SUPABASE_SERVICE_ROLE_KEY");
+const LINE_CHANNEL_ACCESS_TOKEN = getEnv("LINE_CHANNEL_ACCESS_TOKEN");
+const CRON_SECRET = Deno.env.get("CRON_SECRET");
+
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+});
+
+const log = (level: LogLevel, message: string, context: Record<string, unknown> = {}) => {
+  const entry = {
+    level,
+    message,
+    ...context,
+    timestamp: new Date().toISOString(),
+  };
+  const output = JSON.stringify(entry);
+  if (level === "error") {
+    console.error(output);
+  } else {
+    console.log(output);
+  }
+};
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * テーマ別の配信統計を取得
+ * Verify request authentication
  */
-async function getThemeStats(supabase: SupabaseClient): Promise<ThemeStats[]> {
-  const { data, error } = await supabase
-    .from("line_cards")
-    .select("theme, times_used")
-    .eq("status", "ready");
+function verifyAuth(req: Request): boolean {
+  const cronHeader = req.headers.get("X-CRON-SECRET");
+  if (CRON_SECRET && cronHeader === CRON_SECRET) return true;
+
+  const authHeader = req.headers.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.substring(7);
+    if (token === SUPABASE_SERVICE_ROLE_KEY) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Get theme statistics for balanced selection (DB-side aggregation)
+ */
+async function getThemeStats(client: SupabaseClient): Promise<ThemeStats[]> {
+  const { data, error } = await client.rpc("get_theme_stats");
 
   if (error) {
-    console.error("テーマ統計の取得エラー:", error);
-    throw error;
+    throw new Error(`Failed to fetch theme stats: ${error.message}`);
   }
 
-  // テーマ別に集計
-  const statsMap = new Map<LineCardTheme, { total_used: number; card_count: number }>();
-
-  for (const row of data || []) {
-    const theme = row.theme as LineCardTheme;
-    const current = statsMap.get(theme) || { total_used: 0, card_count: 0 };
-    current.total_used += row.times_used;
-    current.card_count += 1;
-    statsMap.set(theme, current);
-  }
-
-  return Array.from(statsMap.entries()).map(([theme, stats]) => ({
-    theme,
-    ...stats,
-  }));
+  return (data || []) as ThemeStats[];
 }
 
 /**
- * 配信するカードを1件選択
- * - テーマの偏りが少なくなるように選ぶ
- * - 同じテーマ内では times_used が最小のものを優先
+ * Get the theme of the last delivered card
  */
-async function selectCardForBroadcast(
-  supabase: SupabaseClient
-): Promise<LineCard | null> {
-  // テーマ別統計を取得
-  const themeStats = await getThemeStats(supabase);
+async function getLastDeliveredTheme(client: SupabaseClient): Promise<CardTheme | null> {
+  const { data, error } = await client
+    .from("line_cards")
+    .select("theme")
+    .not("last_used_at", "is", null)
+    .order("last_used_at", { ascending: false })
+    .limit(1)
+    .single();
 
-  if (themeStats.length === 0) {
-    console.log("配信可能なカードがありません");
+  if (error || !data) {
     return null;
   }
 
-  // total_used / card_count が最小のテーマを選ぶ（平均配信回数が少ないテーマ）
-  // card_count が 0 の場合は考慮しない（上で除外済み）
-  themeStats.sort((a, b) => {
-    const avgA = a.card_count > 0 ? a.total_used / a.card_count : Infinity;
-    const avgB = b.card_count > 0 ? b.total_used / b.card_count : Infinity;
-    return avgA - avgB;
+  return data.theme as CardTheme;
+}
+
+/**
+ * Select one card with balanced theme distribution
+ * RULE: Never select the same theme as the previous delivery
+ */
+async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
+  const lastTheme = await getLastDeliveredTheme(client);
+  log("info", "Fetched last delivered theme", { lastTheme: lastTheme ?? "none" });
+
+  const themeStats = await getThemeStats(client);
+  let availableThemes = themeStats.filter((t) => t.ready_count > 0 || t.total_times_used > 0);
+
+  if (lastTheme && availableThemes.length > 1) {
+    availableThemes = availableThemes.filter((t) => t.theme !== lastTheme);
+    log("info", "Excluded last theme to avoid repetition", { lastTheme });
+  }
+
+  if (availableThemes.length === 0) {
+    log("warn", "No available themes after filtering");
+    return null;
+  }
+
+  availableThemes.sort((a, b) => a.total_times_used - b.total_times_used);
+  const selectedTheme = availableThemes[0].theme;
+  log("info", "Selected theme", {
+    selectedTheme,
+    totalTimesUsed: availableThemes[0].total_times_used,
   });
 
-  // 最も配信回数が少ないテーマのトップ3から選ぶ（バリエーションのため）
-  const candidateThemes = themeStats.slice(0, Math.min(3, themeStats.length));
-  const selectedTheme =
-    candidateThemes[Math.floor(Math.random() * candidateThemes.length)].theme;
-
-  console.log(`選択されたテーマ: ${selectedTheme}`);
-
-  // そのテーマの中で times_used が最小のカードを取得
-  const { data: cards, error } = await supabase
+  const { data: cards, error } = await client
     .from("line_cards")
     .select("*")
-    .eq("status", "ready")
     .eq("theme", selectedTheme)
+    .in("status", ["ready", "used"])
     .order("times_used", { ascending: true })
-    .order("created_at", { ascending: true })
     .limit(5);
 
   if (error) {
-    console.error("カード取得エラー:", error);
-    throw error;
+    throw new Error(`Failed to fetch cards: ${error.message}`);
   }
 
   if (!cards || cards.length === 0) {
-    console.log(`テーマ ${selectedTheme} に配信可能なカードがありません`);
+    log("warn", "No available cards for selected theme", { selectedTheme });
     return null;
   }
 
-  // 最小 times_used のカードの中からランダムに選択
-  const minTimesUsed = cards[0].times_used;
-  const candidateCards = cards.filter((c) => c.times_used === minTimesUsed);
-  const selectedCard =
-    candidateCards[Math.floor(Math.random() * candidateCards.length)];
+  const randomIndex = Math.floor(Math.random() * Math.min(cards.length, 5));
+  const selectedCard = cards[randomIndex] as LineCard;
 
-  console.log(
-    `選択されたカード: ${selectedCard.id} (times_used: ${selectedCard.times_used})`
-  );
+  log("info", "Selected card", { cardId: selectedCard.id, timesUsed: selectedCard.times_used });
 
-  return selectedCard as LineCard;
+  return selectedCard;
 }
 
-// ============================================
-// LINE配信ロジック
-// ============================================
-
 /**
- * カード本文をLINE用に整形
+ * Format card body for LINE message
  */
-function formatCardForLine(card: LineCard): string {
-  const lines = card.body.split("\n").filter((l) => l.trim().length > 0);
-
-  // 行数が多すぎる場合は最初の5行に制限
-  const limitedLines = lines.slice(0, 5);
-
-  // テーマに応じた絵文字プレフィックス
-  const themeEmoji: Record<LineCardTheme, string> = {
+function formatMessage(card: LineCard): string {
+  const themeEmoji: Record<CardTheme, string> = {
     ai_gov: "🤖",
     tax: "💰",
     law: "⚖️",
     biz: "📈",
     career: "👨‍⚕️",
-    asset: "💎",
+    asset: "🏦",
     general: "💡",
   };
 
   const emoji = themeEmoji[card.theme] || "💡";
+  const footer = "\n\n──────────\nCursorvers.edu";
 
-  // メッセージを組み立て
-  let message = `${emoji} 今日の一言\n\n`;
-  message += limitedLines.join("\n");
+  let message = `${emoji} 今日のひとこと\n\n${card.body}${footer}`;
 
-  // 文字数制限（LINEは5000文字まで、余裕を持って4000文字に）
-  if (message.length > 4000) {
-    message = message.substring(0, 3997) + "...";
+  if (message.length > 4500) {
+    message = `${message.substring(0, 4450)}...${footer}`;
   }
 
   return message;
 }
 
 /**
- * LINE Messaging API でブロードキャスト配信
+ * Send broadcast message via LINE Messaging API with retries
  */
-async function broadcastMessage(message: string): Promise<boolean> {
-  if (!LINE_CHANNEL_ACCESS_TOKEN) {
-    console.error("LINE_CHANNEL_ACCESS_TOKEN が設定されていません");
-    return false;
+async function broadcastMessage(text: string): Promise<BroadcastResult> {
+  const maxAttempts = 3;
+  let attempt = 0;
+  let lastError = "";
+
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    const response = await fetch("https://api.line.me/v2/bot/message/broadcast", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            type: "text",
+            text,
+          },
+        ],
+      }),
+    });
+
+    if (response.ok) {
+      const requestId = response.headers.get("X-Line-Request-Id");
+      log("info", "Broadcast succeeded", { attempt, requestId });
+      return { success: true, requestId };
+    }
+
+    const errorBody = await response.text();
+    lastError = `LINE API error ${response.status}: ${errorBody}`;
+    const retryAfter = response.headers.get("Retry-After");
+    const shouldRetry = response.status === 429 || response.status >= 500;
+
+    log(shouldRetry ? "warn" : "error", "Broadcast failed", {
+      attempt,
+      status: response.status,
+      errorBody,
+      retryAfter,
+    });
+
+    if (!shouldRetry || attempt >= maxAttempts) {
+      break;
+    }
+
+    const retryMs = retryAfter ? Number(retryAfter) * 1000 : 500 * Math.pow(2, attempt - 1);
+    await delay(retryMs);
   }
 
-  const response = await fetch("https://api.line.me/v2/bot/message/broadcast", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify({
-      messages: [
-        {
-          type: "text",
-          text: message,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("LINE API エラー:", response.status, errorText);
-    return false;
-  }
-
-  console.log("LINE 配信成功");
-  return true;
+  return { success: false, error: lastError || "Unknown LINE broadcast error" };
 }
 
-// ============================================
-// 配信後の更新
-// ============================================
-
 /**
- * カードの配信状態を更新
+ * Update card after successful delivery (SQL injection safe)
  */
-async function updateCardAfterBroadcast(
-  supabase: SupabaseClient,
-  cardId: string
-): Promise<void> {
-  const now = new Date().toISOString();
+async function updateCardAfterDelivery(client: SupabaseClient, cardId: string): Promise<void> {
+  const { error } = await client.rpc("increment_times_used", { card_id: cardId });
 
-  // カードを更新
-  const { error: updateError } = await supabase
+  if (!error) {
+    log("info", "Card updated via RPC", { cardId });
+    return;
+  }
+
+  log("warn", "RPC increment_times_used failed, applying safe fallback", {
+    cardId,
+    error: error.message,
+  });
+
+  const { data: currentCard, error: fetchError } = await client
+    .from("line_cards")
+    .select("times_used")
+    .eq("id", cardId)
+    .single();
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch card for update: ${fetchError.message}`);
+  }
+
+  const { error: updateError } = await client
     .from("line_cards")
     .update({
-      times_used: supabase.rpc("increment_times_used", { card_id: cardId }),
-      last_used_at: now,
+      times_used: (currentCard?.times_used || 0) + 1,
+      last_used_at: new Date().toISOString(),
       status: "used",
     })
     .eq("id", cardId);
 
-  // times_used のインクリメントは RPC がなければ直接 SQL で
   if (updateError) {
-    // RPC がない場合のフォールバック
-    const { data: card } = await supabase
-      .from("line_cards")
-      .select("times_used")
-      .eq("id", cardId)
-      .single();
-
-    if (card) {
-      await supabase
-        .from("line_cards")
-        .update({
-          times_used: card.times_used + 1,
-          last_used_at: now,
-          status: "used",
-        })
-        .eq("id", cardId);
-    }
+    throw new Error(`Failed to update card: ${updateError.message}`);
   }
 
-  // 配信履歴を記録
-  await supabase.from("line_card_broadcasts").insert({
-    card_id: cardId,
-    sent_at: now,
-    success: true,
-  });
-
-  console.log(`カード ${cardId} を更新しました`);
+  log("info", "Card updated via fallback", { cardId });
 }
 
-// ============================================
-// メインハンドラ
-// ============================================
-
-serve(async (req: Request): Promise<Response> => {
-  // CORSプリフライト対応
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Cron-Secret",
-      },
-    });
-  }
-
-  // POSTのみ許可
+/**
+ * Main handler
+ */
+Deno.serve(async (req) => {
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  // 認証: X-Cron-Secret ヘッダーをチェック
-  if (CRON_SECRET) {
-    const providedSecret = req.headers.get("X-Cron-Secret");
-    if (providedSecret !== CRON_SECRET) {
-      console.error("認証エラー: 無効な X-Cron-Secret");
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+  if (!verifyAuth(req)) {
+    log("error", "Authentication failed");
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  console.log("═══════════════════════════════════════════");
-  console.log("  LINE Daily Brief - 配信開始");
-  console.log("═══════════════════════════════════════════");
-
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    // 1. カードを選択
-    const card = await selectCardForBroadcast(supabase);
+    log("info", "Step 1: Selecting card");
+    const card = await selectCard(supabaseClient);
 
     if (!card) {
-      console.log("配信するカードがありません");
+      log("warn", "No card available to send");
       return new Response(
         JSON.stringify({
-          status: "no_card",
-          message: "配信可能なカードがありません",
+          success: true,
+          message: "No card to send",
+          cardSent: false,
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
       );
     }
 
-    // 2. メッセージを整形
-    const message = formatCardForLine(card);
-    console.log(`配信メッセージ (${message.length}文字):\n${message.substring(0, 100)}...`);
+    log("info", "Step 2: Formatting message", {
+      cardId: card.id,
+      messageLength: card.body.length,
+    });
+    const message = formatMessage(card);
 
-    // 3. LINE配信
-    const success = await broadcastMessage(message);
+    log("info", "Step 3: Broadcasting via LINE", { cardId: card.id });
+    const broadcastResult = await broadcastMessage(message);
 
-    if (!success) {
+    if (!broadcastResult.success) {
+      log("error", "Broadcast failed", { error: broadcastResult.error });
       return new Response(
         JSON.stringify({
-          status: "error",
-          message: "LINE配信に失敗しました",
+          success: false,
+          error: broadcastResult.error,
         }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
       );
     }
 
-    // 4. カードの状態を更新
-    await updateCardAfterBroadcast(supabase, card.id);
-
-    console.log("═══════════════════════════════════════════");
-    console.log("  配信完了！");
-    console.log("═══════════════════════════════════════════");
+    log("info", "Step 4: Updating card record", { cardId: card.id });
+    await updateCardAfterDelivery(supabaseClient, card.id);
 
     return new Response(
       JSON.stringify({
-        status: "success",
-        card_id: card.id,
+        success: true,
+        message: "Daily brief sent successfully",
+        cardSent: true,
+        cardId: card.id,
         theme: card.theme,
-        message_length: message.length,
+        bodyPreview: `${card.body.substring(0, 50)}...`,
+        requestId: broadcastResult.requestId,
       }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
     );
-  } catch (err) {
-    console.error("配信エラー:", err);
+  } catch (error) {
+    log("error", "Error in line-daily-brief", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
     return new Response(
       JSON.stringify({
-        status: "error",
-        message: String(err),
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
     );
   }
 });
-
