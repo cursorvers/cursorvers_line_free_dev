@@ -64,6 +64,8 @@ const CRON_SECRET = Deno.env.get("CRON_SECRET") || Deno.env.get("LINE_DAILY_BRIE
 // Debug: Log secret availability (without exposing the actual value)
 if (!CRON_SECRET) {
   console.error("CRON_SECRET is not set. Available env vars:", Object.keys(Deno.env.toObject()).filter(k => k.includes("CRON") || k.includes("SECRET")));
+} else {
+  console.log("CRON_SECRET is set, length:", CRON_SECRET.length);
 }
 
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
