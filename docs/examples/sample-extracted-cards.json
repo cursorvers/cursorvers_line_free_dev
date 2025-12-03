@@ -1,0 +1,59 @@
+[
+  {
+    "body": "勤務医でも副業を持つと「事業主」として確定申告が必要になる場合がある。20万円以上の雑所得が目安",
+    "theme": "tax",
+    "sourcePath": "docs/examples/sample-obsidian-note.md",
+    "sourceLine": 5,
+    "contentHash": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+  },
+  {
+    "body": "医療法人の役員報酬は損金算入できるが、不相当に高額な場合は否認される",
+    "theme": "tax",
+    "sourcePath": "docs/examples/sample-obsidian-note.md",
+    "sourceLine": 6,
+    "contentHash": "b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7"
+  },
+  {
+    "body": "節税よりもまず「見える化」が大事。月次で数字を見る習慣をつける",
+    "theme": "tax",
+    "sourcePath": "docs/examples/sample-obsidian-note.md",
+    "sourceLine": 10,
+    "contentHash": "c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8"
+  },
+  {
+    "body": "医療法人化のメリットは「節税」だけではない。社会保険料の最適化、退職金準備、事業承継の観点も重要",
+    "theme": "tax",
+    "sourcePath": "docs/examples/sample-obsidian-note.md",
+    "sourceLine": 11,
+    "contentHash": "d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9"
+  },
+  {
+    "body": "医師の副業収入は雑所得か事業所得か。継続性・規模がポイント",
+    "theme": "career",
+    "sourcePath": "docs/examples/sample-obsidian-note.md",
+    "sourceLine": 15,
+    "contentHash": "e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0"
+  },
+  {
+    "body": "バイト先を増やすより、1つの施設で信頼を積み上げる方が長期的にはお得なことが多い",
+    "theme": "career",
+    "sourcePath": "docs/examples/sample-obsidian-note.md",
+    "sourceLine": 16,
+    "contentHash": "f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1"
+  },
+  {
+    "body": "医療AIを導入する前に「誰が最終判断するか」を明文化する。AI任せにしない文化づくりが大切",
+    "theme": "ai_gov",
+    "sourcePath": "docs/examples/sample-obsidian-note.md",
+    "sourceLine": 20,
+    "contentHash": "g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2"
+  },
+  {
+    "body": "メモを取る習慣が人生を変える。アウトプット前提でインプットする",
+    "theme": "general",
+    "sourcePath": "docs/examples/sample-obsidian-note.md",
+    "sourceLine": 24,
+    "contentHash": "h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3"
+  }
+]
+

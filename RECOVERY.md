@@ -230,6 +230,30 @@ curl -X POST https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/ingest-hij \
 3. トリガーを再設定（1時間おきまたは6時間おき）
 4. エラー通知を有効化（毎日通知）
 
+### LINE Daily Brief が配信されない
+
+1. [ ] `line_cards` テーブルに `status = 'ready'` のカードがあるか確認
+2. [ ] GitHub Actions の `line-daily-brief-cron` ログを確認
+3. [ ] `LINE_CHANNEL_ACCESS_TOKEN` が有効か確認
+4. [ ] `LINE_DAILY_BRIEF_CRON_SECRET` が正しく設定されているか確認
+5. [ ] 手動で `line-daily-brief` を curl でテスト
+
+```bash
+curl -X POST https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/line-daily-brief \
+  -H "Content-Type: application/json" \
+  -H "X-Cron-Secret: <LINE_DAILY_BRIEF_CRON_SECRET>"
+```
+
+### Obsidian 同期スクリプトのセットアップ
+
+```bash
+cd cursorvers_line_stripe_discord/scripts/export-line-cards
+npm install
+export SUPABASE_URL="https://haaxgwyimoqzzxzdaeep.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="..."
+npm run export "/Users/masayuki/Obsidian Professional Kit"
+```
+
 ---
 
 ## 9. 環境変数のバックアップ
@@ -252,6 +276,7 @@ supabase secrets list --project-ref haaxgwyimoqzzxzdaeep
 # - SEC_BRIEF_CHANNEL_ID
 # - INGEST_HIJ_API_KEY
 # - GENERATE_SEC_BRIEF_API_KEY
+# - LINE_DAILY_BRIEF_CRON_SECRET
 ```
 
 ---

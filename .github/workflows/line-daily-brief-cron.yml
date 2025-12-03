@@ -1,0 +1,62 @@
+# .github/workflows/line-daily-brief-cron.yml
+# 毎日1回 LINE Daily Brief を配信するワークフロー
+
+name: LINE Daily Brief
+
+on:
+  schedule:
+    # 毎日 JST 08:00 (UTC 23:00 前日) に配信
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+    # 手動実行も可能
+
+jobs:
+  send-daily-brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Trigger line-daily-brief Edge Function
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          LINE_DAILY_BRIEF_CRON_SECRET: ${{ secrets.LINE_DAILY_BRIEF_CRON_SECRET }}
+        run: |
+          echo "📤 LINE Daily Brief を配信中..."
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${SUPABASE_URL}/functions/v1/line-daily-brief" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${LINE_DAILY_BRIEF_CRON_SECRET}")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "Response: $BODY"
+          echo "HTTP Code: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "❌ Edge Function returned $HTTP_CODE"
+            exit 1
+          fi
+          
+          # no_card の場合もエラーにしない
+          STATUS=$(echo "$BODY" | jq -r '.status // empty')
+          if [ "$STATUS" = "no_card" ]; then
+            echo "📭 配信可能なカードがありませんでした（正常終了）"
+          elif [ "$STATUS" = "success" ]; then
+            echo "✅ LINE Daily Brief 配信成功"
+          else
+            echo "⚠️ 予期しないステータス: $STATUS"
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d '{"content": "⚠️ **LINE Daily Brief ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          fi
+
