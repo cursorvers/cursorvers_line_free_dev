@@ -1,1 +1,4 @@
 Cursorvers_LINEsystem/
+# Deno/NPM artifacts for export script
+scripts/export-line-cards/node_modules/
+scripts/export-line-cards/package-lock.json
