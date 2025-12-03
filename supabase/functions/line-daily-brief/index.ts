@@ -61,6 +61,11 @@ const LINE_CHANNEL_ACCESS_TOKEN = getEnv("LINE_CHANNEL_ACCESS_TOKEN");
 // Support both CRON_SECRET and LINE_DAILY_BRIEF_CRON_SECRET for backward compatibility
 const CRON_SECRET = Deno.env.get("CRON_SECRET") || Deno.env.get("LINE_DAILY_BRIEF_CRON_SECRET");
 
+// Debug: Log secret availability (without exposing the actual value)
+if (!CRON_SECRET) {
+  console.error("CRON_SECRET is not set. Available env vars:", Object.keys(Deno.env.toObject()).filter(k => k.includes("CRON") || k.includes("SECRET")));
+}
+
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: {
     autoRefreshToken: false,
@@ -90,6 +95,14 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 function verifyAuth(req: Request): boolean {
   const cronHeader = req.headers.get("X-CRON-SECRET");
+  log("info", "Auth check", {
+    hasCronSecret: !!CRON_SECRET,
+    cronSecretLength: CRON_SECRET?.length || 0,
+    hasCronHeader: !!cronHeader,
+    cronHeaderLength: cronHeader?.length || 0,
+    headersMatch: CRON_SECRET && cronHeader === CRON_SECRET,
+  });
+
   if (CRON_SECRET && cronHeader === CRON_SECRET) return true;
 
   const authHeader = req.headers.get("Authorization");
