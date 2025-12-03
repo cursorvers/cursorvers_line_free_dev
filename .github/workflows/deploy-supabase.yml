@@ -36,6 +36,15 @@ jobs:
       - name: Deploy health-check
         run: supabase functions deploy health-check --project-ref "$SUPABASE_PROJECT_ID"
 
+      - name: Deploy ingest-hij
+        run: supabase functions deploy ingest-hij --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Deploy generate-sec-brief
+        run: supabase functions deploy generate-sec-brief --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Deploy discord-bot
+        run: supabase functions deploy discord-bot --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+
       - name: Send Discord notification
         if: always()
         run: |

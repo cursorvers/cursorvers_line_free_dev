@@ -21,3 +21,5 @@ jobs:
           git tag "$TAG_NAME" || echo "Tag already exists"
           git push origin "$TAG_NAME" || echo "Tag already pushed"
 
+
+
