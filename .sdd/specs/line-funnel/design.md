@@ -1,230 +1,116 @@
 # Design – Cursorvers LINE Funnel
 
-## Scope & Context
-Implements the marketing automation loop that converts note article readers into LINE subscribers, nurtures them with compliant messaging, and feeds operations through GitHub Actions while keeping Manus usage minimal. The design covers the Edge “Front Door”, GitHub Actions workflows, orchestration scripts, storage touchpoints (Google Sheets, Supabase), and supporting documentation/tests referenced in the Cursor handover package.
+## Scope & Decisions
+Implements the LINE funnel with verified Front Door dispatch to GitHub Actions, hashed contact logging to Google Sheets, safety-footed messaging, and hardened LINE Daily Brief. Existing Supabase functions remain the runtime; we will (a) adapt `supabase/functions/line-webhook` to act as the Front Door (signature/idempotency/sanitize → repository_dispatch) and (b) keep `line-daily-brief` on Supabase with required fixes. If stakeholders prefer a new minimal relay, we can factor logic into `functions/relay/index.ts` later with the same contracts.
 
----
+Known open items (cannot block design): Sheets retention/salt ownership; messaging cadence/segmentation; degraded path specifics when Manus/budget is unavailable; credentials readiness.
 
 ## Architecture Overview
-
-### System Boundaries & Data Flow
 ```
-[note article CTA] → [LINE add friend] ──┐
-                                        ├─(LINE webhook, X-Line-Signature)
-[Manus Progress webhook] ───────────────┘
+[note article CTA] → [LINE add friend]
+      │  (X-Line-Signature, POST)
+      ▼
+Supabase Edge Front Door (line-webhook adaptation)
+  - Verify LINE signature (HMAC-SHA256)
+  - Sanitize & hash userId with managed salt
+  - Idempotency cache (KV/in-memory with TTL)
+  - Emit GitHub REST POST /repos/{owner}/{repo}/dispatches
+      event_type: line_event
+      client_payload: sanitized event + metadata
       │
       ▼
- Front Door (Edge/Workers, TypeScript)
-   - Verify signatures (LINE HMAC / Manus bearer)
-   - Sanitize & hash identifiers
-   - Enforce idempotency window (eventId cache)
-   - Dispatch: GitHub REST `POST /dispatches`
-      payload{ event_type, client_payload }
-                     │
-                     ▼
- GitHub Actions (YAML)
-   - `line-event.yml`: plan selection, cost guard, message execution
-   - `manus-progress.yml`: update state machine, log telemetry
-   - Future workflows: SLO monitor, backups
-                     │
-                     ├─ Trigger GPT plan analysis (repository scripts)
-                     ├─ Invoke Manus (fallback / last-mile)
-                     ├─ Update Supabase (logs) & Google Sheets (contact ledger)
-                     └─ Reply via LINE Messaging API (guardrail appended)
-
-Progress/heartbeat events (Push)
-  GitHub → `repository_dispatch` → monitoring dashboards
+GitHub Actions
+  - line-event.yml: load plan/cost, mode (normal/degraded), Supabase upsert, Sheets ledger, Manus optional, LINE reply with safety footer
+  - manus-progress.yml: log ProgressEvent, analyze, optional Manus dispatch
+  - cron: line-daily-brief.yml calls Edge function daily 07:00 JST
+      │
+      ▼
+Supabase/External
+  - Supabase tables (line_cards, etc.) for daily brief
+  - Google Sheets ledger (hashed IDs)
+  - LINE Messaging API for replies/broadcasts
+  - Manus (last-mile) guarded by budget flags
 ```
 
 ### Component Responsibilities
-- **Front Door (Edge/Workers)**: 100–200 line TypeScript function running on Supabase Edge Function or Cloudflare Workers. Handles:
-  - Signature verification using Node `crypto.subtle` (`HMAC-SHA256`) for LINE; bearer token comparison for Manus.
-  - Payload minimisation (`sanitize` utility) removing optional fields, hashing LINE user IDs before forwarding.
-  - Idempotency enforcement storing event hashes in KV (Workers KV / Supabase Key-Value or in-memory if cold start acceptable).
-  - Dispatch to GitHub using PAT stored in environment secret (`GH_PAT`).
+- **Front Door (line-webhook adapted)**:
+  - Validate signature; reject missing/invalid.
+  - Hash `userId` with SHA-256 + salt (env) before forwarding.
+  - Apply idempotency cache per event hash; drop duplicates.
+  - Dispatch to GitHub via PAT (`GH_PAT`) using `repository_dispatch`.
 
-- **GitHub Actions Workflows**:
-  - `line-event.yml`:
-    - Parse incoming payload, detect event type (`follow`, `message`, etc.).
-    - Run cost estimator (`python orchestration/cost.py`) before executing plan.
-    - Choose handler (`follow` → welcome flow, `message` → command router, degrade to fallback on budget).
-    - Persist subscriber metadata to Google Sheets using CLI script or Manus step (if approved).
-    - Reply via LINE Messaging API (dedicated GitHub Action using OIDC + Secrets).
-  - `manus-progress.yml`:
-    - Receive Manus progress heartbeat/progress events.
-    - Validate plan consistency, update logs, request re-run or mark success.
-    - Surface outputs as artifacts or comment on PR/issues.
-  - Future expansions: `slo-monitor.yml`, `backup.yml` for Supabase dump, `plan-validator.yml`.
+- **GitHub Actions**:
+  - `line-event.yml`: ensure plan assets, resolve degraded mode, run cost check, upsert Supabase (script), upsert Sheets ledger (hashing helper), invoke Manus only when enabled, append safety footer to replies.
+  - `manus-progress.yml`: log progress JSON, (future) GPT analysis, optional Manus follow-up; ensure no missing TODOs.
+  - `line-daily-brief.yml` (new): cron 07:00 JST, call Edge daily brief endpoint with auth; alert on failure.
 
-- **Orchestration Layer** (`orchestration/`):
-  - `cost.py`: provides `estimate(plan)` and `check_budget(plan)` helpers referenced in workflows.
-  - `plan/current_plan.json`: canonical plan used by GitHub Actions to decide automation steps; includes degrade branch for budget exhaustion.
-  - Manus briefs (v3.1 cost-aware) to keep Manus tasks aligned with “last-mile” constraints.
+- **Orchestration assets**:
+  - `orchestration/plan/current_plan.json`, degraded plan/flag, Manus brief, `orchestration/cost.py`.
+  - Scripts: plan delta generator (dev), Supabase upsert, Sheets upsert, Manus dispatch helper.
 
-- **Data Persistence**:
-  - **Google Sheets**: Columns `[line_user_hash, display_name, status, tags, registered_at, last_active_at, source_article]`. Updates executed via Manus Gmail/Calendar connectors or dedicated script using service account.
-  - **Supabase (optional)**: Table `progress_events` capturing webhook telemetry; fallback is GitHub run logs if Supabase unavailable.
+- **Daily Brief (Supabase Edge)**:
+  - Fix CRITICAL/HIGH: parameterized queries, env validation at startup, retry/backoff for LINE API (429 Retry-After), simplified card update.
+  - Optional medium: metrics to `line_card_broadcasts`, structured logging, DB-side theme stats.
 
-- **Docs & Tooling**:
-  - `.cursorrules` ensures Cursor development guardrails.
-  - `docs/RUNBOOK.md` describing stop/recover/rollback, monitoring, budget rules.
-  - `tests/` folder to contain unit/integration tests (signature verification, idempotency, cost estimator, failure injection).
+- **Guardrails**:
+  - Safety footer helper required for all outbound LINE messages.
+  - Budget guard: degrade to non-Manus paths when thresholds exceeded or disabled.
 
-### Technology Choices
-- **Edge runtime**: Supabase Edge Functions (Deno) is default per earlier guidance—supports crypto APIs and easy deployment; Cloudflare Workers is alternative.
-- **Languages**: TypeScript for Edge (strict typing, better linting), Python 3.11 for orchestration/testing utilities.
-- **Persistence**: Google Sheets chosen as interim CRM for low overhead; hashed identifiers satisfy compliance.
-- **Messaging**: LINE Messaging API with guardrail helper; Manus limited to Gmail/Calendar operations when essential.
+### Data Models & Contracts
+- **Dispatch payload (Front Door → GitHub)**:
+  ```json
+  {
+    "event_type": "line_event",
+    "client_payload": {
+      "source": "line",
+      "event_id": "hash(raw body + ts)",
+      "received_at": "ISO8601",
+      "events": [ /* sanitized, userId hashed */ ],
+      "signature_valid": true,
+      "idempotency_key": "hash(event)"
+    }
+  }
+  ```
+- **Sheets ledger columns**: `line_user_hash`, `display_name`, `status`, `tags`, `source_article`, `registered_at`, `last_active_at`, `channel`, `notes` (optional). Hash: SHA-256(userId + salt).
+- **Safety footer**: shared constant appended to every LINE message body (single helper).
+- **Daily brief HTTP**: POST from GH Action with auth header (`X-CRON-SECRET` or bearer service role); responds 200/4xx; records metrics/logs.
+
+### Patterns / Libraries
+- Supabase Edge (Deno), fetch + crypto.subtle; GitHub REST dispatch via PAT.
+- Deno std/testing for unit tests; `act` for workflow dry-runs.
+- Node/Python for scripts (`orchestration/cost.py`, Sheets updater via Google API client).
 
 ### Alternatives Considered
-| Approach | Pros | Cons | Decision |
-| --- | --- | --- | --- |
-| Direct backend (e.g., Supabase Edge handling full automation) | Simplifies architecture, fewer moving parts | Harder to enforce GitOps workflow, loses Actions auditing | Rejected; GitHub Actions central to governance |
-| Using Manus for all messaging automation | Rapid integration with connectors | Consumes points, less control, risk of runaway costs | Rejected; keep Manus “last-mile” only |
-| Storing contacts in Supabase instead of Sheets | Stronger querying, scaling | Requires DB and migrations now, higher maintenance | Deferred; Sheets acceptable for initial stage with hashed IDs |
-| Pull-based telemetry (Actions polling Manus) | Simpler to implement initially | Higher latency, more API calls, misses real-time need | Rejected; push notifications recommended (ProgressEvent v1.1) |
-
----
-
-## Data Models & Interfaces
-
-### Repository Dispatch Payload (Front Door → GitHub)
-```json
-{
-  "event_type": "line_event | manus_progress",
-  "client_payload": {
-    "source": "line" | "manus",
-    "event_id": "uuid+timestamp hash",
-    "received_at": "2024-07-01T12:34:56Z",
-    "event": { /* sanitized event body */ },
-    "signature_valid": true,
-    "idempotency_key": "hash(event)"
-  }
-}
-```
-
-### LINE Event Sanitized Structure
-```json
-{
-  "destination": "Uxxxx",
-  "events": [
-    {
-      "type": "follow | message | postback",
-      "timestamp": 1710000000000,
-      "source": {
-        "type": "user",
-        "userId": "hash:sha256(...)"  // hashed in Front Door
-      },
-      "message": {
-        "type": "text",
-        "id": "123456",
-        "text": "#参加"
-      },
-      "replyToken": "abcdef",
-      "metadata": {
-        "campaign": "note-2024-07",
-        "articleId": "note-slug"
-      }
-    }
-  ]
-}
-```
-
-### ProgressEvent v1.1 (GitHub → Monitoring)
-```json
-{
-  "event_type": "step_succeeded|step_failed|heartbeat",
-  "task_id": "line-event-handler",
-  "step_id": "dispatch_line_reply",
-  "ts": "2024-07-01T12:35:00Z",
-  "idempotency_key": "line-event-<eventId>",
-  "plan_title": "LINE Event Processing",
-  "metrics": {
-    "latency_ms": 3456,
-    "retries": 0
-  },
-  "context": {
-    "trigger": "follow",
-    "user_ref": "hash:...",
-    "risk_level": "low"
-  }
-}
-```
-
-### Google Sheets Columns
-- `line_user_hash` (string, SHA-256 of user ID + salt).
-- `display_name` (string, sanitized).
-- `status` (`subscribed`, `unsubscribed`, `pending`).
-- `tags` (comma-separated campaign labels).
-- `source_article` (note slug).
-- `registered_at` (ISO timestamp).
-- `last_active_at` (ISO timestamp).
-- `channel` (e.g., `line`, `manus`).
-
----
+- **New minimal relay function (Cloudflare/Workers)**: rejected for now to reuse existing Supabase infra; can switch later with same contracts.
+- **Direct Supabase-only processing (no Actions)**: rejected to keep GitOps/audit trail.
+- **Supabase DB instead of Sheets for contacts**: deferred; Sheets meets interim needs with hashing.
 
 ## Testing Strategy
-- **Unit Tests**:
-  - Edge signature verification (valid + invalid HMAC, missing header).
-  - Idempotency cache behavior (duplicate events suppressed).
-  - `cost.py` estimator for various plan permutations including degrade path.
-  - Guardrail footer helper ensures disclaimer appended.
-  - Budget check (daily/weekly thresholds crossing) returns degrade flag.
-- **Integration Tests**:
-  - Simulated LINE follow event through Front Door to GitHub Actions using local Miniflare + `act` CLI.
-  - Manus Progress event through pipeline verifying log update and ProgressEvent dispatch.
-  - Google Sheets write using mock service account or stub Manus connector.
-  - Failure injection cases (403, 429, timeout) ensuring retries/backoff paths.
-- **End-to-End / Acceptance**:
-  - Run scripted scenario: note CTA → LINE follow (#参加) → success reply → Sheets entry → progress telemetry recorded.
-  - Budget exceed scenario to confirm degrade to LINE+ICS path and Manus call skipped.
-  - Manual rollback exercise following `docs/RUNBOOK.md`.
+- **Unit**: signature verification (valid/invalid/missing), idempotency cache, safety footer helper, cost estimator budget logic, daily-brief retry/backoff and env validation.
+- **Integration**: Front Door → `repository_dispatch` simulated via `act`; Sheets updater with mock/service account; Manus step gated by flag; daily-brief card selection and LINE call mocked.
+- **End-to-End**: follow event → dispatch → plan load → Sheets upsert → reply with footer; degraded mode skip Manus; daily-brief cron dry-run hitting Edge with auth.
+- CI: run `deno test` for functions, Node/Python lint/tests, `act` smoke for workflows.
 
-Test automation will live under `tests/` with Python/TypeScript suites, executed via GitHub Actions (lint → unit → integration). Local developer workflow uses Cursor tasks plus `npm test`/`pytest`.
-
----
-
-## Deployment & Migration Considerations
-1. **Preparation**:
-   - Import Cursor handover package files or recreate per spec.
-   - Configure GitHub repository secrets/variables: `GH_PAT`, `LLM_ENDPOINT`, `LLM_API_KEY`, Manus & LINE credentials, progress webhook URL, Google Sheets service config.
-   - Ensure `.cursorrules` committed to enforce development guardrails.
-2. **Front Door Deployment**:
-   - Deploy `functions/relay/index.ts` to Supabase Edge (or Cloudflare Workers) with env vars.
-   - Set up KV storage for idempotency (Supabase Deno KV / Workers KV).
-   - Point LINE webhook URL and Manus progress webhook to deployed endpoint.
-3. **GitHub Actions**:
-   - Enable required workflows (`line-event.yml`, `manus-progress.yml`) and set concurrency groups.
-   - Add branch protection requiring lint/test jobs to pass.
-4. **Data Migration**:
-   - Backfill existing subscribers into Google Sheets (manual import, hashed before upload).
-   - Optionally seed Supabase logging tables.
-5. **Monitoring & Alerts**:
-   - Register ProgressEvent webhook in GitHub repo settings (or use dedicated workflow to forward to monitoring service).
-   - Configure UptimeRobot or equivalent to watch Front Door endpoint.
-6. **Rollback Plan**:
-   - Disable workflows via branch protection toggle.
-   - Set `FEATURE_BOT_ENABLED=false`.
-   - Revert to previous webhook endpoint if necessary.
-
----
+## Deployment & Migration
+1) Restore orchestration assets (plan/cost/brief/degraded) and scripts; ensure workflows read them.  
+2) Adapt `line-webhook` to dispatch while preserving signature/idempotency; set LINE webhook URL to Supabase endpoint.  
+3) Add hashing salt secret and Sheets service account; configure GitHub vars/secrets (`GH_PAT`, LINE secrets, Manus optional, PROGRESS webhook).  
+4) Deploy daily-brief fixes; add cron workflow; verify via dry-run.  
+5) Enable alerts (Discord webhook) on workflow failure.  
+Rollback: set `FEATURE_BOT_ENABLED=false`, disable workflows, revert plan/degraded flags.
 
 ## Risks & Mitigations
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| Google Sheets API quota or auth failure | Contacts not logged, compliance gap | Implement retry/backoff, queue writes via Manus fallback, alert on failure; plan migration to Supabase DB. |
-| Manus budget constraints | External actions fail silently | `cost.py` budget check plus degrade path to LINE+ICS; log budget status via ProgressEvent for visibility. |
-| LINE signature verification bugs | Security incident or webhook hijack | Unit tests covering signature cases; use server-provided channel secret via env; monitor 4xx rates at Front Door. |
-| Idempotency lapses (duplicate processing) | Double messaging/charges | Hash event payload + timestamp; maintain short-lived cache; integration tests for duplicates. |
-| Secrets misconfiguration | Production outage | Provide `requirements.md` + design doc checklists; run `gh workflow run secret-audit` script; add PR template checks. |
-| Observability gaps | Slow incident response | Enforce push telemetry, ensure Supabase logging or GitHub artifact fallback, integrate with Ops alerts. |
-| Compliance drift (missing guardrail) | Regulatory/brand risk | Centralized helper to append disclaimer; lint rule/test verifying `tests/test_guardrail_footer.py`. |
+- **Architecture drift (Supabase vs Actions)**: document decision; keep dispatch path thin; revisit if latency/cost issues.  
+- **Sheets quota/auth failures**: skip with warning, alert; plan fallback (log only) and future DB migration.  
+- **Manus/budget unavailability**: enforce degrade branch; guard Manus steps with flags.  
+- **Signature/idempotency bugs**: tests + metrics; 4xx monitoring.  
+- **Missing secrets**: startup env validation (daily brief), workflow preflight checks.  
+- **Observability gaps**: structured logs + alerting on workflow/Edge failures.
 
----
+## Open Questions (must resolve with stakeholders)
+- Sheets retention/access and salt ownership; fallback path when Sheets fails.  
+- Messaging cadence/segmentation and additional KPIs.  
+- Degraded-path specifics (ICS-only/LINE-only) when Manus/budget off.  
+- Credential readiness (Sheets service account, Manus API/base URL, verified domain/PAT).  
 
-## Next Steps Toward `/sdd-tasks`
-1. Validate KPI targets, messaging cadence, and Google Sheets retention policy with stakeholders.
-2. Import or recreate handover package files in repo; set up baseline workflows.
-3. Scaffold tests (signature, cost estimator, failure injection) and ensure GitHub Actions pipelines run locally with `act`.
-4. Document secret provisioning and environment setup (README/RUNBOOK updates).
-5. Schedule dry-run with sample LINE events to verify end-to-end flow.
+Once these are answered, proceed to `/sdd-tasks` and implementation.

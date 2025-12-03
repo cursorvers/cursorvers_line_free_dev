@@ -101,59 +101,59 @@ async function handleJoin(
     });
   }
 
-  // メールアドレスで検索
-  const { data: member, error } = await supabase
-    .from("library_members")
-    .select("*")
-    .eq("stripe_customer_email", email)
-    .eq("status", "active")
-    .single();
+    // メールアドレスで検索
+    const { data: member, error } = await supabase
+      .from("library_members")
+      .select("*")
+      .eq("stripe_customer_email", email)
+      .eq("status", "active")
+      .single();
 
-  if (error || !member) {
-    return jsonResponse({
-      type: 4,
-      data: {
-        content: `⛔ **エラー**: そのメールアドレス (${email}) の決済情報が見つかりません。\nStripeで決済したメールアドレスを正確に入力してください。`,
+    if (error || !member) {
+      return jsonResponse({
+        type: 4,
+        data: { 
+          content: `⛔ **エラー**: そのメールアドレス (${email}) の決済情報が見つかりません。\nStripeで決済したメールアドレスを正確に入力してください。`,
         flags: 64,
       },
-    });
-  }
-
-  // ロール付与 (Discord API)
-  const roleRes = await fetch(
-    `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${DISCORD_ROLE_ID}`,
-    {
-      method: "PUT",
-      headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` },
+      });
     }
-  );
 
-  if (!roleRes.ok) {
-    const errorText = await roleRes.text();
-    console.error(`Role assignment failed: ${errorText}`);
-    return jsonResponse({
-      type: 4,
+    // ロール付与 (Discord API)
+    const roleRes = await fetch(
+      `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${DISCORD_ROLE_ID}`,
+      {
+        method: "PUT",
+        headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` },
+      }
+    );
+
+    if (!roleRes.ok) {
+      const errorText = await roleRes.text();
+      console.error(`Role assignment failed: ${errorText}`);
+      return jsonResponse({
+        type: 4,
       data: {
         content: "⚠️ ロールの付与に失敗しました。管理者に連絡してください。",
         flags: 64,
       },
-    });
-  }
+      });
+    }
 
-  // DB更新 (Discord IDを紐付け)
-  await supabase
-    .from("library_members")
-    .update({ discord_user_id: userId })
-    .eq("id", member.id);
+    // DB更新 (Discord IDを紐付け)
+    await supabase
+      .from("library_members")
+      .update({ discord_user_id: userId })
+      .eq("id", member.id);
 
-  return jsonResponse({
-    type: 4,
+    return jsonResponse({
+      type: 4,
     data: {
       content:
         "🎉 **認証成功！**\nLibrary Memberの権限を付与しました。\n左側のメニューに限定チャンネルが表示されているか確認してください。",
     },
-  });
-}
+    });
+  }
 
 // ============================================
 // /sec-brief-latest コマンドハンドラ

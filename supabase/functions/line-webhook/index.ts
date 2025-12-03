@@ -25,6 +25,7 @@ import {
   getTotalQuestions,
 } from "./lib/diagnosis-flow.ts";
 import { getArticlesByIds, getArticlesByTag } from "./lib/note-recommendations.ts";
+import { withSafetyFooter } from "../_shared/safety.ts";
 
 // =======================
 // 型定義
@@ -156,7 +157,7 @@ interface QuickReply {
 // LINE 返信（reply API）
 async function replyText(replyToken: string, text: string, quickReply?: QuickReply) {
   if (!replyToken) return;
-  const message: Record<string, unknown> = { type: "text", text };
+  const message: Record<string, unknown> = { type: "text", text: withSafetyFooter(text) };
   if (quickReply) {
     message.quickReply = quickReply;
   }
@@ -939,4 +940,3 @@ serve(async (req: Request): Promise<Response> => {
   // replyMessage は handleEvent 内で済ませているので、ここは常に 200 でOK
   return new Response("OK", { status: 200 });
 });
-

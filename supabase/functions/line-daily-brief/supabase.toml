@@ -1,0 +1,3 @@
+[function.line-daily-brief]
+verify_jwt = false
+

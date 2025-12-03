@@ -1,0 +1,2 @@
+[function.relay]
+verify_jwt = false

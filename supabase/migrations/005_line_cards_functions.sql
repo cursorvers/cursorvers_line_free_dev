@@ -3,7 +3,7 @@
 -- Aggregate theme stats in the database (used by Edge Function)
 CREATE OR REPLACE FUNCTION get_theme_stats()
 RETURNS TABLE (
-  theme card_theme,
+  theme TEXT,
   total_times_used INTEGER,
   ready_count INTEGER
 ) LANGUAGE sql AS $$
