@@ -203,6 +203,57 @@ supabase secrets set INGEST_HIJ_API_KEY=<新しいキー> --project-ref haaxgwyi
 3. [ ] `OPENAI_API_KEY` が有効か確認
 4. [ ] `generate-sec-brief` 関数を手動実行してテスト
 
+### Gmail → Supabase 連携（GAS）が動作しない
+
+1. [ ] Google Apps Script のダッシュボードでエラーログを確認
+2. [ ] GASのトリガーが有効か確認（1時間おきまたは6時間おき）
+3. [ ] `INGEST_HIJ_API_KEY` が GAS の `CONFIG.API_KEY` と一致しているか確認
+4. [ ] Supabase ダッシュボードで `ingest-hij` のログを確認
+5. [ ] 手動で `ingest-hij` を curl でテスト
+
+```bash
+curl -X POST https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/ingest-hij \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <INGEST_HIJ_API_KEY>" \
+  -d '{
+    "message_id": "test-123",
+    "sent_at": "2025-12-03T12:00:00+09:00",
+    "subject": "Test Subject",
+    "body": "Test body content"
+  }'
+```
+
+### GAS 再セットアップ手順
+
+1. `docs/GAS_SETUP.md` を参照してスクリプトを再作成
+2. Gmail で `label:health-isac-japan` が正しく適用されているか確認
+3. トリガーを再設定（1時間おきまたは6時間おき）
+4. エラー通知を有効化（毎日通知）
+
+---
+
+## 9. 環境変数のバックアップ
+
+**重要**: 環境変数は自動バックアップされません。手動で安全な場所に保管してください。
+
+```bash
+# 現在の環境変数を取得（値は伏せて表示）
+supabase secrets list --project-ref haaxgwyimoqzzxzdaeep
+
+# 1Passwordや安全なドキュメントに以下を保存:
+# - LINE_CHANNEL_ACCESS_TOKEN
+# - LINE_CHANNEL_SECRET
+# - OPENAI_API_KEY
+# - STRIPE_API_KEY
+# - STRIPE_WEBHOOK_SECRET
+# - DISCORD_PUBLIC_KEY
+# - DISCORD_BOT_TOKEN
+# - DISCORD_ROLE_ID
+# - SEC_BRIEF_CHANNEL_ID
+# - INGEST_HIJ_API_KEY
+# - GENERATE_SEC_BRIEF_API_KEY
+```
+
 ---
 
 最終更新: 2025-12-03
