@@ -10,7 +10,7 @@
  *
  * POST /line-daily-brief
  * Headers:
- *   - X-CRON-SECRET: Secret key for scheduler authentication
+ *   - X-API-Key: API key for scheduler authentication (LINE_DAILY_BRIEF_API_KEY)
  *   - OR Authorization: Bearer <service_role_key>
  */
 
