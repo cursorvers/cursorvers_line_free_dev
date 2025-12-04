@@ -285,22 +285,34 @@ async function checkDatabaseHealth(client: SupabaseClient): Promise<{
   const anomalies: string[] = [];
 
   // Check for duplicate content hashes
-  const { data: hashData, error: hashError } = await client
-    .rpc("check_duplicate_hashes")
-    .catch(() => {
-      // If function doesn't exist, use alternative query
-      return client
-        .from("line_cards")
-        .select("content_hash")
-        .then((result) => {
-          const hashCounts: Record<string, number> = {};
-          for (const card of result.data || []) {
-            hashCounts[card.content_hash] = (hashCounts[card.content_hash] || 0) + 1;
-          }
-          const dupes = Object.values(hashCounts).filter((count) => count > 1).length;
-          return { data: dupes, error: null };
-        });
-    });
+  let hashData: number | null = null;
+  let hashError: Error | null = null;
+  
+  try {
+    const rpcResult = await client.rpc("check_duplicate_hashes");
+    if (rpcResult.error) {
+      hashError = rpcResult.error;
+    } else {
+      hashData = rpcResult.data as number;
+    }
+  } catch (err) {
+    // If RPC function doesn't exist, use alternative query
+    const { data: cards, error: cardsError } = await client
+      .from("line_cards")
+      .select("content_hash");
+    
+    if (cardsError) {
+      hashError = cardsError;
+    } else {
+      const hashCounts: Record<string, number> = {};
+      for (const card of cards || []) {
+        if (card.content_hash) {
+          hashCounts[card.content_hash] = (hashCounts[card.content_hash] || 0) + 1;
+        }
+      }
+      hashData = Object.values(hashCounts).filter((count) => count > 1).length;
+    }
+  }
 
   if (!hashError && typeof hashData === "number") {
     duplicates = hashData;
@@ -544,4 +556,5 @@ Deno.serve(async (req) => {
     );
   }
 });
+
 
