@@ -283,6 +283,43 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
 }
 
 /**
+ * Record broadcast history for monitoring and analytics
+ */
+async function recordBroadcastHistory(
+  client: SupabaseClient,
+  data: {
+    cardId: string;
+    theme: CardTheme;
+    broadcastStatus: "success" | "failed";
+    errorMessage?: string;
+    lineRequestId: string | null;
+    lineResponseStatus: number | null;
+  }
+): Promise<void> {
+  const { error } = await client.from("line_card_broadcasts").insert({
+    card_id: data.cardId,
+    theme: data.theme,
+    broadcast_status: data.broadcastStatus,
+    error_message: data.errorMessage || null,
+    line_request_id: data.lineRequestId,
+    line_response_status: data.lineResponseStatus,
+  });
+
+  if (error) {
+    log("warn", "Failed to record broadcast history", {
+      cardId: data.cardId,
+      error: error.message,
+    });
+    // Don't throw - this is non-critical
+  } else {
+    log("info", "Broadcast history recorded", {
+      cardId: data.cardId,
+      status: data.broadcastStatus,
+    });
+  }
+}
+
+/**
  * Update card after successful delivery (SQL injection safe)
  */
 async function updateCardAfterDelivery(client: SupabaseClient, cardId: string): Promise<void> {
@@ -373,6 +410,19 @@ Deno.serve(async (req) => {
 
     if (!broadcastResult.success) {
       log("error", "Broadcast failed", { error: broadcastResult.error });
+      
+      // Record failed broadcast history
+      await recordBroadcastHistory(supabaseClient, {
+        cardId: card.id,
+        theme: card.theme,
+        broadcastStatus: "failed",
+        errorMessage: broadcastResult.error || "Unknown error",
+        lineRequestId: broadcastResult.requestId || null,
+        lineResponseStatus: null,
+      }).catch((err) => {
+        log("warn", "Failed to record broadcast history", { error: err.message });
+      });
+
       return new Response(
         JSON.stringify({
           success: false,
@@ -387,6 +437,16 @@ Deno.serve(async (req) => {
 
     log("info", "Step 4: Updating card record", { cardId: card.id });
     await updateCardAfterDelivery(supabaseClient, card.id);
+
+    // Step 5: Record broadcast history
+    log("info", "Step 5: Recording broadcast history", { cardId: card.id });
+    await recordBroadcastHistory(supabaseClient, {
+      cardId: card.id,
+      theme: card.theme,
+      broadcastStatus: "success",
+      lineRequestId: broadcastResult.requestId || null,
+      lineResponseStatus: 200,
+    });
 
     return new Response(
       JSON.stringify({

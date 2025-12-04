@@ -1,0 +1,51 @@
+# .github/workflows/sync-line-cards.yml
+# Obsidian VaultからLINEカードを同期するワークフロー
+# 毎日 06:00 JST (21:00 UTC) に実行（配信の1時間前）
+
+name: Sync Line Cards from Obsidian
+
+on:
+  schedule:
+    # 毎日 JST 06:00 (UTC 21:00 前日) に同期
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+    # 手動実行も可能
+
+jobs:
+  sync-cards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Sync cards from Obsidian Vault
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VAULT_PATH: ${{ secrets.OBSIDIAN_VAULT_PATH }}
+        run: |
+          echo "📚 Obsidian VaultからLINEカードを同期中..."
+          
+          cd scripts/export-line-cards
+          deno task export
+          
+          echo "✅ 同期完了"
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d '{"content": "⚠️ **LINEカード同期ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          fi
+
