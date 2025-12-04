@@ -62,13 +62,6 @@ const LINE_CHANNEL_ACCESS_TOKEN = getEnv("LINE_CHANNEL_ACCESS_TOKEN");
 // Use API key for authentication (same pattern as generate-sec-brief)
 const LINE_DAILY_BRIEF_API_KEY = Deno.env.get("LINE_DAILY_BRIEF_API_KEY");
 
-// Debug: Log secret availability (without exposing the actual value)
-if (!CRON_SECRET) {
-  console.error("CRON_SECRET is not set. Available env vars:", Object.keys(Deno.env.toObject()).filter(k => k.includes("CRON") || k.includes("SECRET")));
-} else {
-  console.log("CRON_SECRET is set, length:", CRON_SECRET.length);
-}
-
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: {
     autoRefreshToken: false,
