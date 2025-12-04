@@ -27,8 +27,14 @@ jobs:
         with:
           version: latest
 
-      - name: Deploy line-bot
-        run: supabase functions deploy line-bot --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Deploy line-webhook
+        run: supabase functions deploy line-webhook --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Deploy line-daily-brief
+        run: supabase functions deploy line-daily-brief --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Deploy manus-audit-line-daily-brief
+        run: supabase functions deploy manus-audit-line-daily-brief --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
 
       - name: Deploy stats-exporter
         run: supabase functions deploy stats-exporter --project-ref "$SUPABASE_PROJECT_ID"
@@ -44,6 +50,12 @@ jobs:
 
       - name: Deploy discord-bot
         run: supabase functions deploy discord-bot --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Deploy stripe-webhook
+        run: supabase functions deploy stripe-webhook --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Deploy relay
+        run: supabase functions deploy relay --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
 
       - name: Send Discord notification
         if: always()
