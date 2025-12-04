@@ -2,6 +2,7 @@
  * LINE Daily Brief Edge Function
  *
  * Selects one card from line_cards and broadcasts via LINE Messaging API.
+ * Updated: 2025-12-04
  * Priority:
  * 1. status = 'ready'
  * 2. Themes with the lowest total delivery count
@@ -58,8 +59,8 @@ const getEnv = (name: (typeof REQUIRED_ENV_VARS)[number]): string => {
 const SUPABASE_URL = getEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = getEnv("SUPABASE_SERVICE_ROLE_KEY");
 const LINE_CHANNEL_ACCESS_TOKEN = getEnv("LINE_CHANNEL_ACCESS_TOKEN");
-// Support both CRON_SECRET and LINE_DAILY_BRIEF_CRON_SECRET for backward compatibility
-const CRON_SECRET = Deno.env.get("CRON_SECRET") || Deno.env.get("LINE_DAILY_BRIEF_CRON_SECRET");
+// Use LINE_DAILY_BRIEF_CRON_SECRET only (ignore CRON_SECRET to avoid conflicts)
+const CRON_SECRET = Deno.env.get("LINE_DAILY_BRIEF_CRON_SECRET");
 
 // Debug: Log secret availability (without exposing the actual value)
 if (!CRON_SECRET) {
