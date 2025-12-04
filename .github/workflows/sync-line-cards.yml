@@ -23,7 +23,7 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
-          deno-version: v1.x
+          deno-version: v2.x  # v1.x から v2.x に変更（ロックファイルバージョン5に対応）
 
       - name: Sync cards from Obsidian Vault
         env:
