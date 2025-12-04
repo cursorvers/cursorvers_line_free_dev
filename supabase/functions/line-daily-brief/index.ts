@@ -216,7 +216,7 @@ function formatMessage(card: LineCard): string {
   };
 
   const emoji = themeEmoji[card.theme] || "💡";
-  const footer = "\n\n──────────\nCursorvers.edu";
+  const footer = "\n\n──────────\nCursorvers.edu\nhttps://cursorvers.edu";
 
   let message = `${emoji} 今日のひとこと\n\n${card.body}${footer}`;
 
