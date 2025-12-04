@@ -18,14 +18,15 @@
  *   - OR Authorization: Bearer <service_role_key>
  * 
  * Query params:
- *   - mode=weekly: Weekly audit only
+ *   - mode=daily: Daily audit (card inventory + broadcast success)
+ *   - mode=weekly: Weekly audit (same as daily)
  *   - mode=monthly: Monthly audit + maintenance
  */
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
 type CardTheme = "ai_gov" | "tax" | "law" | "biz" | "career" | "asset" | "general";
-type AuditMode = "weekly" | "monthly";
+type AuditMode = "daily" | "weekly" | "monthly";
 
 interface CardInventory {
   theme: CardTheme;
@@ -482,7 +483,7 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const mode = (url.searchParams.get("mode") || "weekly") as AuditMode;
+    const mode = (url.searchParams.get("mode") || "daily") as AuditMode;
 
     log("info", "Starting audit", { mode });
 
