@@ -296,14 +296,21 @@ async function recordBroadcastHistory(
     lineResponseStatus: number | null;
   }
 ): Promise<void> {
-  const { error } = await client.from("line_card_broadcasts").insert({
+  // Insert with both new and legacy columns for backward compatibility
+  const insertData: Record<string, unknown> = {
     card_id: data.cardId,
-    theme: data.theme,
-    broadcast_status: data.broadcastStatus,
+    sent_at: new Date().toISOString(),
+    success: data.broadcastStatus === "success",
     error_message: data.errorMessage || null,
-    line_request_id: data.lineRequestId,
-    line_response_status: data.lineResponseStatus,
-  });
+  };
+  
+  // Add new columns if they exist
+  if (data.theme) insertData.theme = data.theme;
+  if (data.broadcastStatus) insertData.broadcast_status = data.broadcastStatus;
+  if (data.lineRequestId) insertData.line_request_id = data.lineRequestId;
+  if (data.lineResponseStatus !== null) insertData.line_response_status = data.lineResponseStatus;
+  
+  const { error } = await client.from("line_card_broadcasts").insert(insertData);
 
   if (error) {
     log("warn", "Failed to record broadcast history", {
