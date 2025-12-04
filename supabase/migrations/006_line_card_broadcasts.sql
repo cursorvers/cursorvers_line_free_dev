@@ -22,10 +22,10 @@ CREATE TABLE IF NOT EXISTS line_card_broadcasts (
 );
 
 -- Indexes for efficient queries
-CREATE INDEX idx_line_card_broadcasts_card_id ON line_card_broadcasts(card_id);
-CREATE INDEX idx_line_card_broadcasts_broadcasted_at ON line_card_broadcasts(broadcasted_at);
-CREATE INDEX idx_line_card_broadcasts_status ON line_card_broadcasts(broadcast_status);
-CREATE INDEX idx_line_card_broadcasts_theme ON line_card_broadcasts(theme);
+CREATE INDEX IF NOT EXISTS idx_line_card_broadcasts_card_id ON line_card_broadcasts(card_id);
+CREATE INDEX IF NOT EXISTS idx_line_card_broadcasts_broadcasted_at ON line_card_broadcasts(broadcasted_at);
+CREATE INDEX IF NOT EXISTS idx_line_card_broadcasts_status ON line_card_broadcasts(broadcast_status);
+CREATE INDEX IF NOT EXISTS idx_line_card_broadcasts_theme ON line_card_broadcasts(theme);
 
 -- View for daily broadcast statistics
 CREATE OR REPLACE VIEW line_card_broadcasts_daily_stats AS
