@@ -399,15 +399,19 @@ async function performMaintenance(client: SupabaseClient): Promise<{
 }
 
 async function sendDiscordNotification(result: AuditResult): Promise<void> {
+  // 正常時は通知を送らない（ログのみ）
+  if (result.summary.allPassed && result.summary.warningCount === 0 && result.summary.errorCount === 0) {
+    log("info", "Audit passed, skipping Discord notification (alerts only mode)");
+    return;
+  }
+
   if (!DISCORD_ADMIN_WEBHOOK_URL) {
     log("warn", "Discord webhook URL not configured, skipping notification");
     return;
   }
 
-  const emoji = result.summary.allPassed ? "✅" : result.summary.errorCount > 0 ? "🚨" : "⚠️";
-  const statusText = result.summary.allPassed
-    ? "全て正常"
-    : result.summary.errorCount > 0
+  const emoji = result.summary.errorCount > 0 ? "🚨" : "⚠️";
+  const statusText = result.summary.errorCount > 0
     ? "エラー検出"
     : "警告あり";
 
@@ -415,32 +419,24 @@ async function sendDiscordNotification(result: AuditResult): Promise<void> {
   message += `時刻: ${new Date(result.timestamp).toLocaleString("ja-JP")}\n`;
   message += `ステータス: **${statusText}**\n\n`;
 
-  // Card inventory
-  message += `**📊 カード在庫**\n`;
-  if (result.checks.cardInventory.warnings.length > 0) {
+  // Card inventory (異常時のみ表示)
+  if (result.checks.cardInventory.warnings.length > 0 || !result.checks.cardInventory.passed) {
+    message += `**📊 カード在庫**\n`;
     message += result.checks.cardInventory.warnings.join("\n") + "\n";
-  } else {
-    message += "✅ 全てのテーマで十分な在庫があります\n";
+    message += "\n";
   }
-  message += "\n";
 
-  // Broadcast success
-  message += `**📈 配信成功率**\n`;
-  if (result.checks.broadcastSuccess.warnings.length > 0) {
+  // Broadcast success (異常時のみ表示)
+  if (result.checks.broadcastSuccess.warnings.length > 0 || !result.checks.broadcastSuccess.passed) {
+    message += `**📈 配信成功率**\n`;
     message += result.checks.broadcastSuccess.warnings.join("\n") + "\n";
-  } else {
-    message += "✅ 配信成功率は正常です\n";
+    message += "\n";
   }
-  message += "\n";
 
-  // Database health (monthly only)
-  if (result.checks.databaseHealth) {
+  // Database health (monthly only, 異常時のみ表示)
+  if (result.checks.databaseHealth && (result.checks.databaseHealth.warnings.length > 0 || !result.checks.databaseHealth.passed)) {
     message += `**🔍 データベース健全性**\n`;
-    if (result.checks.databaseHealth.warnings.length > 0) {
-      message += result.checks.databaseHealth.warnings.join("\n") + "\n";
-    } else {
-      message += "✅ データベースは健全です\n";
-    }
+    message += result.checks.databaseHealth.warnings.join("\n") + "\n";
     message += "\n";
   }
 
