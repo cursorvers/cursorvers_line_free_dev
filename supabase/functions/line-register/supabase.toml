@@ -1,0 +1,3 @@
+[functions.line-register]
+verify_jwt = false
+
