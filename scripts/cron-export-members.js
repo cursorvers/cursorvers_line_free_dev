@@ -1,8 +1,10 @@
 /**
  * Export members (email list) from Supabase to Google Sheets.
  * - Source of truth: Supabase `members`
- * - Filter: tier in ('library','master') AND status='active' AND opt_in_email=true
- * - Destination: Google Sheet tab `members_export` (cleared & overwritten)
+ * - Split into two tabs:
+ *   - `members_paid`: tier in ('library','master') AND status='active'
+ *   - `members_free`: tier='free' AND status='active'
+ * - Newsletter: メールアドレス登録者は全員対象（opt_in_email に依存しない）
  *
  * Requirements:
  * - Environment variables:
@@ -40,11 +42,20 @@ if (
   Deno.exit(1);
 }
 
-const sheetName = "members_export";
+const sheetPaid = "members_paid";
+const sheetFree = "members_free";
+const columns = [
+  "email",
+  "tier",
+  "status",
+  "period_end",
+  "opt_in_email",
+  "updated_at",
+  "line_user_id",
+];
 
-async function fetchMembers() {
-  const query =
-    "members?status=eq.active&tier=in.(library,master)&opt_in_email=eq.true&select=email,tier,status,period_end,opt_in_email,updated_at";
+async function fetchMembers(filter) {
+  const query = `members?${filter}&select=${columns.join(",")}`;
   const url = `${SUPABASE_URL}/rest/v1/${query}`;
   const res = await fetch(url, {
     headers: {
@@ -71,33 +82,41 @@ async function getSheetsClient() {
   return sheets;
 }
 
-function toRows(data) {
-  return data.map((row) => [
+const toRows = (data) =>
+  data.map((row) => [
     row.email ?? "",
     row.tier ?? "",
     row.status ?? "",
     row.period_end ?? "",
     row.opt_in_email ?? "",
     row.updated_at ?? "",
+    row.line_user_id ?? "",
   ]);
-}
 
-async function clearAndWrite(sheets, rows) {
+async function clearAndWrite(sheets, targetSheet, rows) {
   // Clear sheet
   await sheets.spreadsheets.values.clear({
     spreadsheetId: GOOGLE_SHEET_ID,
-    range: sheetName,
+    range: targetSheet,
   });
 
   // Write header + rows
   const values = [
-    ["Email", "Tier", "Status", "Period End", "Opt In Email", "Updated At"],
+    [
+      "Email",
+      "Tier",
+      "Status",
+      "Period End",
+      "Opt In Email",
+      "Updated At",
+      "Line User ID",
+    ],
     ...rows,
   ];
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: GOOGLE_SHEET_ID,
-    range: sheetName,
+    range: targetSheet,
     valueInputOption: "RAW",
     requestBody: { values },
   });
@@ -105,14 +124,21 @@ async function clearAndWrite(sheets, rows) {
 
 async function main() {
   try {
-    console.log("[members-export] fetching from supabase...");
-    const members = await fetchMembers();
-    console.log(`[members-export] fetched ${members.length} rows`);
+    console.log("[members-export] fetching paid members...");
+    const [paid, free] = await Promise.all([
+      fetchMembers("status=eq.active&tier=in.(library,master)"),
+      fetchMembers("status=eq.active&tier=eq.free"),
+    ]);
+    console.log(`[members-export] paid: ${paid.length}, free: ${free.length}`);
 
     const sheets = await getSheetsClient();
-    const rows = toRows(members);
-    await clearAndWrite(sheets, rows);
-    console.log("[members-export] written to sheet:", sheetName);
+    await clearAndWrite(sheets, sheetPaid, toRows(paid));
+    await clearAndWrite(sheets, sheetFree, toRows(free));
+    console.log(
+      "[members-export] written to sheets:",
+      `${sheetPaid} (${paid.length})`,
+      `${sheetFree} (${free.length})`
+    );
   } catch (err) {
     console.error("[members-export] failed:", err);
     Deno.exit(1);
@@ -120,4 +146,5 @@ async function main() {
 }
 
 await main();
+
 
