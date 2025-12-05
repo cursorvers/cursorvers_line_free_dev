@@ -50,12 +50,17 @@ serve(async (req) => {
         let subscriptionStatus = "active";
         let nextBillingAt: string | null = null;
         let membershipTier = "library"; // デフォルトはLibrary Member
+        let stripeSubscriptionId: string | null = null;
+        const optInEmail =
+          (session.metadata?.opt_in_email ?? "").toString().toLowerCase() ===
+          "true";
 
         // サブスクリプション型の場合、詳細情報を取得
         if (subscriptionId && typeof subscriptionId === "string") {
           try {
             const subscription = await stripe.subscriptions.retrieve(subscriptionId);
             subscriptionStatus = subscription.status;
+            stripeSubscriptionId = subscription.id;
             nextBillingAt = subscription.current_period_end
               ? new Date(subscription.current_period_end * 1000).toISOString()
               : null;
@@ -80,19 +85,20 @@ serve(async (req) => {
         }
 
         const { error } = await supabase
-          .from("library_members")
+          .from("members")
           .upsert(
             {
-              stripe_customer_email: customerEmail,
+              email: customerEmail,
+              stripe_customer_id: session.customer as string | null,
+              stripe_subscription_id: stripeSubscriptionId,
               status: "active",
               subscription_status: subscriptionStatus,
-              membership_tier: membershipTier,
-              subscription_start_date: new Date().toISOString(),
-              next_billing_at: nextBillingAt,
-              last_payment_at: new Date().toISOString(),
+              tier: membershipTier,
+              period_end: nextBillingAt,
+              opt_in_email: optInEmail,
               updated_at: new Date().toISOString(),
             },
-            { onConflict: "stripe_customer_email" }
+            { onConflict: "email" }
           );
 
         if (error) {
@@ -128,15 +134,17 @@ serve(async (req) => {
 
       if (customerEmail) {
         const { error } = await supabase
-          .from("library_members")
+          .from("members")
           .update({
             subscription_status: subscription.status,
-            next_billing_at: subscription.current_period_end
+            status: subscription.status === "canceled" ? "inactive" : "active",
+            period_end: subscription.current_period_end
               ? new Date(subscription.current_period_end * 1000).toISOString()
               : null,
+            stripe_subscription_id: subscription.id,
             updated_at: new Date().toISOString(),
           })
-          .eq("stripe_customer_email", customerEmail);
+          .eq("email", customerEmail);
 
         if (error) console.error("DB Update Error:", error);
         else console.log(`Subscription updated: ${subscription.id}`);
@@ -162,13 +170,13 @@ serve(async (req) => {
 
       if (customerEmail) {
         const { error } = await supabase
-          .from("library_members")
+          .from("members")
           .update({
             subscription_status: "canceled",
             status: "inactive",
             updated_at: new Date().toISOString(),
           })
-          .eq("stripe_customer_email", customerEmail);
+          .eq("email", customerEmail);
 
         if (error) console.error("DB Update Error:", error);
         else console.log(`Subscription canceled: ${subscription.id}`);
