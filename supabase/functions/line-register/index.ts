@@ -1,8 +1,8 @@
 // LINE/LIFF用: 無料登録でメール任意取得し members にUPSERT
-// - line_user_id: 必須
+// - line_user_id: 必須（LIFFのuserId）
 // - email: 任意（未入力可）
 // - opt_in_email: デフォルト true（明示的に false 指定可）
-// セキュリティ: x-api-key ヘッダーで簡易保護（LINE_FORM_API_KEY）
+// セキュリティ: LINEのプロフィール取得でline_user_idを検証（LINE_CHANNEL_ACCESS_TOKENが必要）
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -10,7 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const FORM_API_KEY = Deno.env.get("LINE_FORM_API_KEY") ?? "";
+const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
@@ -46,14 +46,9 @@ serve(async (req) => {
     return badRequest("Method not allowed", 405);
   }
 
-  if (!FORM_API_KEY) {
-    console.error("[line-register] missing LINE_FORM_API_KEY");
+  if (!LINE_CHANNEL_ACCESS_TOKEN) {
+    console.error("[line-register] missing LINE_CHANNEL_ACCESS_TOKEN");
     return badRequest("Server not configured", 500);
-  }
-
-  const apiKey = req.headers.get("x-api-key");
-  if (apiKey !== FORM_API_KEY) {
-    return badRequest("Unauthorized", 401);
   }
 
   let body: {
@@ -71,6 +66,22 @@ serve(async (req) => {
   const lineUserId = body.line_user_id?.trim();
   if (!lineUserId) {
     return badRequest("line_user_id is required");
+  }
+
+  // Verify line_user_id by calling LINE profile API
+  try {
+    const res = await fetch(`https://api.line.me/v2/bot/profile/${lineUserId}`, {
+      headers: {
+        Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+      },
+    });
+    if (!res.ok) {
+      console.error("[line-register] LINE profile fetch failed", res.status);
+      return badRequest("LINE verification failed", 401);
+    }
+  } catch (err) {
+    console.error("[line-register] LINE profile error", err);
+    return badRequest("LINE verification error", 500);
   }
 
   const email = normalizeEmail(body.email ?? null);
