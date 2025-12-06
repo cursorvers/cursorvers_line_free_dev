@@ -33,16 +33,7 @@
       <p class="text-xs text-red-300">PHI（診療情報）は絶対に入力しないでください。</p>
     </div>
 
-    <div class="bg-brand-surface border border-white/10 rounded-2xl p-6 shadow-lg space-y-3">
-      <p class="text-sm font-semibold">STEP1: 友だち追加（必須）</p>
-      <div class="flex flex-col items-center gap-3">
-        <img src="https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%2540s2yyhfo&choe=UTF-8" alt="LINE友だち追加QR" class="w-56 h-56 bg-white rounded-xl p-2" loading="lazy">
-        <a href="https://line.me/R/ti/p/%40s2yyhfo" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition">
-          LINEで友だち追加
-        </a>
-        <p class="text-xs text-white/60">友だち追加後にメール登録 → LINEログインへ進んでください。</p>
-      </div>
-    </div>
+    <!-- メール登録が最初のステップ。LINE登録はメール送信後に案内表示 -->
 
     <div id="status" class="text-sm"></div>
 
@@ -165,11 +156,14 @@
           sessionStorage.setItem('savedOptIn', optIn.toString());
           
           lineLoginMessage.innerHTML = `
-            <div class="space-y-2 text-left">
-              <p class="font-semibold">STEP1: 友だち追加（必須）</p>
-              <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition">
-                LINEで友だち追加
-              </a>
+            <div class="space-y-3 text-left">
+              <p class="font-semibold">STEP2: 友だち追加 → LINEログイン</p>
+              <div class="flex flex-col items-center gap-2">
+                <img src="https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%2540s2yyhfo&choe=UTF-8" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2" loading="lazy">
+                <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition">
+                  LINEで友だち追加
+                </a>
+              </div>
               <p class="text-xs text-white/60">友だち追加のあとに「LINEでログイン」を押してください。</p>
             </div>
           `;
@@ -181,11 +175,14 @@
           sessionStorage.setItem('savedEmail', '');
           sessionStorage.setItem('savedOptIn', optIn.toString());
           lineLoginMessage.innerHTML = `
-            <div class="space-y-2 text-left">
-              <p class="font-semibold">STEP1: 友だち追加（必須）</p>
-              <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition">
-                LINEで友だち追加
-              </a>
+            <div class="space-y-3 text-left">
+              <p class="font-semibold">STEP2: 友だち追加 → LINEログイン</p>
+              <div class="flex flex-col items-center gap-2">
+                <img src="https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%2540s2yyhfo&choe=UTF-8" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2" loading="lazy">
+                <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition">
+                  LINEで友だち追加
+                </a>
+              </div>
               <p class="text-xs text-white/60">友だち追加のあとに「LINEでログイン」を押してください。</p>
             </div>
           `;
