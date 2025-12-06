@@ -44,6 +44,21 @@
       margin-bottom: 20px;
       line-height: 1.3;
     }
+    .step-indicator {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 30px;
+    }
+    .step {
+      flex: 1;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+    .step.active {
+      background: #06b6d4;
+    }
     .description {
       color: #d1d5db;
       font-size: 14px;
@@ -180,6 +195,16 @@
       border: 1px solid rgba(239, 68, 68, 0.3);
       color: #fca5a5;
     }
+    .info-box {
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      color: #a5f3fc;
+      font-size: 14px;
+      line-height: 1.6;
+    }
     a {
       color: #06b6d4;
       text-decoration: underline;
@@ -190,6 +215,12 @@
   <div class="container">
     <div class="subtitle">FREE COMMUNITY</div>
     <h1>参加フォーム</h1>
+    
+    <!-- ステップインジケーター -->
+    <div class="step-indicator">
+      <div class="step active" id="step1"></div>
+      <div class="step" id="step2"></div>
+    </div>
     
     <div class="description">
       LINEで友だち追加し、最新のSafety & Literacyアップデートを受け取ります。
@@ -203,7 +234,7 @@
     
     <div id="status" class="status hidden"></div>
     
-    <!-- メール登録フォーム -->
+    <!-- ステップ1: メール登録フォーム -->
     <div id="email-form-section" class="form-section">
       <div class="toggle-group">
         <input type="checkbox" id="email-opt-in" checked>
@@ -228,16 +259,22 @@
         <label for="agree">利用規約・プライバシーポリシー・PHI禁止に同意する</label>
       </div>
       
-      <button id="email-submit-btn">LINE登録に進む</button>
+      <button id="email-submit-btn">次へ（LINE登録）</button>
     </div>
     
-    <!-- LINEログインセクション -->
+    <!-- ステップ2: LINEログインセクション -->
     <div id="line-login-section" class="form-section hidden">
-      <p id="line-login-message" style="margin-bottom: 20px; color: #d1d5db; font-size: 14px;"></p>
+      <div class="info-box" id="line-login-message"></div>
       <button id="line-login-btn">LINEでログイン</button>
     </div>
     
-    <div id="line-user" class="hidden" style="margin-top: 20px; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 13px; color: #9ca3af;"></div>
+    <!-- 完了メッセージ -->
+    <div id="complete-section" class="form-section hidden">
+      <div class="status success">
+        ✅ 登録が完了しました！
+      </div>
+      <div id="line-user" style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 13px; color: #9ca3af;"></div>
+    </div>
   </div>
 
   <script>
@@ -252,7 +289,10 @@
     const lineLoginSection = document.getElementById("line-login-section");
     const lineLoginBtn = document.getElementById("line-login-btn");
     const lineLoginMessage = document.getElementById("line-login-message");
+    const completeSection = document.getElementById("complete-section");
     const userEl = document.getElementById("line-user");
+    const step1 = document.getElementById("step1");
+    const step2 = document.getElementById("step2");
     
     let savedEmail = null;
     let savedOptIn = false;
@@ -266,6 +306,15 @@
       statusEl.classList.remove('hidden');
     }
 
+    // ステップ切り替え
+    function goToStep2() {
+      step1.classList.remove('active');
+      step2.classList.add('active');
+      emailFormSection.classList.add('hidden');
+      lineLoginSection.classList.remove('hidden');
+      statusEl.classList.add('hidden');
+    }
+
     // メール登録トグル制御
     emailOptIn.addEventListener('change', () => {
       if (emailOptIn.checked) {
@@ -275,7 +324,7 @@
       }
     });
 
-    // LINE登録に進むボタン
+    // 次へボタン（ステップ1）
     emailSubmitBtn.addEventListener('click', async () => {
       const agreeCheckbox = document.getElementById('agree');
       if (!agreeCheckbox.checked) {
@@ -287,6 +336,8 @@
       setStatus('処理中...');
 
       try {
+        let message = '';
+        
         // メール登録がONかつメールアドレスが入力されている場合
         if (emailOptIn.checked) {
           const email = document.getElementById('email').value.trim();
@@ -313,18 +364,18 @@
             savedEmail = email;
             savedOptIn = optIn;
 
-            lineLoginMessage.textContent = 'メール登録しました。LINEログインして連携を完了してください。';
+            message = '✅ メール登録が完了しました！\n\n次に、LINEアカウントと連携して登録を完了してください。';
           } else {
-            lineLoginMessage.textContent = 'LINEログインに進みます。';
+            message = 'LINEアカウントで登録を完了してください。';
           }
         } else {
-          lineLoginMessage.textContent = 'LINEログインに進みます。';
+          message = 'LINEアカウントで登録を完了してください。';
         }
 
-        // フォームを非表示、LINEログインセクションを表示
-        emailFormSection.classList.add('hidden');
-        lineLoginSection.classList.remove('hidden');
-        statusEl.classList.add('hidden');
+        lineLoginMessage.textContent = message;
+        
+        // ステップ2へ移動
+        goToStep2();
 
       } catch (error) {
         console.error('Error:', error);
@@ -334,8 +385,11 @@
       }
     });
 
-    // LINEログインボタン
+    // LINEログインボタン（ステップ2）
     lineLoginBtn.addEventListener('click', async () => {
+      lineLoginBtn.disabled = true;
+      lineLoginMessage.textContent = 'LINEログイン中...';
+      
       try {
         // URLからliffIdを取得（なければfallback）
         const params = new URLSearchParams(window.location.search);
@@ -354,7 +408,9 @@
 
       } catch (error) {
         console.error('LIFF Error:', error);
-        setStatus('LINEログインに失敗しました', true);
+        lineLoginMessage.textContent = '❌ LINEログインに失敗しました。もう一度お試しください。';
+      } finally {
+        lineLoginBtn.disabled = false;
       }
     });
 
@@ -392,13 +448,12 @@
         sessionStorage.removeItem('savedOptIn');
         
         lineLoginSection.classList.add('hidden');
-        setStatus('登録が完了しました！');
+        completeSection.classList.remove('hidden');
         userEl.textContent = `LINE User ID: ${lineUserId.substring(0, 8)}...`;
-        userEl.classList.remove('hidden');
 
       } catch (error) {
         console.error('Link Error:', error);
-        setStatus(error.message || 'LINE連携に失敗しました', true);
+        lineLoginMessage.textContent = `❌ ${error.message || 'LINE連携に失敗しました'}`;
       }
     }
 
@@ -415,9 +470,8 @@
           savedOptIn = storedOptIn === 'true';
         }
 
-        // フォームを非表示、LINEログインセクションを表示
-        emailFormSection.classList.add('hidden');
-        lineLoginSection.classList.remove('hidden');
+        // ステップ2に移動
+        goToStep2();
         lineLoginMessage.textContent = 'LINEログイン中...';
 
         try {
@@ -428,7 +482,7 @@
           await linkLineAccount();
         } catch (error) {
           console.error('Init Error:', error);
-          setStatus('初期化に失敗しました', true);
+          lineLoginMessage.textContent = '❌ 初期化に失敗しました';
         }
       }
     });
