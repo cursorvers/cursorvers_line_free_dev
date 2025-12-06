@@ -10,6 +10,10 @@ on:
   workflow_dispatch:
     # 手動実行も可能
 
+concurrency:
+  group: line-daily-brief
+  cancel-in-progress: true
+
 jobs:
   send-daily-brief:
     runs-on: ubuntu-latest
