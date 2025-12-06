@@ -24,7 +24,7 @@
   </script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
-<body class="bg-brand-bg text-white min-h-screen">
+<body class="bg-[#0c0c0c] text-white min-h-screen">
   <main class="max-w-xl mx-auto px-6 py-10 space-y-6">
     <div class="space-y-2">
       <p class="text-xs uppercase tracking-[0.4em] text-brand-flame font-bold">Free Community</p>
@@ -37,7 +37,7 @@
 
     <div id="status" class="text-sm"></div>
 
-    <form id="community-form" class="space-y-4 bg-brand-surface border border-white/10 rounded-2xl p-6 shadow-lg">
+    <form id="community-form" class="space-y-4 bg-[#141414] border border-white/10 rounded-2xl p-6 shadow-lg">
       <label class="flex items-start gap-3 text-sm text-white/80">
         <input id="email-opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" checked>
         <span>メールアドレスを登録して特典を受け取る（初期ON）</span>
@@ -66,7 +66,7 @@
       <div id="line-login-section" class="hidden space-y-4">
         <div class="text-center">
           <p id="line-login-message" class="text-sm text-white/80 mb-4"></p>
-          <button id="line-login-btn" type="button" class="w-full rounded-full bg-green-500 text-white font-bold py-3 hover:bg-green-600 transition">
+          <button id="line-login-btn" type="button" class="w-full rounded-full bg-brand-flame text-white font-bold py-3 hover:bg-brand-flame/80 transition focus:outline-none focus:ring-2 focus:ring-brand-flame focus:ring-offset-2 focus:ring-offset-[#141414]">
             LINEでログイン
           </button>
         </div>
@@ -157,11 +157,11 @@
           
           lineLoginMessage.innerHTML = `
             <div class="space-y-3 text-left">
-              <p class="font-semibold">STEP2: 友だち追加 → LINEログイン</p>
+              <p class="font-semibold text-white">STEP2: 友だち追加 → LINEログイン</p>
               <div class="flex flex-col items-center gap-2">
-                <img src="https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%2540s2yyhfo&choe=UTF-8" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2" loading="lazy">
-                <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition">
-                  LINEで友だち追加
+                <img src="https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%2540s2yyhfo&choe=UTF-8" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2 shadow" loading="lazy">
+                <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="text-brand-flame underline font-semibold">
+                  友だち追加リンク
                 </a>
               </div>
               <p class="text-xs text-white/60">友だち追加のあとに「LINEでログイン」を押してください。</p>
@@ -176,11 +176,11 @@
           sessionStorage.setItem('savedOptIn', optIn.toString());
           lineLoginMessage.innerHTML = `
             <div class="space-y-3 text-left">
-              <p class="font-semibold">STEP2: 友だち追加 → LINEログイン</p>
+              <p class="font-semibold text-white">STEP2: 友だち追加 → LINEログイン</p>
               <div class="flex flex-col items-center gap-2">
-                <img src="https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%2540s2yyhfo&choe=UTF-8" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2" loading="lazy">
-                <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition">
-                  LINEで友だち追加
+                <img src="https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%2540s2yyhfo&choe=UTF-8" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2 shadow" loading="lazy">
+                <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="text-brand-flame underline font-semibold">
+                  友だち追加リンク
                 </a>
               </div>
               <p class="text-xs text-white/60">友だち追加のあとに「LINEでログイン」を押してください。</p>
