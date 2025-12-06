@@ -100,13 +100,15 @@ serve(async (req) => {
   const timestamp = new Date().toISOString();
   const results: { users?: boolean; members?: boolean } = {};
 
-  // パターン1: メールのみ → users テーブル
+  // パターン1: メールのみ → members テーブル（無料会員）
   if (email && !lineUserId) {
     const { error } = await supabase
-      .from("users")
+      .from("members")
       .upsert(
         {
           email,
+          tier: "free",
+          status: "active",
           opt_in_email: optInEmail,
           updated_at: timestamp,
         },
@@ -114,11 +116,11 @@ serve(async (req) => {
       );
 
     if (error) {
-      console.error("[line-register] users upsert error", error);
+      console.error("[line-register] members upsert error", error);
       return badRequest("Database error", 500);
     }
 
-    results.users = true;
+    results.members = true;
   }
 
   // パターン2: LINE のみ → members テーブル
@@ -145,47 +147,27 @@ serve(async (req) => {
     results.members = true;
   }
 
-  // パターン3: 両方あり → users と members 両方
+  // パターン3: 両方あり → members テーブル（emailを優先）
   if (email && lineUserId) {
-    // users テーブル
-    const { error: usersError } = await supabase
-      .from("users")
+    const { error } = await supabase
+      .from("members")
       .upsert(
         {
           email,
           line_user_id: lineUserId,
+          tier: "free",
+          status: "active",
           opt_in_email: optInEmail,
           updated_at: timestamp,
         },
         { onConflict: "email" }
       );
 
-    if (usersError) {
-      console.error("[line-register] users upsert error", usersError);
-      return badRequest("Database error (users)", 500);
+    if (error) {
+      console.error("[line-register] members upsert error (both)", error);
+      return badRequest("Database error", 500);
     }
 
-    // members テーブル
-    const { error: membersError } = await supabase
-      .from("members")
-      .upsert(
-        {
-          line_user_id: lineUserId,
-          email,
-          tier: "free",
-          status: "active",
-          opt_in_email: optInEmail,
-          updated_at: timestamp,
-        },
-        { onConflict: "line_user_id" }
-      );
-
-    if (membersError) {
-      console.error("[line-register] members upsert error", membersError);
-      return badRequest("Database error (members)", 500);
-    }
-
-    results.users = true;
     results.members = true;
   }
 
