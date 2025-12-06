@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>無料登録 - Cursorvers</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #000;
+      color: #fff;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #ff6b00;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #ff6b00;
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+    .description {
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .highlight {
+      color: #ffeb3b;
+      font-weight: bold;
+    }
+    .warning {
+      color: #f44336;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .error {
+      color: #f44336;
+      margin-bottom: 20px;
+      padding: 10px;
+      background: rgba(244, 67, 54, 0.1);
+      border-radius: 4px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    input[type="email"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #333;
+      border-radius: 4px;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    .note {
+      font-size: 12px;
+      color: #999;
+      margin-top: 5px;
+    }
+    .checkbox-group {
+      margin-bottom: 15px;
+    }
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .checkbox-group input[type="checkbox"] {
+      margin-right: 10px;
+      width: 20px;
+      height: 20px;
+    }
+    button {
+      width: 100%;
+      padding: 15px;
+      background: #ff6b00;
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #e65100;
+    }
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    a {
+      color: #2196f3;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="subtitle">FREE COMMUNITY</div>
+    <h1>参加フォーム</h1>
+    
+    <div class="description">
+      LINEで友だち追加し、最新のSafety & Literacyアップデートを受け取ります。
+      <span class="highlight">メール登録で「Safetyスタートパック」（最新AI副業トレンド＋安全プロンプトLite）を配布。</span>
+      メールは任意ですが、登録推奨です。
+    </div>
+    
+    <div class="warning">
+      PHI（診療情報）は絶対に入力しないでください。
+    </div>
+    
+    <div id="error" class="error" style="display:none;"></div>
+    
+    <form id="registrationForm">
+      <div class="form-group">
+        <label for="email">メールアドレス（任意）</label>
+        <input type="email" id="email" name="email" placeholder="your-email@example.com">
+        <div class="note">メール登録で特典配布。未入力でも参加できます。</div>
+      </div>
+      
+      <div class="checkbox-group">
+        <label>
+          <input type="checkbox" id="newsletter" checked>
+          ニュースレター／アップデートをメールで受け取る（任意、初期ON）
+        </label>
+      </div>
+      
+      <div class="checkbox-group">
+        <label>
+          <input type="checkbox" id="terms" required>
+          利用規約・プライバシーポリシー・PHI禁止に同意する
+        </label>
+      </div>
+      
+      <button type="submit" id="submitBtn">送信して参加する</button>
+    </form>
+  </div>
+
+  <script>
+    // 環境変数（実際の値はLINE Developers ConsoleとSupabaseで取得）
+    const LIFF_ID = 'YOUR_LIFF_ID_HERE'; // TODO: LINE Developers Consoleで取得したLIFF IDに置き換え
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // TODO: Supabase URLに置き換え
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // TODO: Supabase Anon Keyに置き換え
+    
+    let lineUserId = null;
+
+    // LIFF初期化
+    async function initializeLiff() {
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        
+        // LINEユーザーIDを取得
+        const profile = await liff.getProfile();
+        lineUserId = profile.userId;
+        console.log('LINE User ID:', lineUserId);
+        
+      } catch (error) {
+        console.error('LIFF initialization failed:', error);
+        showError('LINEユーザーIDを取得できませんでした。リロードしてください。');
+      }
+    }
+
+    // エラー表示
+    function showError(message) {
+      const errorDiv = document.getElementById('error');
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+    }
+
+    // フォーム送信
+    document.getElementById('registrationForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (!lineUserId) {
+        showError('LINEユーザーIDを取得できませんでした。リロードしてください。');
+        return;
+      }
+      
+      const email = document.getElementById('email').value;
+      const newsletter = document.getElementById('newsletter').checked;
+      const terms = document.getElementById('terms').checked;
+      
+      if (!terms) {
+        showError('利用規約とプライバシーポリシーに同意してください。');
+        return;
+      }
+      
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '送信中...';
+      
+      try {
+        // Supabaseに登録
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            line_user_id: lineUserId,
+            email: email || null,
+            newsletter_subscribed: newsletter
+          })
+        });
+        
+        if (response.ok) {
+          alert('登録が完了しました！LINEでメッセージをお送りします。');
+          liff.closeWindow();
+        } else {
+          const error = await response.json();
+          showError('登録に失敗しました: ' + (error.message || '不明なエラー'));
+          submitBtn.disabled = false;
+          submitBtn.textContent = '送信して参加する';
+        }
+      } catch (error) {
+        console.error('Registration error:', error);
+        showError('登録に失敗しました。もう一度お試しください。');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '送信して参加する';
+      }
+    });
+
+    // 初期化実行
+    initializeLiff();
+  </script>
+</body>
+</html>

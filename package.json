@@ -1,0 +1,12 @@
+{
+  "name": "cursorvers-line-free-dev",
+  "version": "1.0.0",
+  "description": "Cursorvers LINE Integration",
+  "scripts": {
+    "generate-dashboard": "tsx scripts/generate-dashboard-data.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "@types/node": "^20.11.0"
+  }
+}
