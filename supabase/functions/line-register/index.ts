@@ -1,7 +1,13 @@
-// LINE/LIFF用: 無料登録でメール任意取得し members にUPSERT
-// - line_user_id: 必須（LIFFのuserId）
-// - email: 任意（未入力可）
+// LINE/LIFF用: 無料登録でメール任意取得し users または members にUPSERT
+// - line_user_id: 任意（LINEログイン時のみ）
+// - email: 任意（メール登録時のみ）
 // - opt_in_email: デフォルト true（明示的に false 指定可）
+// 
+// パターン:
+// 1. メールのみ → users テーブルに保存
+// 2. LINE のみ → members テーブルに保存
+// 3. 両方あり → users と members 両方に保存
+//
 // セキュリティ: LINEのプロフィール取得でline_user_idを検証（LINE_CHANNEL_ACCESS_TOKENが必要）
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -46,11 +52,6 @@ serve(async (req) => {
     return badRequest("Method not allowed", 405);
   }
 
-  if (!LINE_CHANNEL_ACCESS_TOKEN) {
-    console.error("[line-register] missing LINE_CHANNEL_ACCESS_TOKEN");
-    return badRequest("Server not configured", 500);
-  }
-
   let body: {
     line_user_id?: string;
     email?: string | null;
@@ -64,47 +65,142 @@ serve(async (req) => {
   }
 
   const lineUserId = body.line_user_id?.trim();
-  if (!lineUserId) {
-    return badRequest("line_user_id is required");
-  }
-
-  // Verify line_user_id by calling LINE profile API
-  try {
-    const res = await fetch(`https://api.line.me/v2/bot/profile/${lineUserId}`, {
-      headers: {
-        Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-      },
-    });
-    if (!res.ok) {
-      console.error("[line-register] LINE profile fetch failed", res.status);
-      return badRequest("LINE verification failed", 401);
-    }
-  } catch (err) {
-    console.error("[line-register] LINE profile error", err);
-    return badRequest("LINE verification error", 500);
-  }
-
   const email = normalizeEmail(body.email ?? null);
   const optInEmail =
     typeof body.opt_in_email === "boolean" ? body.opt_in_email : true;
 
-  const payload = {
-    line_user_id: lineUserId,
-    email,
-    tier: "free",
-    status: "active",
-    opt_in_email: optInEmail,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabase
-    .from("members")
-    .upsert(payload, { onConflict: "line_user_id" });
-
-  if (error) {
-    console.error("[line-register] upsert error", error);
-    return badRequest("Database error", 500);
+  // 少なくとも line_user_id または email のどちらかが必要
+  if (!lineUserId && !email) {
+    return badRequest("line_user_id or email is required");
   }
+
+  // LINE verification (line_user_id が提供されている場合のみ)
+  if (lineUserId) {
+    if (!LINE_CHANNEL_ACCESS_TOKEN) {
+      console.error("[line-register] missing LINE_CHANNEL_ACCESS_TOKEN");
+      return badRequest("Server not configured", 500);
+    }
+
+    try {
+      const res = await fetch(`https://api.line.me/v2/bot/profile/${lineUserId}`, {
+        headers: {
+          Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+        },
+      });
+      if (!res.ok) {
+        console.error("[line-register] LINE profile fetch failed", res.status);
+        return badRequest("LINE verification failed", 401);
+      }
+    } catch (err) {
+      console.error("[line-register] LINE profile error", err);
+      return badRequest("LINE verification error", 500);
+    }
+  }
+
+  const timestamp = new Date().toISOString();
+  const results: { users?: boolean; members?: boolean } = {};
+
+  // パターン1: メールのみ → users テーブル
+  if (email && !lineUserId) {
+    const { error } = await supabase
+      .from("users")
+      .upsert(
+        {
+          email,
+          opt_in_email: optInEmail,
+          updated_at: timestamp,
+        },
+        { onConflict: "email" }
+      );
+
+    if (error) {
+      console.error("[line-register] users upsert error", error);
+      return badRequest("Database error", 500);
+    }
+
+    results.users = true;
+  }
+
+  // パターン2: LINE のみ → members テーブル
+  if (lineUserId && !email) {
+    const { error } = await supabase
+      .from("members")
+      .upsert(
+        {
+          line_user_id: lineUserId,
+          email: null,
+          tier: "free",
+          status: "active",
+          opt_in_email: optInEmail,
+          updated_at: timestamp,
+        },
+        { onConflict: "line_user_id" }
+      );
+
+    if (error) {
+      console.error("[line-register] members upsert error", error);
+      return badRequest("Database error", 500);
+    }
+
+    results.members = true;
+  }
+
+  // パターン3: 両方あり → users と members 両方
+  if (email && lineUserId) {
+    // users テーブル
+    const { error: usersError } = await supabase
+      .from("users")
+      .upsert(
+        {
+          email,
+          line_user_id: lineUserId,
+          opt_in_email: optInEmail,
+          updated_at: timestamp,
+        },
+        { onConflict: "email" }
+      );
+
+    if (usersError) {
+      console.error("[line-register] users upsert error", usersError);
+      return badRequest("Database error (users)", 500);
+    }
+
+    // members テーブル
+    const { error: membersError } = await supabase
+      .from("members")
+      .upsert(
+        {
+          line_user_id: lineUserId,
+          email,
+          tier: "free",
+          status: "active",
+          opt_in_email: optInEmail,
+          updated_at: timestamp,
+        },
+        { onConflict: "line_user_id" }
+      );
+
+    if (membersError) {
+      console.error("[line-register] members upsert error", membersError);
+      return badRequest("Database error (members)", 500);
+    }
+
+    results.users = true;
+    results.members = true;
+  }
+
+  // ログ記録
+  await supabase.from("logs").insert({
+    source: "line-register",
+    level: "info",
+    message: "Registration successful",
+    details: {
+      line_user_id: lineUserId ? `${lineUserId.slice(0, 8)}***` : null,
+      email: email ? `${email.slice(0, 3)}***` : null,
+      opt_in_email: optInEmail,
+      saved_to: results,
+    },
+  });
 
   return new Response(
     JSON.stringify({
@@ -112,8 +208,8 @@ serve(async (req) => {
       line_user_id: lineUserId,
       email,
       opt_in_email: optInEmail,
+      saved_to: results,
     }),
     { status: 200, headers }
   );
 });
-
