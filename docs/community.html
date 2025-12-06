@@ -107,9 +107,7 @@
       statusEl.className = isError ? "text-sm text-red-400" : "text-sm text-brand-flame";
     };
 
-    // メールアドレス登録（任意）
-    emailSubmitBtn.addEventListener("click", async (e) => {
-      e.preventDefault();
+    async function handleEmailSubmit() {
       const emailOptInChecked = emailOptIn.checked;
       const email = emailOptInChecked ? (document.getElementById("email").value || "").trim() : "";
       const optIn = document.getElementById("opt-in").checked;
@@ -196,6 +194,16 @@
         emailSubmitBtn.disabled = false;
         emailSubmitBtn.textContent = "LINE登録に進む";
       }
+    }
+
+    // メールアドレス登録（任意）: ボタンとフォーム送信の両方で共通処理
+    emailSubmitBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleEmailSubmit();
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      handleEmailSubmit();
     });
 
     // LINEログインボタン
