@@ -457,35 +457,8 @@
       }
     }
 
-    // リダイレクト戻り処理（URLにcodeがある場合）
-    window.addEventListener('DOMContentLoaded', async () => {
-      const params = new URLSearchParams(window.location.search);
-      if (params.has('code')) {
-        // sessionStorageから復元
-        const storedEmail = sessionStorage.getItem('savedEmail');
-        const storedOptIn = sessionStorage.getItem('savedOptIn');
-        
-        if (storedEmail) {
-          savedEmail = storedEmail;
-          savedOptIn = storedOptIn === 'true';
-        }
-
-        // ステップ2に移動
-        goToStep2();
-        lineLoginMessage.textContent = 'LINEログイン中...';
-
-        try {
-          if (params.has('liffId')) {
-            liffId = params.get('liffId');
-          }
-          await liff.init({ liffId: liffId });
-          await linkLineAccount();
-        } catch (error) {
-          console.error('Init Error:', error);
-          lineLoginMessage.textContent = '❌ 初期化に失敗しました';
-        }
-      }
-    });
+    // Note: 自動LIFF初期化は削除しました。
+    // ユーザーが「LINEでログイン」ボタンを押すまで、LINEログインは開始されません。
   </script>
 </body>
 </html>
