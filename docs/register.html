@@ -3,497 +3,232 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cursorvers Community Join</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: #0F0505;
-      color: #fff;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .container {
-      max-width: 500px;
-      width: 100%;
-      background: rgba(255, 255, 255, 0.05);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      padding: 40px 30px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    }
-    .subtitle {
-      color: #999;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 2px;
-      margin-bottom: 10px;
-      text-transform: uppercase;
-    }
-    h1 {
-      font-size: 28px;
-      font-weight: 700;
-      margin-bottom: 20px;
-      line-height: 1.3;
-      color: #fff;
-    }
-    .step-indicator {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 30px;
-    }
-    .step {
-      flex: 1;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 2px;
-      transition: all 0.3s;
-    }
-    .step.active {
-      background: #888;
-    }
-    .description {
-      color: #ccc;
-      font-size: 14px;
-      line-height: 1.6;
-      margin-bottom: 20px;
-    }
-    .highlight {
-      color: #bbb;
-      font-weight: 600;
-      display: block;
-      margin-top: 10px;
-    }
-    .warning {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      padding: 12px;
-      color: #ccc;
-      font-size: 13px;
-      margin-bottom: 20px;
-    }
-    .form-section {
-      margin-bottom: 30px;
-    }
-    .form-group {
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      color: #fff;
-    }
-    input[type="email"] {
-      width: 100%;
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      color: #fff;
-      font-size: 14px;
-      transition: all 0.3s;
-    }
-    input[type="email"]:focus {
-      outline: none;
-      border-color: #888;
-      background: rgba(255, 255, 255, 0.15);
-    }
-    input[type="email"]::placeholder {
-      color: rgba(255, 255, 255, 0.4);
-    }
-    .note {
-      font-size: 12px;
-      color: #999;
-      margin-top: 6px;
-    }
-    .toggle-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-      padding: 16px;
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 8px;
-    }
-    .toggle-group label {
-      margin: 0;
-      flex: 1;
-      cursor: pointer;
-      color: #fff;
-    }
-    input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      accent-color: #888;
-    }
-    .checkbox-group {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .checkbox-group label {
-      margin: 0;
-      font-size: 13px;
-      font-weight: 400;
-      cursor: pointer;
-      line-height: 1.5;
-      color: #ccc;
-    }
-    button {
-      width: 100%;
-      padding: 14px;
-      background: #FF6B35;
-      color: #fff;
-      font-size: 16px;
-      font-weight: 700;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s;
-      box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
-    }
-    button:hover {
-      background: #ff8555;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
-    }
-    button:active {
-      transform: translateY(0);
-    }
-    button:disabled {
-      background: #666;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-    .hidden {
-      display: none;
-    }
-    .status {
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 14px;
-      text-align: center;
-    }
-    .status.success {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #bbb;
-    }
-    .status.error {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #ccc;
-    }
-    .info-box {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 20px;
-      color: #fff;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    a {
-      color: #999;
-      text-decoration: underline;
-    }
-  </style>
+  <title>Free Community Join</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
-<body>
-  <div class="container">
-    <div class="subtitle">FREE COMMUNITY</div>
-    <h1>参加フォーム</h1>
-    
-    <!-- ステップインジケーター -->
-    <div class="step-indicator">
-      <div class="step active" id="step1"></div>
-      <div class="step" id="step2"></div>
+<body class="bg-[#050202] text-white min-h-screen">
+  <main class="max-w-xl mx-auto px-6 py-10 space-y-6">
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-[0.4em] text-orange-500 font-bold">Free Community</p>
+      <h1 class="text-3xl font-bold">参加フォーム</h1>
+      <p class="text-sm text-white/80">
+        LINEで友だち追加し、最新のSafety &amp; Literacyアップデートを受け取ります。
+        <span class="text-orange-300 font-semibold">メール登録で「Safetyスタートパック」（最新AI副業トレンド＋安全プロンプトLite）を配布</span>。
+        まずメールアドレスを登録してから、LINE登録に進みます。
+      </p>
+      <p class="text-xs text-red-300">PHI（診療情報）は絶対に入力しないでください。</p>
     </div>
-    
-    <div class="description">
-      LINEで友だち追加し、最新のSafety & Literacyアップデートを受け取ります。
-      <span class="highlight">メール登録で「Safetyスタートパック」（最新AI副業トレンド＋安全プロンプトLite）を配布。</span>
-      メールは任意です。
-    </div>
-    
-    <div class="warning">
-      PHI（診療情報）は絶対に入力しないでください。
-    </div>
-    
-    <div id="status" class="status hidden"></div>
-    
-    <!-- ステップ1: メール登録フォーム -->
-    <div id="email-form-section" class="form-section">
-      <div class="toggle-group">
-        <input type="checkbox" id="email-opt-in" checked>
-        <label for="email-opt-in">メールアドレスを登録して特典を受け取る</label>
+
+    <div id="status" class="text-sm"></div>
+
+    <form id="community-form" class="space-y-4 bg-[#0F0505] border border-white/10 rounded-2xl p-6 shadow-lg">
+      <label class="flex items-start gap-3 text-sm text-white/80">
+        <input id="email-opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-orange-500 focus:ring-orange-500" checked>
+        <span>メールアドレスを登録して特典を受け取る（初期ON）</span>
+      </label>
+
+      <div id="email-input-section" class="space-y-2">
+        <label for="email" class="text-sm font-semibold">メールアドレス</label>
+        <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+        <p class="text-xs text-white/50">メール登録で「Safetyスタートパック」を配布します。</p>
       </div>
-      
-      <div id="email-input-section">
-        <div class="form-group">
-          <label for="email">メールアドレス</label>
-          <input type="email" id="email" name="email" placeholder="your-email@example.com">
-          <div class="note">メール登録で特典配布。未入力でもLINE登録できます。</div>
+
+      <label class="flex items-start gap-3 text-sm text-white/80">
+        <input id="opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-orange-500 focus:ring-orange-500" checked>
+        <span>ニュースレター／アップデートをメールで受け取る（任意、初期ON）</span>
+      </label>
+
+      <label class="flex items-start gap-3 text-sm text-white/80">
+        <input id="agree" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-orange-500 focus:ring-orange-500" required>
+        <span><a href="terms.html" class="underline hover:text-orange-500" target="_blank" rel="noopener">利用規約</a>・<a href="privacy.html" class="underline hover:text-orange-500" target="_blank" rel="noopener">プライバシーポリシー</a>・PHI禁止に同意する</span>
+      </label>
+
+      <button id="email-submit-btn" type="button" class="w-full rounded-full bg-orange-500 text-white font-bold py-3 hover:bg-orange-500/80 transition focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-[#050202]">
+        LINE登録に進む
+      </button>
+
+      <div id="line-login-section" class="hidden space-y-4">
+        <div class="text-center">
+          <p id="line-login-message" class="text-sm text-white/80 mb-4"></p>
+          <button id="line-login-btn" type="button" class="w-full rounded-full bg-green-500 text-white font-bold py-3 hover:bg-green-600 transition">
+            LINEでログイン
+          </button>
         </div>
-        
-        <div class="checkbox-group">
-          <input type="checkbox" id="opt-in" checked>
-          <label for="opt-in">ニュースレター／アップデートをメールで受け取る（任意、初期ON）</label>
-        </div>
       </div>
-      
-      <div class="checkbox-group">
-        <input type="checkbox" id="agree" required>
-        <label for="agree">利用規約・プライバシーポリシー・PHI禁止に同意する</label>
-      </div>
-      
-      <button id="email-submit-btn">次へ（LINE登録）</button>
-    </div>
-    
-    <!-- ステップ2: LINEログインセクション -->
-    <div id="line-login-section" class="form-section hidden">
-      <div class="info-box" id="line-login-message"></div>
-      <button id="line-login-btn">LINEでログイン</button>
-    </div>
-    
-    <!-- 完了メッセージ -->
-    <div id="complete-section" class="form-section hidden">
-      <div class="status success">
-        ✅ 登録が完了しました！
-      </div>
-      <div id="line-user" style="padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 13px; color: #999;"></div>
-    </div>
-  </div>
+
+      <p id="line-user" class="text-xs text-white/40"></p>
+    </form>
+  </main>
 
   <script>
     const LIFF_FALLBACK_ID = "2008640048-jnoneGgO";
     const API_ENDPOINT = "https://haaxgwyimoqzzxzdaeep.functions.supabase.co/line-register";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhYXhnd3lpbW9xenp4emRhZWVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg0MzMyMzUsImV4cCI6MjA3NDAwOTIzNX0.U3Q0wwFbQlZ2tjK8E0upFbK25VpKoVF_OqQTBf6lWVQ";
-    
     const statusEl = document.getElementById("status");
-    const emailOptIn = document.getElementById("email-opt-in");
-    const emailInputSection = document.getElementById("email-input-section");
-    const emailFormSection = document.getElementById("email-form-section");
+    const userEl = document.getElementById("line-user");
+    const form = document.getElementById("community-form");
     const emailSubmitBtn = document.getElementById("email-submit-btn");
     const lineLoginSection = document.getElementById("line-login-section");
     const lineLoginBtn = document.getElementById("line-login-btn");
     const lineLoginMessage = document.getElementById("line-login-message");
-    const completeSection = document.getElementById("complete-section");
-    const userEl = document.getElementById("line-user");
-    const step1 = document.getElementById("step1");
-    const step2 = document.getElementById("step2");
-    
-    let savedEmail = null;
-    let savedOptIn = false;
-    let lineUserId = null;
-    let liffId = LIFF_FALLBACK_ID;
-    let liffLoaded = false;
+    const emailOptIn = document.getElementById("email-opt-in");
+    const emailInputSection = document.getElementById("email-input-section");
 
-    // ステータス表示
-    function setStatus(message, isError = false) {
-      statusEl.textContent = message;
-      statusEl.className = `status ${isError ? 'error' : 'success'}`;
-      statusEl.classList.remove('hidden');
-    }
+    let savedEmail = "";
+    let savedOptIn = true;
+    let lineUserId = "";
+    let liffId = "";
 
-    // ステップ切り替え
-    function goToStep2() {
-      step1.classList.remove('active');
-      step2.classList.add('active');
-      emailFormSection.classList.add('hidden');
-      lineLoginSection.classList.remove('hidden');
-      statusEl.classList.add('hidden');
-    }
-
-    // メール登録トグル制御
-    emailOptIn.addEventListener('change', () => {
-      if (emailOptIn.checked) {
-        emailInputSection.classList.remove('hidden');
-      } else {
-        emailInputSection.classList.add('hidden');
-      }
+    // メールアドレス登録トグル
+    emailOptIn.addEventListener("change", (e) => {
+      emailInputSection.style.display = e.target.checked ? "block" : "none";
     });
 
-    // 次へボタン（ステップ1）
-    emailSubmitBtn.addEventListener('click', async () => {
-      const agreeCheckbox = document.getElementById('agree');
-      if (!agreeCheckbox.checked) {
-        setStatus('利用規約に同意してください', true);
+    const setStatus = (msg, isError = true) => {
+      statusEl.textContent = msg;
+      statusEl.className = isError ? "text-sm text-red-400" : "text-sm text-orange-400";
+    };
+
+    // メール送信（任意）
+    emailSubmitBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const emailOptInChecked = emailOptIn.checked;
+      const email = emailOptInChecked ? (document.getElementById("email").value || "").trim() : "";
+      const optIn = document.getElementById("opt-in").checked;
+      const agree = document.getElementById("agree").checked;
+
+      if (!agree) {
+        setStatus("利用規約・プライバシーポリシーへの同意が必要です。");
+        return;
+      }
+      if (emailOptInChecked && !email) {
+        setStatus("メールアドレスを入力してください。");
         return;
       }
 
       emailSubmitBtn.disabled = true;
-      setStatus('処理中...');
+      emailSubmitBtn.textContent = "処理中...";
+      setStatus("");
 
       try {
-        let message = '';
-        
-        // メール登録がONかつメールアドレスが入力されている場合
-        if (emailOptIn.checked) {
-          const email = document.getElementById('email').value.trim();
-          if (email) {
-            const optIn = document.getElementById('opt-in').checked;
-            
-            // メールアドレスをAPIに送信
-            const response = await fetch(API_ENDPOINT, {
-              method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-              },
-              body: JSON.stringify({
-                email: email,
-                opt_in_email: optIn
-              })
-            });
+        if (emailOptInChecked && email) {
+          const res = await fetch(API_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, opt_in_email: optIn }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "メールアドレスの登録に失敗しました");
 
-            if (!response.ok) {
-              throw new Error('メール登録に失敗しました');
-            }
-
-            // sessionStorageに保存
-            sessionStorage.setItem('savedEmail', email);
-            sessionStorage.setItem('savedOptIn', optIn.toString());
-            savedEmail = email;
-            savedOptIn = optIn;
-
-            message = '✅ メール登録が完了しました！\n\n次に、LINEアカウントと連携して登録を完了してください。';
-          } else {
-            message = 'LINEアカウントで登録を完了してください。';
-          }
+          savedEmail = email;
+          savedOptIn = optIn;
+          sessionStorage.setItem("savedEmail", email);
+          sessionStorage.setItem("savedOptIn", optIn.toString());
+          lineLoginMessage.textContent = "メールアドレスを登録しました。LINEログインに進みます。";
+          setStatus("メールアドレスを登録しました。LINEログインに進みます。", false);
         } else {
-          message = 'LINEアカウントで登録を完了してください。';
+          savedEmail = "";
+          savedOptIn = optIn;
+          sessionStorage.setItem("savedEmail", "");
+          sessionStorage.setItem("savedOptIn", optIn.toString());
+          lineLoginMessage.textContent = "LINEログインに進みます。";
+          setStatus("LINEログインに進みます。", false);
         }
 
-        lineLoginMessage.textContent = message;
-        
-        // ステップ2へ移動
-        goToStep2();
-
-      } catch (error) {
-        console.error('Error:', error);
-        setStatus(error.message || 'エラーが発生しました', true);
+        form.querySelector('label.flex.items-start').style.display = 'none';
+        emailInputSection.style.display = 'none';
+        emailSubmitBtn.style.display = 'none';
+        lineLoginSection.classList.remove('hidden');
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || "処理に失敗しました");
       } finally {
         emailSubmitBtn.disabled = false;
+        emailSubmitBtn.textContent = "LINE登録に進む";
       }
     });
 
-    // LIFF SDKを動的に読み込む
-    function loadLiffSdk() {
-      return new Promise((resolve, reject) => {
-        if (liffLoaded) {
-          resolve();
-          return;
-        }
-        
-        const script = document.createElement('script');
-        script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
-        script.onload = () => {
-          liffLoaded = true;
-          resolve();
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    }
-
-    // LINEログインボタン（ステップ2）
-    lineLoginBtn.addEventListener('click', async () => {
-      lineLoginBtn.disabled = true;
-      lineLoginMessage.textContent = 'LINEログイン準備中...';
-      
+    // LINEログインボタン
+    lineLoginBtn.addEventListener("click", async () => {
+      const qsId = new URLSearchParams(location.search).get("liffId");
+      liffId = qsId || LIFF_FALLBACK_ID;
+      if (!liffId) {
+        setStatus("LIFF ID が設定されていません。");
+        return;
+      }
       try {
-        // LIFF SDKを読み込む（ここで初めて読み込まれる）
-        await loadLiffSdk();
-        
-        lineLoginMessage.textContent = 'LINEログイン中...';
-        
-        // URLからliffIdを取得（なければfallback）
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('liffId')) {
-          liffId = params.get('liffId');
-        }
-
-        await liff.init({ liffId: liffId });
-
+        await liff.init({ liffId });
         if (!liff.isLoggedIn()) {
           liff.login();
           return;
         }
-
         await linkLineAccount();
-
-      } catch (error) {
-        console.error('LIFF Error:', error);
-        lineLoginMessage.textContent = '❌ LINEログインに失敗しました。もう一度お試しください。';
-      } finally {
-        lineLoginBtn.disabled = false;
+      } catch (err) {
+        console.error(err);
+        setStatus("LIFF初期化に失敗しました。再度お試しください。");
       }
     });
 
-    // LINE連携
     async function linkLineAccount() {
       try {
         const profile = await liff.getProfile();
         lineUserId = profile.userId;
+        userEl.textContent = `LINE ID: ${lineUserId}`;
 
-        // sessionStorageから復元
-        const storedEmail = sessionStorage.getItem('savedEmail');
-        const storedOptIn = sessionStorage.getItem('savedOptIn') === 'true';
+        const payload = { line_user_id: lineUserId, opt_in_email: savedOptIn };
+        if (savedEmail) payload.email = savedEmail;
 
-        const payload = {
-          line_user_id: lineUserId,
-          opt_in_email: storedOptIn
-        };
-
-        if (storedEmail) {
-          payload.email = storedEmail;
-        }
-
-        const response = await fetch(API_ENDPOINT, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify(payload)
+        const res = await fetch(API_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "LINEアカウントの紐付けに失敗しました");
 
-        if (!response.ok) {
-          throw new Error('LINE連携に失敗しました');
-        }
-
-        // 成功
-        sessionStorage.removeItem('savedEmail');
-        sessionStorage.removeItem('savedOptIn');
-        
-        lineLoginSection.classList.add('hidden');
-        completeSection.classList.remove('hidden');
-        userEl.textContent = `LINE User ID: ${lineUserId.substring(0, 8)}...`;
-
-      } catch (error) {
-        console.error('Link Error:', error);
-        lineLoginMessage.textContent = `❌ ${error.message || 'LINE連携に失敗しました'}`;
+        setStatus("登録が完了しました！LINEで配信をお待ちください。", false);
+        lineLoginSection.classList.add("hidden");
+        sessionStorage.removeItem("savedEmail");
+        sessionStorage.removeItem("savedOptIn");
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || "LINEアカウントの紐付けに失敗しました");
       }
     }
 
-    // Note: ページ読み込み時にLINE関連の処理は一切起動しません。
-    // LIFF SDKも、ユーザーが「LINEでログイン」ボタンを押すまで読み込まれません。
+    // リダイレクト後（code付き）の復元
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("code")) {
+      const qsId = new URLSearchParams(location.search).get("liffId");
+      liffId = qsId || LIFF_FALLBACK_ID;
+      savedEmail = sessionStorage.getItem("savedEmail") || "";
+      savedOptIn = sessionStorage.getItem("savedOptIn") === "true";
+      if (liffId) {
+        (async () => {
+          try {
+            await liff.init({ liffId });
+            if (liff.isLoggedIn()) {
+              await linkLineAccount();
+            }
+          } catch (err) {
+            console.error(err);
+            setStatus("LINEログインの処理に失敗しました。");
+          }
+        })();
+      }
+    } else {
+      const storedEmail = sessionStorage.getItem("savedEmail");
+      if (storedEmail) {
+        document.getElementById("email").value = storedEmail;
+        savedEmail = storedEmail;
+        savedOptIn = sessionStorage.getItem("savedOptIn") === "true";
+        document.getElementById("opt-in").checked = savedOptIn;
+        form.querySelector("div.space-y-2").style.display = "none";
+        form.querySelector("label.flex.items-start").style.display = "none";
+        emailSubmitBtn.style.display = "none";
+        lineLoginSection.classList.remove("hidden");
+      }
+    }
   </script>
 </body>
 </html>
