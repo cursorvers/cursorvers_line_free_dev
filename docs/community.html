@@ -65,9 +65,6 @@
       <div id="line-login-section" class="hidden space-y-4">
         <div class="text-center">
           <p id="line-login-message" class="text-sm text-white/80 mb-4"></p>
-          <button id="line-login-btn" type="button" class="w-full rounded-full bg-brand-flame text-white font-bold py-3 hover:bg-brand-flame/80 transition focus:outline-none focus:ring-2 focus:ring-brand-flame focus:ring-offset-2 focus:ring-offset-[#141414]">
-            LINEでログイン
-          </button>
         </div>
       </div>
 
@@ -84,7 +81,6 @@
     const form = document.getElementById("community-form");
     const emailSubmitBtn = document.getElementById("email-submit-btn");
     const lineLoginSection = document.getElementById("line-login-section");
-    const lineLoginBtn = document.getElementById("line-login-btn");
     const lineLoginMessage = document.getElementById("line-login-message");
     const emailOptIn = document.getElementById("email-opt-in");
     const emailInputSection = document.getElementById("email-input-section");
@@ -150,17 +146,17 @@
           
           lineLoginMessage.innerHTML = `
             <div class="space-y-3 text-left">
-              <p class="font-semibold text-white">STEP2: 友だち追加 → LINEログイン</p>
+              <p class="font-semibold text-white">STEP2: 友だち追加で完了</p>
               <div class="flex flex-col items-center gap-2">
                 <img src="https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%2540s2yyhfo&choe=UTF-8" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2 shadow" loading="lazy">
                 <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="text-brand-flame underline font-semibold">
                   友だち追加リンク
                 </a>
               </div>
-              <p class="text-xs text-white/60">友だち追加のあとに「LINEでログイン」を押してください。</p>
+              <p class="text-xs text-white/60">友だち追加すれば完了です（LINEログイン不要）。</p>
             </div>
           `;
-          setStatus("メールアドレスを登録しました。友だち追加後にLINEログインへ進んでください。", false);
+          setStatus("メールアドレスを登録しました。友だち追加すれば完了です。", false);
         } else {
           // メールアドレス登録がOFF、またはメールアドレスなしの場合
           savedEmail = "";
@@ -169,17 +165,17 @@
           sessionStorage.setItem('savedOptIn', optIn.toString());
           lineLoginMessage.innerHTML = `
             <div class="space-y-3 text-left">
-              <p class="font-semibold text-white">STEP2: 友だち追加 → LINEログイン</p>
+              <p class="font-semibold text-white">STEP2: 友だち追加で完了</p>
               <div class="flex flex-col items-center gap-2">
                 <img src="https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%2540s2yyhfo&choe=UTF-8" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2 shadow" loading="lazy">
                 <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="text-brand-flame underline font-semibold">
                   友だち追加リンク
                 </a>
               </div>
-              <p class="text-xs text-white/60">友だち追加のあとに「LINEでログイン」を押してください。</p>
+              <p class="text-xs text-white/60">友だち追加すれば完了です（LINEログイン不要）。</p>
             </div>
           `;
-          setStatus("友だち追加後にLINEログインへ進んでください。", false);
+          setStatus("友だち追加すれば完了です。", false);
         }
 
         // フォームを非表示、LINEログインセクションを表示
@@ -207,111 +203,7 @@
       handleEmailSubmit();
     });
 
-    // LINEログインボタン
-    lineLoginBtn.addEventListener("click", async () => {
-      const qsId = new URLSearchParams(location.search).get("liffId");
-      liffId = qsId || LIFF_FALLBACK_ID;
-      
-      if (!liffId) {
-        setStatus("LIFF ID が設定されていません。");
-        return;
-      }
-
-      try {
-        await liff.init({ liffId });
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
-        // 既にログイン済みの場合
-        await linkLineAccount();
-      } catch (err) {
-        console.error(err);
-        setStatus("LIFF初期化に失敗しました。再度お試しください。");
-      }
-    });
-
-    // LINEアカウントとメールアドレスを紐付け
-    async function linkLineAccount() {
-      try {
-        const profile = await liff.getProfile();
-        lineUserId = profile.userId;
-        userEl.textContent = `LINE ID: ${lineUserId}`;
-
-        // メールアドレスとLINEユーザーIDを紐付け（メールアドレスがある場合のみ）
-        const payload: any = {
-          line_user_id: lineUserId,
-          opt_in_email: savedOptIn,
-        };
-        
-        if (savedEmail) {
-          payload.email = savedEmail;
-        }
-
-        const res = await fetch(API_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data.error || "LINEアカウントの紐付けに失敗しました");
-        }
-
-        setStatus("登録が完了しました！LINEで配信をお待ちください。", false);
-        lineLoginSection.classList.add('hidden');
-        
-        // セッションストレージをクリア
-        sessionStorage.removeItem('savedEmail');
-        sessionStorage.removeItem('savedOptIn');
-        
-      } catch (err) {
-        console.error(err);
-        setStatus(err.message || "LINEアカウントの紐付けに失敗しました");
-      }
-    }
-
-    // URLパラメータにcodeがある場合（LINEログイン後のリダイレクト）
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('code')) {
-      // LINEログイン後のコールバック
-      const qsId = new URLSearchParams(location.search).get("liffId");
-      liffId = qsId || LIFF_FALLBACK_ID;
-      
-      // セッションストレージから保存したメールアドレスを取得
-      savedEmail = sessionStorage.getItem('savedEmail') || '';
-      savedOptIn = sessionStorage.getItem('savedOptIn') === 'true';
-
-      if (liffId) {
-        (async () => {
-          try {
-            await liff.init({ liffId });
-            if (liff.isLoggedIn()) {
-              await linkLineAccount();
-            }
-          } catch (err) {
-            console.error(err);
-            setStatus("LINEログインの処理に失敗しました。");
-          }
-        })();
-      }
-    } else {
-      // 通常の表示時、メールアドレス登録フォームを表示
-      // セッションストレージに保存されたメールアドレスがあれば復元
-      const storedEmail = sessionStorage.getItem('savedEmail');
-      if (storedEmail) {
-        document.getElementById("email").value = storedEmail;
-        savedEmail = storedEmail;
-        savedOptIn = sessionStorage.getItem('savedOptIn') === 'true';
-        document.getElementById("opt-in").checked = savedOptIn;
-        // フォームを非表示、LINEログインセクションを表示
-        form.querySelector('div.space-y-2').style.display = 'none';
-        form.querySelector('label.flex.items-start').style.display = 'none';
-        emailSubmitBtn.style.display = 'none';
-        lineLoginSection.classList.remove('hidden');
-      }
-    }
+    // LINEログイン不要のため、追加の処理は無し
   </script>
 </body>
 </html>
