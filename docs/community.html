@@ -21,7 +21,6 @@
       },
     };
   </script>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body class="bg-[#0c0c0c] text-white min-h-screen">
   <main class="max-w-xl mx-auto px-6 py-10 space-y-6">
@@ -62,13 +61,6 @@
         LINE登録に進む
       </button>
 
-      <div id="line-login-section" class="hidden space-y-4">
-        <div class="text-center">
-          <p id="line-login-message" class="text-sm text-white/80 mb-4"></p>
-        </div>
-      </div>
-
-      <p id="line-user" class="text-xs text-white/40"></p>
     </form>
 
     <!-- QRポップアップ -->
@@ -95,22 +87,16 @@
   </main>
 
   <script>
-    const LIFF_FALLBACK_ID = "2008640048-jnoneGgO"; // LIFF ID (Cursorvers Community Join)
     const API_ENDPOINT = "https://haaxgwyimoqzzxzdaeep.functions.supabase.co/line-register";
     const LINE_ADD_FRIEND_URL = "https://line.me/R/ti/p/%40s2yyhfo"; // 友だち追加リンク（Cursorvers ボット）
     const statusEl = document.getElementById("status");
-    const userEl = document.getElementById("line-user");
     const form = document.getElementById("community-form");
     const emailSubmitBtn = document.getElementById("email-submit-btn");
-    const lineLoginSection = document.getElementById("line-login-section");
-    const lineLoginMessage = document.getElementById("line-login-message");
     const emailOptIn = document.getElementById("email-opt-in");
     const emailInputSection = document.getElementById("email-input-section");
 
     let savedEmail = "";
     let savedOptIn = true;
-    let lineUserId = "";
-    let liffId = "";
     const qrModal = document.getElementById("qr-modal");
     const qrClose = document.getElementById("qr-close");
     const showQr = () => {
@@ -172,24 +158,6 @@
           sessionStorage.setItem('savedEmail', email);
           sessionStorage.setItem('savedOptIn', optIn.toString());
           
-          lineLoginMessage.innerHTML = `
-            <div class="space-y-3 text-left">
-              <p class="font-semibold text-white">STEP2: 友だち追加で完了</p>
-              <div class="flex flex-col items-center gap-2">
-                <img src="https://qr-official.line.me/gs/M_@s2yyhfo.png" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2 shadow object-contain" loading="lazy">
-                <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="text-brand-flame underline font-semibold">
-                  友だち追加リンク
-                </a>
-              </div>
-              <p class="text-xs text-white/60">友だち追加すれば完了です（LINEログイン不要）。</p>
-              <div class="text-xs text-white/70 space-y-1">
-                <p class="font-semibold">iPhoneでの手順</p>
-                <p>1) LINEアプリ内でこの画面を開く（LIFF URL経由）</p>
-                <p>2) メール送信 → 下のQRを長押し or リンクをタップして友だち追加</p>
-                <p>3) 追加できたら登録完了（ログインボタン操作は不要）</p>
-              </div>
-            </div>
-          `;
           setStatus("メールアドレスを登録しました。友だち追加すれば完了です。", false);
           showQr();
         } else {
@@ -198,33 +166,9 @@
           savedOptIn = optIn;
           sessionStorage.setItem('savedEmail', '');
           sessionStorage.setItem('savedOptIn', optIn.toString());
-          lineLoginMessage.innerHTML = `
-            <div class="space-y-3 text-left">
-              <p class="font-semibold text-white">STEP2: 友だち追加で完了</p>
-              <div class="flex flex-col items-center gap-2">
-                <img src="https://qr-official.line.me/gs/M_@s2yyhfo.png" alt="LINE友だち追加QR" class="w-48 h-48 bg-white rounded-xl p-2 shadow object-contain" loading="lazy">
-                <a href="${LINE_ADD_FRIEND_URL}" target="_blank" rel="noopener" class="text-brand-flame underline font-semibold">
-                  友だち追加リンク
-                </a>
-              </div>
-              <p class="text-xs text-white/60">友だち追加すれば完了です（LINEログイン不要）。</p>
-              <div class="text-xs text-white/70 space-y-1">
-                <p class="font-semibold">iPhoneでの手順</p>
-                <p>1) LINEアプリ内でこの画面を開く（LIFF URL経由）</p>
-                <p>2) メール送信 → 下のQRを長押し or リンクをタップして友だち追加</p>
-                <p>3) 追加できたら登録完了（ログインボタン操作は不要）</p>
-              </div>
-            </div>
-          `;
           setStatus("友だち追加すれば完了です。", false);
           showQr();
         }
-
-        // フォームを非表示、LINEログインセクションを表示
-        form.querySelector('label.flex.items-start').style.display = 'none';
-        emailInputSection.style.display = 'none';
-        emailSubmitBtn.style.display = 'none';
-        lineLoginSection.classList.remove('hidden');
 
       } catch (err) {
         console.error(err);
