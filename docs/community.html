@@ -63,13 +63,10 @@
 
     </form>
 
-    <!-- QRポップアップ -->
-    <div id="qr-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4 hidden z-50">
-      <div class="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between">
-          <p class="text-sm font-semibold text-white">LINE友だち追加</p>
-          <button id="qr-close" class="text-white/60 hover:text-white text-sm">閉じる</button>
-        </div>
+    <!-- QRインライン表示 -->
+    <div id="qr-section" class="hidden bg-[#141414] border border-white/10 rounded-2xl p-6 shadow-lg space-y-4">
+      <div class="space-y-3 text-left">
+        <p class="font-semibold text-white">STEP2: QRで友だち追加</p>
         <div class="flex flex-col items-center gap-3">
           <img
             src="https://quickchart.io/qr?text=https://page.line.me/s2yyhfo&size=320"
@@ -100,15 +97,11 @@
     const emailSubmitBtn = document.getElementById("email-submit-btn");
     const emailOptIn = document.getElementById("email-opt-in");
     const emailInputSection = document.getElementById("email-input-section");
+    const qrSection = document.getElementById("qr-section");
 
     let savedEmail = "";
     let savedOptIn = true;
-    const qrModal = document.getElementById("qr-modal");
-    const qrClose = document.getElementById("qr-close");
-    const showQr = () => {
-      qrModal.classList.remove("hidden");
-    };
-    qrClose.addEventListener("click", () => qrModal.classList.add("hidden"));
+    const showQr = () => qrSection.classList.remove("hidden");
 
     // メールアドレス登録トグルの制御
     emailOptIn.addEventListener("change", (e) => {
@@ -140,41 +133,30 @@
       setStatus("");
 
       try {
-        // メールアドレス登録がONで、メールアドレスがある場合のみ保存（line_user_idなし）
-        if (emailOptInChecked && email) {
-          const res = await fetch(API_ENDPOINT, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: email,
-              opt_in_email: optIn,
-            }),
-          });
+          // メールアドレス登録がONかつ入力ありのときだけ保存。それ以外はスキップ。
+          if (emailOptInChecked && email) {
+            const res = await fetch(API_ENDPOINT, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: email,
+                opt_in_email: optIn,
+              }),
+            });
 
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            throw new Error(data.error || "メールアドレスの登録に失敗しました");
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(data.error || "メールアドレスの登録に失敗しました");
+            }
+            savedEmail = email;
+            savedOptIn = optIn;
+            setStatus("メールアドレスを登録しました。QRから友だち追加してください。", false);
+          } else {
+            savedEmail = "";
+            savedOptIn = optIn;
+            setStatus("QRから友だち追加してください。", false);
           }
-
-          // 保存成功
-          savedEmail = email;
-          savedOptIn = optIn;
-          
-          // セッションストレージに保存（LINEログイン後のコールバックで使用）
-          sessionStorage.setItem('savedEmail', email);
-          sessionStorage.setItem('savedOptIn', optIn.toString());
-          
-          setStatus("メールアドレスを登録しました。友だち追加すれば完了です。", false);
           showQr();
-        } else {
-          // メールアドレス登録がOFF、またはメールアドレスなしの場合
-          savedEmail = "";
-          savedOptIn = optIn;
-          sessionStorage.setItem('savedEmail', '');
-          sessionStorage.setItem('savedOptIn', optIn.toString());
-          setStatus("友だち追加すれば完了です。", false);
-          showQr();
-        }
 
       } catch (err) {
         console.error(err);
@@ -185,7 +167,6 @@
       }
     }
 
-    // メールアドレス登録（任意）: ボタンとフォーム送信の両方で共通処理
     emailSubmitBtn.addEventListener("click", (e) => {
       e.preventDefault();
       handleEmailSubmit();
@@ -194,8 +175,6 @@
       e.preventDefault();
       handleEmailSubmit();
     });
-
-    // LINEログイン不要のため、追加の処理は無し
   </script>
 </body>
 </html>
