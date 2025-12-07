@@ -70,6 +70,28 @@
 
       <p id="line-user" class="text-xs text-white/40"></p>
     </form>
+
+    <!-- QRポップアップ -->
+    <div id="qr-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4 hidden z-50">
+      <div class="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold text-white">LINE友だち追加</p>
+          <button id="qr-close" class="text-white/60 hover:text-white text-sm">閉じる</button>
+        </div>
+        <div class="flex flex-col items-center gap-3">
+          <img src="https://qr-official.line.me/gs/M_@s2yyhfo.png" alt="LINE友だち追加QR" class="w-52 h-52 bg-white rounded-xl p-2 shadow object-contain" loading="lazy">
+          <a href="https://line.me/R/ti/p/%40s2yyhfo" target="_blank" rel="noopener" class="text-brand-flame underline font-semibold">
+            友だち追加リンク
+          </a>
+        </div>
+        <div class="text-xs text-white/70 space-y-1">
+          <p class="font-semibold">iPhoneでの手順</p>
+          <p>1) LINEアプリ内でこの画面を開く（LIFF URL経由）</p>
+          <p>2) メール送信 → QR長押し or リンクで友だち追加</p>
+          <p>3) 追加できたら完了（ログインボタン不要）</p>
+        </div>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -89,6 +111,12 @@
     let savedOptIn = true;
     let lineUserId = "";
     let liffId = "";
+    const qrModal = document.getElementById("qr-modal");
+    const qrClose = document.getElementById("qr-close");
+    const showQr = () => {
+      qrModal.classList.remove("hidden");
+    };
+    qrClose.addEventListener("click", () => qrModal.classList.add("hidden"));
 
     // メールアドレス登録トグルの制御
     emailOptIn.addEventListener("change", (e) => {
@@ -163,6 +191,7 @@
             </div>
           `;
           setStatus("メールアドレスを登録しました。友だち追加すれば完了です。", false);
+          showQr();
         } else {
           // メールアドレス登録がOFF、またはメールアドレスなしの場合
           savedEmail = "";
@@ -188,6 +217,7 @@
             </div>
           `;
           setStatus("友だち追加すれば完了です。", false);
+          showQr();
         }
 
         // フォームを非表示、LINEログインセクションを表示
