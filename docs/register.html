@@ -17,7 +17,7 @@
         <span class="text-orange-300 font-semibold">メール登録で「Safetyスタートパック」（最新AI副業トレンド＋安全プロンプトLite）を配布</span>。
         まずメールアドレスを登録してから、LINE登録に進みます。
       </p>
-      <p class="text-xs text-red-300">PHI（診療情報）は絶対に入力しないでください。</p>
+      <p class="text-xs text-orange-400">PHI（診療情報）は絶対に入力しないでください。</p>
     </div>
 
     <div id="status" class="text-sm"></div>
@@ -51,7 +51,7 @@
       <div id="line-login-section" class="hidden space-y-4">
         <div class="text-center">
           <p id="line-login-message" class="text-sm text-white/80 mb-4"></p>
-          <button id="line-login-btn" type="button" class="w-full rounded-full bg-green-500 text-white font-bold py-3 hover:bg-green-600 transition">
+          <button id="line-login-btn" type="button" class="w-full rounded-full bg-orange-500 text-white font-bold py-3 hover:bg-orange-500/80 transition">
             LINEでログイン
           </button>
         </div>
@@ -86,7 +86,7 @@
 
     const setStatus = (msg, isError = true) => {
       statusEl.textContent = msg;
-      statusEl.className = isError ? "text-sm text-red-400" : "text-sm text-orange-400";
+      statusEl.className = isError ? "text-sm text-orange-400" : "text-sm text-gray-200";
     };
 
     // メール送信（任意）
@@ -101,11 +101,6 @@
         setStatus("利用規約・プライバシーポリシーへの同意が必要です。");
         return;
       }
-      if (emailOptInChecked && !email) {
-        setStatus("メールアドレスを入力してください。");
-        return;
-      }
-
       emailSubmitBtn.disabled = true;
       emailSubmitBtn.textContent = "処理中...";
       setStatus("");
