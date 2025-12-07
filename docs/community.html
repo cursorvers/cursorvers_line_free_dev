@@ -119,12 +119,6 @@
         return;
       }
 
-      // メールアドレス登録がONで、メールアドレスが未入力の場合
-      if (emailOptInChecked && !email) {
-        setStatus("メールアドレスを入力してください。");
-        return;
-      }
-
       emailSubmitBtn.disabled = true;
       emailSubmitBtn.textContent = "処理中...";
       setStatus("");
