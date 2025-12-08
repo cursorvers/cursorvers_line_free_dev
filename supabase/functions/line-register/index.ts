@@ -193,126 +193,6 @@ serve(async (req) => {
     return badRequest("Invalid JSON");
   }
 
-<<<<<<< HEAD
-  const lineUserId = body.line_user_id?.trim();
-  const email = normalizeEmail(body.email ?? null);
-  const optInEmail =
-    typeof body.opt_in_email === "boolean" ? body.opt_in_email : true;
-
-  // 少なくとも line_user_id または email のどちらかが必要
-  if (!lineUserId && !email) {
-    return badRequest("line_user_id or email is required");
-  }
-
-  // LINE verification (line_user_id が提供されている場合のみ)
-  if (lineUserId) {
-    if (!LINE_CHANNEL_ACCESS_TOKEN) {
-      console.error("[line-register] missing LINE_CHANNEL_ACCESS_TOKEN");
-      return badRequest("Server not configured", 500);
-    }
-
-    try {
-      const res = await fetch(`https://api.line.me/v2/bot/profile/${lineUserId}`, {
-        headers: {
-          Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-        },
-      });
-      if (!res.ok) {
-        console.error("[line-register] LINE profile fetch failed", res.status);
-        return badRequest("LINE verification failed", 401);
-      }
-    } catch (err) {
-      console.error("[line-register] LINE profile error", err);
-      return badRequest("LINE verification error", 500);
-    }
-  }
-
-  const timestamp = new Date().toISOString();
-  const results: { users?: boolean; members?: boolean } = {};
-
-  // パターン1: メールのみ → members テーブル（無料会員）
-  if (email && !lineUserId) {
-    const { error } = await supabase
-      .from("members")
-      .upsert(
-        {
-          email,
-          tier: "free",
-          status: "active",
-          opt_in_email: optInEmail,
-          updated_at: timestamp,
-        },
-        { onConflict: "email" }
-      );
-
-    if (error) {
-      console.error("[line-register] members upsert error", error);
-      return badRequest("Database error", 500);
-    }
-
-    results.members = true;
-  }
-
-  // パターン2: LINE のみ → members テーブル
-  if (lineUserId && !email) {
-    const { error } = await supabase
-      .from("members")
-      .upsert(
-        {
-          line_user_id: lineUserId,
-          email: null,
-          tier: "free",
-          status: "active",
-          opt_in_email: optInEmail,
-          updated_at: timestamp,
-        },
-        { onConflict: "line_user_id" }
-      );
-
-    if (error) {
-      console.error("[line-register] members upsert error", error);
-      return badRequest("Database error", 500);
-    }
-
-    results.members = true;
-  }
-
-  // パターン3: 両方あり → members テーブル（emailを優先）
-  if (email && lineUserId) {
-    const { error } = await supabase
-      .from("members")
-      .upsert(
-        {
-          email,
-          line_user_id: lineUserId,
-          tier: "free",
-          status: "active",
-          opt_in_email: optInEmail,
-          updated_at: timestamp,
-        },
-        { onConflict: "email" }
-      );
-
-    if (error) {
-      console.error("[line-register] members upsert error (both)", error);
-      return badRequest("Database error", 500);
-    }
-
-    results.members = true;
-  }
-
-  // ログ記録
-  await supabase.from("logs").insert({
-    source: "line-register",
-    level: "info",
-    message: "Registration successful",
-    details: {
-      line_user_id: lineUserId ? `${lineUserId.slice(0, 8)}***` : null,
-      email: email ? `${email.slice(0, 3)}***` : null,
-      opt_in_email: optInEmail,
-      saved_to: results,
-    },
-=======
   const lineUserId = body.line_user_id?.trim() || null;
   const email = normalizeEmail(body.email ?? null);
   const optInEmail =
@@ -512,7 +392,6 @@ serve(async (req) => {
     lineUserId: lineUserId ? lineUserId.slice(-4) : null,
     optInEmail: optInEmail,
     isUpdate: !!existingRecord,
->>>>>>> dbf31e3 (Append member registrations to Google Sheets when configured)
   });
 
   return new Response(
