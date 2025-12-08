@@ -31,7 +31,7 @@ serve(async (req) => {
     });
 
     // Parse request body
-    const { email, opt_in_email, agree_terms, agree_privacy } = await req.json();
+    const { email, opt_in_email, agree_terms } = await req.json();
 
     // Validate input
     if (!email) {
@@ -44,9 +44,9 @@ serve(async (req) => {
       );
     }
 
-    if (!agree_terms || !agree_privacy) {
+    if (!agree_terms) {
       return new Response(
-        JSON.stringify({ error: "Terms and privacy agreement are required" }),
+        JSON.stringify({ error: "Terms agreement is required" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
