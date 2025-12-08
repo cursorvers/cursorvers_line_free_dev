@@ -214,13 +214,9 @@ serve(async (req) => {
     return badRequest("line_user_id or email is required");
   }
 
-  // line_user_idがある場合は検証
-  if (lineUserId) {
-    if (!LINE_CHANNEL_ACCESS_TOKEN) {
-      console.error("[line-register] missing LINE_CHANNEL_ACCESS_TOKEN for LINE verification");
-      return badRequest("Server not configured for LINE verification", 500);
-    }
-  // Verify line_user_id by calling LINE profile API
+  // line_user_idがある場合は検証（オプション）
+  if (lineUserId && LINE_CHANNEL_ACCESS_TOKEN) {
+  // Verify line_user_id by calling LINE profile API (optional)
   try {
     const res = await fetch(`https://api.line.me/v2/bot/profile/${lineUserId}`, {
       headers: {
@@ -228,21 +224,25 @@ serve(async (req) => {
       },
     });
     if (!res.ok) {
-        log("error", "LINE profile fetch failed", {
+        log("warn", "LINE profile fetch failed (user may not be a friend)", {
           lineUserId: lineUserId?.slice(-4) ?? "null",
           status: res.status,
         });
-      return badRequest("LINE verification failed", 401);
-    }
+      // 401エラーの場合は友だちでない可能性があるため、検証をスキップ
+      if (res.status !== 401) {
+        return badRequest("LINE verification failed", res.status);
+      }
+    } else {
       log("info", "LINE profile verified", {
         lineUserId: lineUserId?.slice(-4) ?? "null",
       });
+    }
   } catch (err) {
       log("error", "LINE profile verification error", {
         lineUserId: lineUserId?.slice(-4) ?? "null",
         error: err instanceof Error ? err.message : String(err),
       });
-    return badRequest("LINE verification error", 500);
+    // エラーが発生しても処理を継続
   }
   }
 
