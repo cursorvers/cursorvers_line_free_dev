@@ -546,8 +546,8 @@ async function handleRiskChecker(
     try {
       const result = await runRiskChecker(rawInput);
       if (result.success && result.formattedMessage) {
-        // risk-checker.tsで既にDiscord案内が含まれているため、追加しない
-        await pushText(lineUserId, result.formattedMessage);
+        const msg = result.formattedMessage + "\n\n---\n💬 詳しい相談は Discord で\n" + DISCORD_INVITE_URL;
+        await pushText(lineUserId, msg);
       } else {
         await pushText(lineUserId, result.error ?? "エラーが発生しました。");
       }
@@ -888,10 +888,10 @@ async function handleEvent(event: LineEvent): Promise<void> {
       "Pocket Defense Tool",
       "",
       "■ プロンプト整形",
-      "文章をそのまま入力",
+      "「洗練:」の後に文章を入力",
       "",
       "■ リスクチェック",
-      "文章をそのまま入力",
+      "「check:」の後に文章を入力",
       "",
       "■ AI導入情報・お問い合わせ",
       "下のボタンから選んでください ↓",

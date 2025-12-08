@@ -7,7 +7,7 @@ Obsidian Vault から特定タグ付きのメモを抽出し、LINE公式アカ�
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Obsidian Vault                          │
-│  /Users/masayuki/Obsidian Professional Kit                     │
+│  /Users/masayuki/Obsidian Pro Kit for market                   │
 │                                                                 │
 │  - メモに #cv_line タグを付けるだけ                              │
 │  - テーマタグ (#ai_gov, #tax 等) で分類可能                     │
@@ -104,7 +104,7 @@ Obsidian Vault から特定タグ付きのメモを抽出し、LINE公式アカ�
 cp .env.example .env
 
 # 以下を設定
-VAULT_PATH=/Users/masayuki/Obsidian Professional Kit
+VAULT_PATH=/Users/masayuki/Obsidian Pro Kit for market
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 LINE_CHANNEL_ACCESS_TOKEN=your-line-channel-access-token

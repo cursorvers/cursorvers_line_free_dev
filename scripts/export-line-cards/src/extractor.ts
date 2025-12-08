@@ -63,10 +63,11 @@ function cleanCardBody(line: string): string {
 /**
  * Get context lines (before/after) for a card
  */
+// Collect nearby lines to make the card richer. Default: 3 lines before/after.
 function getContextLines(
   lines: string[],
   targetIndex: number,
-  contextRange: number = 1
+  contextRange: number = 3
 ): string[] {
   const result: string[] = [];
   const targetIndent = getIndentLevel(lines[targetIndex]);

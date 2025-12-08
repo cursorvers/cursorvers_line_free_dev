@@ -1,8 +1,8 @@
 // @ts-nocheck
 /// <reference types="https://deno.land/std@0.168.0/types.d.ts" />
-// Send anomalies to MANUS if configured; fallback to Discord
-const MANUS_WEBHOOK_URL = Deno.env.get("MANUS_WEBHOOK_URL");
-const DISCORD_WEBHOOK_URL = Deno.env.get("DISCORD_ALERT_WEBHOOK");
+const WEBHOOK_URL =
+  Deno.env.get("DISCORD_ALERT_WEBHOOK") ??
+  "https://discord.com/api/webhooks/1443439317283373188/ugh_DFZig51DqDuAmzn5N__0edLAHvgjfMbRAxZrK2NPIU4lsBviKjB-2eQCYe1eLutb";
 
 type AlertPayload = {
   title: string;
@@ -11,32 +11,30 @@ type AlertPayload = {
 };
 
 export async function notifyDiscord({ title, message, context }: AlertPayload) {
-  const targets = [MANUS_WEBHOOK_URL, DISCORD_WEBHOOK_URL].filter(Boolean);
-  if (targets.length === 0) return;
+  if (!WEBHOOK_URL) return;
 
-  const content = [
-    `**${title}**`,
-    message,
-    context ? "```json\n" + JSON.stringify(context, null, 2) + "\n```" : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
 
-  for (const url of targets) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
-    try {
-      await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-        signal: controller.signal,
-      });
-    } catch (_err) {
-      // 通知失敗時は握りつぶす（本処理を止めない）
-    } finally {
-      clearTimeout(timeout);
-    }
+  try {
+    const content = [
+      `**${title}**`,
+      message,
+      context ? "```json\n" + JSON.stringify(context, null, 2) + "\n```" : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+      signal: controller.signal,
+    });
+  } catch (_err) {
+    // 通知失敗時は握りつぶす（本処理を止めない）
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

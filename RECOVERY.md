@@ -3,6 +3,19 @@
 ## 概要
 このドキュメントは、cursorvers_line_stripe_discord リポジトリで問題が発生した場合の復旧手順を記載しています。
 
+## 運用ポリシー / チャネル設計（メール・LINE・Discord・Stripe）
+
+- メール配信対象: **Library / Master 決済者のみ**（Stripe 決済 + 任意チェック ON）。無料層はメール配信しない。  
+  - 無料接点: LINE / Discord。メールは「有料層の設計図/アップデート」のチャネルとして扱う。
+- 申込フォーム/決済: メール必須 + 任意チェック（デフォルト OFF）「ガバナンス・資産防御レター配信希望」を追加し、利用目的を明記（決済連絡とオプトイン配信を分離）。
+- 配信セグメント: `tier ∈ {Library, Master}` かつ `status=active` かつ `opt_in_email=true` のみをメール対象とする。
+- Supabase スキーマ方針（例: `members`）: `user_id`, `email`, `line_user_id`, `tier`, `status`, `period_end`, `opt_in_email`, `updated_at`。Stripe Webhook で `tier/status/period_end/opt_in_email` を更新し、LINE 連携で `line_user_id` を紐付け。
+- フロー:  
+  - Stripe 決済 → `stripe-webhook` で署名検証 → `members` 更新。  
+  - LINE Bot → `line-bot` で署名検証 → `members` 照合し無料/有料で応答分岐（無料は診断・配布、有料はレター/アップデート案内）。  
+  - メール配信は上記セグメント条件を満たすレコードのみ。
+- セキュリティ/運用: 署名検証（Stripe/LINE 必須）、環境変数は `Deno.env.get`。RLS は `members` などに有効化しロール別ポリシーを設定。Webhook 成否をログ/テーブルに残し監視する。
+
 ## バックアップ体制
 - **頻度**: 毎日 JST 03:00 に自動バックアップ
 - **形式**: Git タグ（`backup/YYYY-MM-DD-HHMMSS`）

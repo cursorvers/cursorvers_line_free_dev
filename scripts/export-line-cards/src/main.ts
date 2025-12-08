@@ -39,7 +39,7 @@ Options:
   --help, -h       Show this help message
 
 Environment Variables:
-  VAULT_PATH                Path to Obsidian vault (default: /Users/masayuki/Obsidian Professional Kit)
+  VAULT_PATH                Path to Obsidian vault (default: /Users/masayuki/Obsidian Pro Kit for market)
   SUPABASE_URL              Supabase project URL
   SUPABASE_SERVICE_ROLE_KEY Supabase service role key
   BATCH_SIZE                Insert batch size (default: 50)
@@ -48,7 +48,7 @@ Environment Variables:
   }
 
   const vaultPath =
-    Deno.env.get("VAULT_PATH") || "/Users/masayuki/Obsidian Professional Kit";
+    Deno.env.get("VAULT_PATH") || "/Users/masayuki/Obsidian Pro Kit for market";
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 

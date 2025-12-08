@@ -46,3 +46,4 @@ CREATE TRIGGER trigger_members_updated_at
 COMMENT ON TABLE members IS 'Library/Master 有料会員の連携情報（メール/LINE/Stripe）。無料層は含めない。';
 COMMENT ON COLUMN members.opt_in_email IS 'メール配信の任意オプトイン。';
 
+

@@ -14,8 +14,8 @@
         ".claude/mcp-servers/github-enhanced.js"
       ],
       "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
-        "REPOSITORY": "${REPOSITORY}"
+        "GITHUB_TOKEN": "${env:GITHUB_TOKEN}",
+        "REPOSITORY": "mo666-med/cursorvers_line_free_dev"
       },
       "disabled": false,
       "description": "Enhanced GitHub operations for Issue/PR management"

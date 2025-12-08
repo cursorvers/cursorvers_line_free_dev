@@ -27,6 +27,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 
 type CardTheme = "ai_gov" | "tax" | "law" | "biz" | "career" | "asset" | "general";
 type AuditMode = "daily" | "weekly" | "monthly";
+type AuditTrigger = AuditMode | "report";
 
 interface CardInventory {
   theme: CardTheme;
@@ -45,7 +46,7 @@ interface BroadcastStats {
 
 interface AuditResult {
   timestamp: string;
-  mode: AuditMode;
+  mode: AuditTrigger;
   checks: {
     cardInventory: {
       passed: boolean;
@@ -92,6 +93,8 @@ const SUPABASE_URL = getEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = getEnv("SUPABASE_SERVICE_ROLE_KEY");
 const MANUS_AUDIT_API_KEY = Deno.env.get("MANUS_AUDIT_API_KEY");
 const DISCORD_ADMIN_WEBHOOK_URL = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
+const DISCORD_MAINT_WEBHOOK_URL = Deno.env.get("DISCORD_MAINT_WEBHOOK_URL");
+const MANUS_WEBHOOK_URL = Deno.env.get("MANUS_WEBHOOK_URL");
 
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -398,49 +401,58 @@ async function performMaintenance(client: SupabaseClient): Promise<{
   return { archivedBroadcasts, archivedCards };
 }
 
-async function sendDiscordNotification(result: AuditResult): Promise<void> {
-  // 正常時は通知を送らない（ログのみ）
-  if (result.summary.allPassed && result.summary.warningCount === 0 && result.summary.errorCount === 0) {
-    log("info", "Audit passed, skipping Discord notification (alerts only mode)");
-    return;
-  }
-
-  if (!DISCORD_ADMIN_WEBHOOK_URL) {
-    log("warn", "Discord webhook URL not configured, skipping notification");
-    return;
-  }
-
-  const emoji = result.summary.errorCount > 0 ? "🚨" : "⚠️";
+function buildNotificationMessage(result: AuditResult, audience: "admin" | "maintenance" | "manus"): string {
+  const isOk = result.summary.allPassed && result.summary.warningCount === 0 && result.summary.errorCount === 0;
+  const emoji = result.summary.errorCount > 0 ? "🚨" : result.summary.warningCount > 0 ? "⚠️" : "✅";
   const statusText = result.summary.errorCount > 0
     ? "エラー検出"
-    : "警告あり";
+    : result.summary.warningCount > 0
+      ? "警告あり"
+      : "正常";
 
   let message = `${emoji} **Manus監査レポート** (${result.mode})\n`;
   message += `時刻: ${new Date(result.timestamp).toLocaleString("ja-JP")}\n`;
   message += `ステータス: **${statusText}**\n\n`;
 
-  // Card inventory (異常時のみ表示)
-  if (result.checks.cardInventory.warnings.length > 0 || !result.checks.cardInventory.passed) {
+  if (!isOk || audience !== "admin") {
+    message += `**サマリー**: ${result.summary.warningCount}件の警告、${result.summary.errorCount}件のエラー\n\n`;
+  }
+
+  // Card inventory
+  if (result.checks.cardInventory.warnings.length > 0 || !result.checks.cardInventory.passed || audience !== "admin") {
     message += `**📊 カード在庫**\n`;
-    message += result.checks.cardInventory.warnings.join("\n") + "\n";
+    if (result.checks.cardInventory.warnings.length > 0) {
+      message += result.checks.cardInventory.warnings.join("\n") + "\n";
+    } else if (audience !== "admin") {
+      message += "問題なし\n";
+    }
     message += "\n";
   }
 
-  // Broadcast success (異常時のみ表示)
-  if (result.checks.broadcastSuccess.warnings.length > 0 || !result.checks.broadcastSuccess.passed) {
+  // Broadcast success
+  if (result.checks.broadcastSuccess.warnings.length > 0 || !result.checks.broadcastSuccess.passed || audience !== "admin") {
     message += `**📈 配信成功率**\n`;
-    message += result.checks.broadcastSuccess.warnings.join("\n") + "\n";
+    if (result.checks.broadcastSuccess.warnings.length > 0) {
+      message += result.checks.broadcastSuccess.warnings.join("\n") + "\n";
+    } else if (audience !== "admin") {
+      message += "問題なし\n";
+    }
     message += "\n";
   }
 
-  // Database health (monthly only, 異常時のみ表示)
-  if (result.checks.databaseHealth && (result.checks.databaseHealth.warnings.length > 0 || !result.checks.databaseHealth.passed)) {
-    message += `**🔍 データベース健全性**\n`;
-    message += result.checks.databaseHealth.warnings.join("\n") + "\n";
-    message += "\n";
+  // Database health (monthly only)
+  if (result.checks.databaseHealth) {
+    if (result.checks.databaseHealth.warnings.length > 0 || !result.checks.databaseHealth.passed || audience !== "admin") {
+      message += `**🔍 データベース健全性**\n`;
+      if (result.checks.databaseHealth.warnings.length > 0) {
+        message += result.checks.databaseHealth.warnings.join("\n") + "\n";
+      } else if (audience !== "admin") {
+        message += "問題なし\n";
+      }
+      message += "\n";
+    }
   }
 
-  // Maintenance results (monthly only)
   if (result.maintenance) {
     message += `**🔧 メンテナンス結果**\n`;
     message += `- アーカイブ対象の配信履歴: ${result.maintenance.archivedBroadcasts}件\n`;
@@ -448,17 +460,65 @@ async function sendDiscordNotification(result: AuditResult): Promise<void> {
     message += "\n";
   }
 
-  message += `**サマリー**: ${result.summary.warningCount}件の警告、${result.summary.errorCount}件のエラー`;
+  return message.trim();
+}
+
+async function sendDiscordNotification(
+  result: AuditResult,
+  options?: { force?: boolean; webhookUrl?: string; audience?: "admin" | "maintenance" },
+): Promise<void> {
+  const force = options?.force ?? false;
+  const webhookUrl = options?.webhookUrl ?? DISCORD_ADMIN_WEBHOOK_URL;
+  const audience = options?.audience ?? "admin";
+
+  if (!force && result.summary.allPassed && result.summary.warningCount === 0 && result.summary.errorCount === 0) {
+    log("info", "Audit passed, skipping Discord notification (alerts only mode)");
+    return;
+  }
+
+  if (!webhookUrl) {
+    log("warn", "Discord webhook URL not configured, skipping notification");
+    return;
+  }
+
+  const message = buildNotificationMessage(result, audience);
 
   try {
-    await fetch(DISCORD_ADMIN_WEBHOOK_URL, {
+    await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: message }),
     });
-    log("info", "Discord notification sent");
+    log("info", "Discord notification sent", { audience });
   } catch (error) {
     log("error", "Failed to send Discord notification", { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+async function sendManusNotification(result: AuditResult, options?: { force?: boolean }): Promise<void> {
+  const force = options?.force ?? false;
+
+  if (!force && result.summary.allPassed && result.summary.warningCount === 0 && result.summary.errorCount === 0) {
+    log("info", "Audit passed, skipping Manus notification (alerts only mode)");
+    return;
+  }
+
+  if (!MANUS_WEBHOOK_URL) {
+    log("warn", "Manus webhook URL not configured, skipping Manus notification");
+    return;
+  }
+
+  const message = buildNotificationMessage(result, "manus");
+
+  try {
+    await fetch(MANUS_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: message }),
+    });
+    log("info", "Manus notification sent");
+  } catch (error) {
+    log("error", "Failed to send Manus notification", { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -480,12 +540,15 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const mode = (url.searchParams.get("mode") || "daily") as AuditMode;
+    const isReportMode = url.searchParams.get("mode") === "report";
+    const effectiveMode: AuditMode = isReportMode ? "daily" : mode;
+    const triggerMode: AuditTrigger = isReportMode ? "report" : effectiveMode;
 
-    log("info", "Starting audit", { mode });
+    log("info", "Starting audit", { mode: triggerMode, effectiveMode, report: isReportMode });
 
     const result: AuditResult = {
       timestamp: new Date().toISOString(),
-      mode,
+      mode: triggerMode,
       checks: {
         cardInventory: await checkCardInventory(supabaseClient),
         broadcastSuccess: await checkBroadcastSuccess(supabaseClient),
@@ -498,7 +561,7 @@ Deno.serve(async (req) => {
     };
 
     // Monthly checks
-    if (mode === "monthly") {
+    if (effectiveMode === "monthly") {
       result.checks.databaseHealth = await checkDatabaseHealth(supabaseClient);
       result.maintenance = await performMaintenance(supabaseClient);
     }
@@ -518,8 +581,16 @@ Deno.serve(async (req) => {
 
     result.summary.allPassed = result.summary.warningCount === 0 && result.summary.errorCount === 0;
 
-    // Send Discord notification
-    await sendDiscordNotification(result);
+    if (isReportMode) {
+      await sendManusNotification(result, { force: true });
+      await sendDiscordNotification(result, {
+        force: true,
+        webhookUrl: DISCORD_MAINT_WEBHOOK_URL,
+        audience: "maintenance",
+      });
+    } else {
+      await sendDiscordNotification(result, { force: false, webhookUrl: DISCORD_ADMIN_WEBHOOK_URL, audience: "admin" });
+    }
 
     log("info", "Audit completed", {
       mode,

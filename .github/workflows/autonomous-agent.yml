@@ -100,8 +100,8 @@ jobs:
           cat > .env << EOF
           GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || secrets.LLM_API_KEY }}
-          OPENAI_ENDPOINT=${{ secrets.LLM_ENDPOINT }}
-          OPENAI_MODEL=${{ vars.OPENAI_MODEL }}
+          OPENAI_ENDPOINT=${{ secrets.LLM_ENDPOINT || 'https://api.openai.com/v1/chat/completions' }}
+          OPENAI_MODEL=${{ vars.OPENAI_MODEL || 'gpt-4o' }}
           DEVICE_IDENTIFIER="GitHub Actions Runner"
           ISSUE_NUMBER=${{ needs.check-trigger.outputs.issue_number }}
           REPOSITORY=${{ github.repository }}
@@ -138,8 +138,8 @@ gh secret set LLM_ENDPOINT --body \"https://api.openai.com/v1/chat/completions\"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || secrets.LLM_API_KEY }}
           LLM_API_KEY: ${{ secrets.OPENAI_API_KEY || secrets.LLM_API_KEY }}
-          LLM_ENDPOINT: ${{ secrets.LLM_ENDPOINT }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          LLM_ENDPOINT: ${{ secrets.LLM_ENDPOINT || 'https://api.openai.com/v1/chat/completions' }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o' }}
           ISSUE_NUMBER: ${{ needs.check-trigger.outputs.issue_number }}
           REPOSITORY: ${{ github.repository }}
         continue-on-error: true

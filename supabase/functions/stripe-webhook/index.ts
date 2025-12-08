@@ -1,6 +1,9 @@
+// @ts-nocheck
+/// <reference types="https://deno.land/std@0.168.0/types.d.ts" />
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@12.0.0?target=deno";
+import { notifyDiscord } from "../../_shared/alert.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY") as string, {
   apiVersion: "2022-11-15",
@@ -26,6 +29,10 @@ serve(async (req) => {
     );
   } catch (err) {
     console.error(`Webhook signature verification failed: ${err.message}`);
+    await notifyDiscord({
+      title: "MANUS ALERT: Stripe webhook signature failed",
+      message: err.message,
+    });
     return new Response(err.message, { status: 400 });
   }
 
@@ -103,6 +110,11 @@ serve(async (req) => {
 
         if (error) {
           console.error("DB Insert Error:", error);
+          await notifyDiscord({
+            title: "MANUS ALERT: members upsert failed",
+            message: error.message ?? "unknown DB error",
+            context: { email: customerEmail, membershipTier, subscriptionId },
+          });
           return new Response(JSON.stringify({ error: error.message }), {
             status: 500,
             headers: { "Content-Type": "application/json" },
