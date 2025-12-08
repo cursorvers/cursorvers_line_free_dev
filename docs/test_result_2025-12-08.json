@@ -1,0 +1,104 @@
+{
+  "timestamp": "2025-12-08T08:05:18.775Z",
+  "mode": "daily",
+  "checks": {
+    "cardInventory": {
+      "passed": true,
+      "warnings": [],
+      "details": [
+        {
+          "theme": "ai_gov",
+          "ready_cards": 87,
+          "used_cards": 3,
+          "total_cards": 102
+        },
+        {
+          "theme": "tax",
+          "ready_cards": 65,
+          "used_cards": 3,
+          "total_cards": 100
+        },
+        {
+          "theme": "law",
+          "ready_cards": 72,
+          "used_cards": 3,
+          "total_cards": 100
+        },
+        {
+          "theme": "biz",
+          "ready_cards": 71,
+          "used_cards": 3,
+          "total_cards": 100
+        },
+        {
+          "theme": "career",
+          "ready_cards": 71,
+          "used_cards": 2,
+          "total_cards": 100
+        },
+        {
+          "theme": "asset",
+          "ready_cards": 62,
+          "used_cards": 2,
+          "total_cards": 100
+        },
+        {
+          "theme": "general",
+          "ready_cards": 57,
+          "used_cards": 2,
+          "total_cards": 101
+        }
+      ]
+    },
+    "broadcastSuccess": {
+      "passed": true,
+      "warnings": [],
+      "details": [
+        {
+          "date": "2025-12-06",
+          "total": 6,
+          "successful": 6,
+          "failed": 0,
+          "success_rate": 100
+        },
+        {
+          "date": "2025-12-05",
+          "total": 1,
+          "successful": 1,
+          "failed": 0,
+          "success_rate": 100
+        },
+        {
+          "date": "2025-12-04",
+          "total": 2,
+          "successful": 2,
+          "failed": 0,
+          "success_rate": 100
+        }
+      ]
+    },
+    "lineRegistrationSystem": {
+      "passed": true,
+      "warnings": [],
+      "details": {
+        "apiHealth": {
+          "passed": true,
+          "responseTime": 1772
+        },
+        "googleSheetsSync": {
+          "passed": true,
+          "lastUpdate": "2025-12-08T08:05:20.062+00:00"
+        },
+        "landingPageAccess": {
+          "passed": true,
+          "responseTime": 265
+        }
+      }
+    }
+  },
+  "summary": {
+    "allPassed": true,
+    "warningCount": 0,
+    "errorCount": 0
+  }
+}

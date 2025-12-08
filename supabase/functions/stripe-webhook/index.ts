@@ -3,7 +3,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@12.0.0?target=deno";
-import { notifyDiscord } from "../../_shared/alert.ts";
+import { notifyDiscord } from "../_shared/alert.ts";
+
+// Google Sheets 連携（任意）
+const MEMBERS_SHEET_ID = Deno.env.get("MEMBERS_SHEET_ID") ?? "";
+const MEMBERS_SHEET_TAB = Deno.env.get("MEMBERS_SHEET_TAB") ?? "members";
+const GOOGLE_SA_JSON = Deno.env.get("GOOGLE_SA_JSON") ?? "";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY") as string, {
   apiVersion: "2022-11-15",
@@ -11,6 +16,99 @@ const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY") as string, {
 });
 
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
+
+// Google Sheets連携関数
+async function buildSheetsClient(serviceAccount: any) {
+  const now = Math.floor(Date.now() / 1000);
+  const jwtHeader = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const jwtPayload = btoa(
+    JSON.stringify({
+      iss: serviceAccount.client_email,
+      scope: "https://www.googleapis.com/auth/spreadsheets",
+      aud: "https://www.googleapis.com/oauth2/v4/token",
+      exp: now + 3600,
+      iat: now,
+    }),
+  );
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    strToUint8Array(serviceAccount.private_key),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    encoder.encode(`${jwtHeader}.${jwtPayload}`),
+  );
+  const jwtSignature = uint8ToBase64(signature);
+
+  const tokenResponse = await fetch("https://www.googleapis.com/oauth2/v4/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: `${jwtHeader}.${jwtPayload}.${jwtSignature}`,
+    }),
+  }).then((res) => res.json());
+
+  if (!tokenResponse.access_token) {
+    throw new Error("Failed to obtain Google access token");
+  }
+
+  const authHeaders = {
+    Authorization: `Bearer ${tokenResponse.access_token}`,
+    "Content-Type": "application/json",
+  };
+
+  return {
+    async append(tabName: string, values: unknown[][]) {
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${MEMBERS_SHEET_ID}/values/${tabName}!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({ values }),
+        },
+      );
+    },
+  };
+}
+
+async function appendMemberRow(row: unknown[]) {
+  if (!MEMBERS_SHEET_ID || !GOOGLE_SA_JSON) {
+    console.log("Google Sheets not configured, skipping append");
+    return;
+  }
+  try {
+    const client = await buildSheetsClient(JSON.parse(GOOGLE_SA_JSON));
+    await client.append(MEMBERS_SHEET_TAB, [row]);
+    console.log(`Appended member to sheet: ${MEMBERS_SHEET_TAB}`);
+  } catch (err) {
+    console.warn("Failed to append to sheet:", err instanceof Error ? err.message : String(err));
+  }
+}
+
+function strToUint8Array(pem: string) {
+  const cleaned = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+  const binary = atob(cleaned);
+  const buffer = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    buffer[i] = binary.charCodeAt(i);
+  }
+  return buffer;
+}
+
+function uint8ToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
 
 serve(async (req) => {
   const signature = req.headers.get("Stripe-Signature");
@@ -121,6 +219,17 @@ serve(async (req) => {
           });
         } else {
           console.log(`Member joined: ${customerEmail}, tier: ${membershipTier}`);
+          
+          // Google Sheets へ追記（設定されている場合のみ）
+          await appendMemberRow([
+            customerEmail ?? "",
+            membershipTier ?? "",
+            "active",
+            nextBillingAt ?? "",
+            optInEmail,
+            "", // line_user_id（Stripe決済時は未設定）
+            new Date().toISOString(),
+          ]);
         }
       } else {
         console.log(`Payment not completed: email=${customerEmail}, status=${paymentStatus}`);
