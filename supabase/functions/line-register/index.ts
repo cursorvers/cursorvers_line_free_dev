@@ -162,6 +162,7 @@ function uint8ToBase64(buffer: ArrayBuffer) {
 }
 
 serve(async (req) => {
+  try {
   // 環境変数チェック
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     log("error", "Missing required environment variables", {
@@ -409,8 +410,20 @@ serve(async (req) => {
       line_user_id: lineUserId,
       email,
       opt_in_email: optInEmail,
-      saved_to: results,
     }),
     { status: 200, headers }
   );
+  } catch (err) {
+    log("error", "Unhandled error in serve", {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    return new Response(
+      JSON.stringify({
+        error: "Internal server error",
+        message: err instanceof Error ? err.message : String(err),
+      }),
+      { status: 500, headers }
+    );
+  }
 });
