@@ -162,6 +162,15 @@ function uint8ToBase64(buffer: ArrayBuffer) {
 }
 
 serve(async (req) => {
+  // 環境変数チェック
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    log("error", "Missing required environment variables", {
+      hasSupabaseUrl: !!SUPABASE_URL,
+      hasServiceRoleKey: !!SUPABASE_SERVICE_ROLE_KEY,
+    });
+    return badRequest("Server configuration error", 500);
+  }
+
   log("info", "Request received", { method: req.method });
 
   if (req.method === "OPTIONS") {
