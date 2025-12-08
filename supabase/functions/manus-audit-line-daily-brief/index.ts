@@ -64,6 +64,15 @@ interface AuditResult {
       duplicates?: number;
       anomalies?: string[];
     };
+    lineRegistrationSystem?: {
+      passed: boolean;
+      warnings: string[];
+      details: {
+        apiHealth: { passed: boolean; responseTime?: number; error?: string };
+        googleSheetsSync: { passed: boolean; lastUpdate?: string; error?: string };
+        landingPageAccess: { passed: boolean; responseTime?: number; error?: string };
+      };
+    };
   };
   maintenance?: {
     archivedBroadcasts: number;
@@ -401,6 +410,156 @@ async function performMaintenance(client: SupabaseClient): Promise<{
   return { archivedBroadcasts, archivedCards };
 }
 
+async function checkLineRegistrationSystem(): Promise<{
+  passed: boolean;
+  warnings: string[];
+  details: {
+    apiHealth: { passed: boolean; responseTime?: number; error?: string };
+    googleSheetsSync: { passed: boolean; lastUpdate?: string; error?: string };
+    landingPageAccess: { passed: boolean; responseTime?: number; error?: string };
+  };
+}> {
+  log("info", "Checking LINE registration system");
+
+  const warnings: string[] = [];
+  let allPassed = true;
+
+  // 1. Check LINE register API health
+  const apiHealth: { passed: boolean; responseTime?: number; error?: string } = { passed: false };
+  try {
+    const startTime = Date.now();
+    const response = await fetch(
+      `${SUPABASE_URL}/functions/v1/line-register`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: `manus-audit-${Date.now()}@example.com`,
+          opt_in_email: true,
+        }),
+      }
+    );
+    const responseTime = Date.now() - startTime;
+    apiHealth.responseTime = responseTime;
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.ok) {
+        apiHealth.passed = true;
+        log("info", "LINE register API is healthy", { responseTime });
+      } else {
+        apiHealth.error = data.error || "Unknown error";
+        warnings.push(`⚠️ LINE登録API: エラーレスポンス - ${apiHealth.error}`);
+        allPassed = false;
+      }
+    } else {
+      apiHealth.error = `HTTP ${response.status}`;
+      warnings.push(`🚨 LINE登録API: HTTPエラー ${response.status}`);
+      allPassed = false;
+    }
+
+    if (responseTime > 5000) {
+      warnings.push(`⚠️ LINE登録API: レスポンス時間が遅い (${responseTime}ms)`);
+      allPassed = false;
+    }
+  } catch (error) {
+    apiHealth.error = error instanceof Error ? error.message : String(error);
+    warnings.push(`🚨 LINE登録API: 接続失敗 - ${apiHealth.error}`);
+    allPassed = false;
+  }
+
+  // 2. Check Google Sheets sync
+  const googleSheetsSync: { passed: boolean; lastUpdate?: string; error?: string } = { passed: false };
+  try {
+    // Check if the test email was saved to members table
+    const { data, error } = await supabaseClient
+      .from("members")
+      .select("email, updated_at")
+      .like("email", "manus-audit-%@example.com")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      googleSheetsSync.error = error.message;
+      warnings.push(`⚠️ Google Sheets連携: データベース確認失敗 - ${error.message}`);
+      allPassed = false;
+    } else if (data) {
+      googleSheetsSync.passed = true;
+      googleSheetsSync.lastUpdate = data.updated_at;
+      log("info", "Google Sheets sync is working", { lastUpdate: data.updated_at });
+
+      // Check if the update is recent (within 1 hour)
+      const lastUpdateTime = new Date(data.updated_at).getTime();
+      const now = Date.now();
+      if (now - lastUpdateTime > 60 * 60 * 1000) {
+        warnings.push(`⚠️ Google Sheets連携: 最終更新が1時間以上前 (${data.updated_at})`);
+        allPassed = false;
+      }
+    } else {
+      googleSheetsSync.error = "No recent audit data found";
+      warnings.push(`⚠️ Google Sheets連携: 最近の監査データが見つかりません`);
+      allPassed = false;
+    }
+  } catch (error) {
+    googleSheetsSync.error = error instanceof Error ? error.message : String(error);
+    warnings.push(`🚨 Google Sheets連携: チェック失敗 - ${googleSheetsSync.error}`);
+    allPassed = false;
+  }
+
+  // 3. Check Landing Page access
+  const landingPageAccess: { passed: boolean; responseTime?: number; error?: string } = { passed: false };
+  try {
+    const startTime = Date.now();
+    const response = await fetch(
+      "https://mo666-med.github.io/cursorvers_line_free_dev/register.html",
+      { method: "GET" }
+    );
+    const responseTime = Date.now() - startTime;
+    landingPageAccess.responseTime = responseTime;
+
+    if (response.ok) {
+      const html = await response.text();
+      // Check if LIFF ID is present
+      if (html.includes("2008640048-jnoneGgO")) {
+        landingPageAccess.passed = true;
+        log("info", "Landing page is accessible", { responseTime });
+      } else {
+        landingPageAccess.error = "LIFF ID not found in HTML";
+        warnings.push(`🚨 ランディングページ: LIFF IDが見つかりません`);
+        allPassed = false;
+      }
+    } else {
+      landingPageAccess.error = `HTTP ${response.status}`;
+      warnings.push(`🚨 ランディングページ: HTTPエラー ${response.status}`);
+      allPassed = false;
+    }
+
+    if (responseTime > 3000) {
+      warnings.push(`⚠️ ランディングページ: レスポンス時間が遅い (${responseTime}ms)`);
+      allPassed = false;
+    }
+  } catch (error) {
+    landingPageAccess.error = error instanceof Error ? error.message : String(error);
+    warnings.push(`🚨 ランディングページ: アクセス失敗 - ${landingPageAccess.error}`);
+    allPassed = false;
+  }
+
+  log("info", "LINE registration system check completed", { passed: allPassed, warningCount: warnings.length });
+
+  return {
+    passed: allPassed,
+    warnings,
+    details: {
+      apiHealth,
+      googleSheetsSync,
+      landingPageAccess,
+    },
+  };
+}
+
 function buildNotificationMessage(result: AuditResult, audience: "admin" | "maintenance" | "manus"): string {
   const isOk = result.summary.allPassed && result.summary.warningCount === 0 && result.summary.errorCount === 0;
   const emoji = result.summary.errorCount > 0 ? "🚨" : result.summary.warningCount > 0 ? "⚠️" : "✅";
@@ -453,10 +612,27 @@ function buildNotificationMessage(result: AuditResult, audience: "admin" | "main
     }
   }
 
+  i  // LINE registration system
+  if (result.checks.lineRegistrationSystem) {
+    if (result.checks.lineRegistrationSystem.warnings.length > 0 || !result.checks.lineRegistrationSystem.passed || audience !== "admin") {
+      message += `**🔐 LINE登録システム**
+`;
+      if (result.checks.lineRegistrationSystem.warnings.length > 0) {
+        message += result.checks.lineRegistrationSystem.warnings.join("\n") + "\n";
+      } else if (audience !== "admin") {
+        message += "問題なし\n";
+      }
+      message += "\n";
+    }
+  }
+
   if (result.maintenance) {
-    message += `**🔧 メンテナンス結果**\n`;
-    message += `- アーカイブ対象の配信履歴: ${result.maintenance.archivedBroadcasts}件\n`;
-    message += `- アーカイブしたカード: ${result.maintenance.archivedCards}件\n`;
+    message += `**🔧 メンテナンス結果**
+`;
+    message += `- アーカイブ対象の配信履歴: ${result.maintenance.archivedBroadcasts}件
+`;
+    message += `- アーカイブしたカード: ${result.maintenance.archivedCards}件
+`;
     message += "\n";
   }
 
@@ -566,17 +742,22 @@ Deno.serve(async (req) => {
       result.maintenance = await performMaintenance(supabaseClient);
     }
 
+    // LINE registration system checks (daily)
+    result.checks.lineRegistrationSystem = await checkLineRegistrationSystem();
+
     // Calculate summary
     result.summary.warningCount = [
       ...result.checks.cardInventory.warnings,
       ...result.checks.broadcastSuccess.warnings,
       ...(result.checks.databaseHealth?.warnings || []),
+      ...(result.checks.lineRegistrationSystem?.warnings || []),
     ].length;
 
     result.summary.errorCount = [
       !result.checks.cardInventory.passed,
       !result.checks.broadcastSuccess.passed,
       result.checks.databaseHealth && !result.checks.databaseHealth.passed,
+      result.checks.lineRegistrationSystem && !result.checks.lineRegistrationSystem.passed,
     ].filter(Boolean).length;
 
     result.summary.allPassed = result.summary.warningCount === 0 && result.summary.errorCount === 0;

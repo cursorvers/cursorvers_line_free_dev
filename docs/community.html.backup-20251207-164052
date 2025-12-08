@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Cursorvers Edu | Free Community Join</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'brand-bg': '#050202',
+            'brand-surface': '#0F0505',
+            'brand-flame': '#FF4500',
+          },
+          fontFamily: {
+            sans: ['"Noto Sans JP"', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+</head>
+<body class="bg-[#0c0c0c] text-white min-h-screen">
+  <main class="max-w-xl mx-auto px-6 py-10 space-y-6">
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-[0.4em] text-brand-flame font-bold">Free Community</p>
+      <h1 class="text-3xl font-bold">参加フォーム</h1>
+      <p class="text-sm text-white/80">LINEで友だち追加し、最新のSafety &amp; Literacyアップデートを受け取ります。<span class="text-brand-flame font-semibold">メール登録は任意（OFFでスキップ可）。登録すると「Safetyスタートパック」（最新AI副業トレンド＋安全プロンプトLite）を配布</span>。メール送信後にQRがポップアップします。</p>
+      <p class="text-xs text-brand-flame">PHI（診療情報）は絶対に入力しないでください。</p>
+    </div>
+
+    <!-- メール登録が最初のステップ。LINE登録はメール送信後に案内表示 -->
+
+    <div id="status" class="text-sm"></div>
+
+    <form id="community-form" class="space-y-4 bg-[#141414] border border-white/10 rounded-2xl p-6 shadow-lg">
+      <label class="flex items-start gap-3 text-sm text-white/80">
+        <input id="email-opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" checked>
+        <span>メールアドレスを登録して特典を受け取る（初期ON）</span>
+      </label>
+
+      <div id="email-input-section" class="space-y-2">
+        <label for="email" class="text-sm font-semibold">メールアドレス</label>
+        <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-flame focus:border-brand-flame">
+        <p class="text-xs text-white/50">メール登録で「Safetyスタートパック」を配布します。</p>
+      </div>
+
+      <label class="flex items-start gap-3 text-sm text-white/80">
+        <input id="opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" checked>
+        <span>ニュースレター／アップデートをメールで受け取る（任意、初期ON）</span>
+      </label>
+
+      <label class="flex items-start gap-3 text-sm text-white/80">
+        <input id="agree" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" required>
+        <span><a href="terms.html" class="underline hover:text-brand-flame" target="_blank" rel="noopener">利用規約</a>・<a href="privacy.html" class="underline hover:text-brand-flame" target="_blank" rel="noopener">プライバシーポリシー</a>・PHI禁止に同意する</span>
+      </label>
+
+      <button id="email-submit-btn" type="submit" class="w-full rounded-full bg-brand-flame text-white font-bold py-3 hover:bg-brand-flame/80 transition focus:outline-none focus:ring-2 focus:ring-brand-flame focus:ring-offset-2 focus:ring-offset-brand-bg">
+        LINE登録に進む
+      </button>
+
+    </form>
+
+    <!-- QRインライン表示 -->
+    <div id="qr-section" class="hidden bg-[#141414] border border-white/10 rounded-2xl p-6 shadow-lg space-y-4">
+      <div class="space-y-3 text-left">
+        <p class="font-semibold text-white">STEP2: QRで友だち追加</p>
+        <div class="flex flex-col items-center gap-3">
+          <img
+            src="https://quickchart.io/qr?text=https://page.line.me/s2yyhfo&size=320"
+            alt="LINE友だち追加QR"
+            class="w-52 h-52 bg-white rounded-xl p-2 shadow object-contain"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            onerror="if(!this.dataset.fallback){this.dataset.fallback='chart';this.src='https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https://page.line.me/s2yyhfo&choe=UTF-8';}else{this.onerror=null;this.src='https://qr-official.line.me/gs/M_%40s2yyhfo.png';}"
+          >
+        </div>
+        <div class="text-xs text-white/70 space-y-1">
+          <p class="font-semibold">iPhoneでの手順</p>
+          <p>1) メール送信 → 下のQRを長押しして「写真に追加」</p>
+          <p>2) LINEの友だち追加 ＞ QRコード ＞ アルバム から保存したQRを選択</p>
+          <p>3) 友だち追加で完了（自動遷移なし／手動で開く）</p>
+          <p class="text-white/50 mt-2">PCの場合: このQRをスマホで読み取るだけで追加できます。</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const LIFF_FALLBACK_ID = "2008640048-jnoneGg0"; // 新LIFF (Cursorvers Edu Login)
+    const API_ENDPOINT = "https://haaxgwyimoqzzxzdaeep.functions.supabase.co/line-register";
+    const LINE_ADD_FRIEND_URL = "https://page.line.me/s2yyhfo"; // 友だち追加リンク（Cursorvers ボット）
+    const statusEl = document.getElementById("status");
+    const form = document.getElementById("community-form");
+    const emailSubmitBtn = document.getElementById("email-submit-btn");
+    const emailOptIn = document.getElementById("email-opt-in");
+    const emailInputSection = document.getElementById("email-input-section");
+    const qrSection = document.getElementById("qr-section");
+
+    let savedEmail = "";
+    let savedOptIn = true;
+    const showQr = () => qrSection.classList.remove("hidden");
+
+    // メールアドレス登録トグルの制御
+    emailOptIn.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        emailInputSection.style.display = "block";
+      } else {
+        emailInputSection.style.display = "none";
+      }
+    });
+
+    const setStatus = (msg, isError = true) => {
+      statusEl.textContent = msg;
+      statusEl.className = isError ? "text-sm text-brand-flame" : "text-sm text-gray-200";
+    };
+
+    async function handleEmailSubmit() {
+      const emailOptInChecked = emailOptIn.checked;
+      const email = emailOptInChecked ? (document.getElementById("email").value || "").trim() : "";
+      const optIn = document.getElementById("opt-in").checked;
+      const agree = document.getElementById("agree").checked;
+
+      if (!agree) {
+        setStatus("利用規約・プライバシーポリシーへの同意が必要です。");
+        return;
+      }
+
+      emailSubmitBtn.disabled = true;
+      emailSubmitBtn.textContent = "処理中...";
+      setStatus("");
+
+      try {
+          // メールアドレス登録がONかつ入力ありのときだけ保存。それ以外はスキップ。
+          if (emailOptInChecked && email) {
+            const res = await fetch(API_ENDPOINT, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: email,
+                opt_in_email: optIn,
+              }),
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(data.error || "メールアドレスの登録に失敗しました");
+            }
+            savedEmail = email;
+            savedOptIn = optIn;
+            setStatus("メールアドレスを登録しました。QRから友だち追加してください。", false);
+          } else {
+            savedEmail = "";
+            savedOptIn = optIn;
+            setStatus("QRから友だち追加してください。", false);
+          }
+          showQr();
+
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || "処理に失敗しました");
+      } finally {
+        emailSubmitBtn.disabled = false;
+        emailSubmitBtn.textContent = "LINE登録に進む";
+      }
+    }
+
+    emailSubmitBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleEmailSubmit();
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      handleEmailSubmit();
+    });
+  </script>
+</body>
+</html>
+
