@@ -1,0 +1,6 @@
+# Economic Circuit Breaker Configuration
+monthly_budget_usd: 100
+
+thresholds:
+  warning: 0.7      # 70%で警告
+  emergency: 0.9    # 90%で緊急停止
