@@ -106,6 +106,16 @@ async function handleJoin(
     });
   }
 
+  if (!userId || !guildId) {
+    return jsonResponse({
+      type: 4,
+      data: {
+        content: "⛔ **エラー**: ユーザー情報またはサーバー情報が取得できませんでした。",
+        flags: 64,
+      },
+    });
+  }
+
   // メールアドレスの正規化
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -124,7 +134,7 @@ async function handleJoin(
   // メールアドレスで検索（trialingを許可）
   const { data: member, error } = await supabase
     .from("members")
-    .select("*")
+    .select("id, email, discord_user_id, stripe_subscription_status")
     .eq("email", normalizedEmail)
     .in("stripe_subscription_status", ["active", "trialing"])
     .single();
