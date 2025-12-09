@@ -556,10 +556,10 @@ async function fetchArticleMetadata(url: string): Promise<{
 
     const html = await response.text();
 
-    // OGPタグからメタデータを抽出
-    const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
-    const descMatch = html.match(/<meta property="og:description" content="([^"]+)"/);
-    const imageMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
+    // OGPタグからメタデータを抽出（属性の順序に依存しない正規表現）
+    const titleMatch = html.match(/<meta[^>]*property="og:title"[^>]*content="([^"]+)"/);
+    const descMatch = html.match(/<meta[^>]*property="og:description"[^>]*content="([^"]+)"/);
+    const imageMatch = html.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/);
 
     // OGPがない場合は通常のtitleタグから取得
     const fallbackTitleMatch = html.match(/<title>([^<]+)<\/title>/);
