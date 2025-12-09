@@ -31,6 +31,8 @@ interface DiscordInteraction {
 
 serve(async (req) => {
   // 0. 環境変数の検証
+  console.log("DISCORD_PUBLIC_KEY length:", DISCORD_PUBLIC_KEY.length);
+  console.log("DISCORD_PUBLIC_KEY:", DISCORD_PUBLIC_KEY);
   if (!DISCORD_PUBLIC_KEY || !DISCORD_BOT_TOKEN) {
     console.error("Missing required environment variables");
     return new Response("Server configuration error", { status: 500 });
@@ -41,7 +43,15 @@ serve(async (req) => {
   const timestamp = req.headers.get("X-Signature-Timestamp");
   const body = await req.text();
 
-  if (!signature || !timestamp || !verifySignature(signature, timestamp, body)) {
+  console.log("Signature:", signature);
+  console.log("Timestamp:", timestamp);
+  console.log("Body:", body);
+  
+  const isValid = verifySignature(signature, timestamp, body);
+  console.log("Signature valid:", isValid);
+  
+  if (!signature || !timestamp || !isValid) {
+    console.error("Signature verification failed");
     return new Response("Invalid signature", { status: 401 });
   }
 
