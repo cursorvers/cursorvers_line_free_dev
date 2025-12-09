@@ -564,11 +564,15 @@ async function fetchArticleMetadata(url: string): Promise<{
     // OGPがない場合は通常のtitleタグから取得
     const fallbackTitleMatch = html.match(/<title>([^<]+)<\/title>/);
 
-    return {
+    const metadata = {
       title: titleMatch?.[1] || fallbackTitleMatch?.[1],
       description: descMatch?.[1],
       image: imageMatch?.[1],
     };
+
+    console.log(`Metadata extracted for ${url}:`, JSON.stringify(metadata));
+
+    return metadata;
   } catch (error) {
     console.error(`Failed to fetch metadata: ${error.message}`);
     return {};
