@@ -10,12 +10,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
-<body class="bg-white text-gray-800 min-h-screen">
+<body class="bg-[#050202] text-white min-h-screen">
   <main class="max-w-xl mx-auto px-6 py-10 space-y-6">
     <div class="space-y-2">
       <p class="text-xs uppercase tracking-[0.4em] text-orange-500 font-bold">Free Community</p>
-      <h1 class="text-3xl font-bold text-gray-900">参加フォーム</h1>
-      <p class="text-sm text-gray-600">
+      <h1 class="text-3xl font-bold text-white">参加フォーム</h1>
+      <p class="text-sm text-white/80">
         LINEで友だち追加し、最新のSafety &amp; Literacyアップデートを受け取ります。
         <span class="text-orange-500 font-semibold">メール登録で「Safetyスタートパック」（最新AI副業トレンド＋安全プロンプトLite）を配布</span>。
         まずメールアドレスを登録してから、LINE登録に進みます。
@@ -25,25 +25,25 @@
 
     <div id="status" class="text-sm"></div>
 
-    <form id="community-form" class="space-y-4 bg-gray-50 border border-gray-200 rounded-2xl p-6 shadow-sm">
-      <label class="flex items-start gap-3 text-sm text-gray-600">
-        <input id="email-opt-in" type="checkbox" class="mt-1 rounded border-gray-300 bg-white text-orange-500 focus:ring-orange-500" checked>
+    <form id="community-form" class="space-y-4 bg-[#0F0505] border border-white/10 rounded-2xl p-6 shadow-lg">
+      <label class="flex items-start gap-3 text-sm text-white/80">
+        <input id="email-opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-orange-500 focus:ring-orange-500" checked>
         <span>メールアドレスを登録して特典を受け取る（初期ON）</span>
       </label>
 
       <div id="email-input-section" class="space-y-2">
-        <label for="email" class="text-sm font-semibold text-gray-700">メールアドレス</label>
-        <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-        <p class="text-xs text-gray-500">メール登録で「Safetyスタートパック」を配布します。</p>
+        <label for="email" class="text-sm font-semibold text-white">メールアドレス</label>
+        <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+        <p class="text-xs text-white/50">メール登録で「Safetyスタートパック」を配布します。</p>
       </div>
 
-      <label class="flex items-start gap-3 text-sm text-gray-600">
-        <input id="opt-in" type="checkbox" class="mt-1 rounded border-gray-300 bg-white text-orange-500 focus:ring-orange-500" checked>
+      <label class="flex items-start gap-3 text-sm text-white/80">
+        <input id="opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-orange-500 focus:ring-orange-500" checked>
         <span>ニュースレター／アップデートをメールで受け取る（任意、初期ON）</span>
       </label>
 
-      <label class="flex items-start gap-3 text-sm text-gray-600">
-        <input id="agree" type="checkbox" class="mt-1 rounded border-gray-300 bg-white text-orange-500 focus:ring-orange-500" required>
+      <label class="flex items-start gap-3 text-sm text-white/80">
+        <input id="agree" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-orange-500 focus:ring-orange-500" required>
         <span><a href="terms.html" class="underline hover:text-orange-500" target="_blank" rel="noopener">利用規約</a>・<a href="privacy.html" class="underline hover:text-orange-500" target="_blank" rel="noopener">プライバシーポリシー</a>・PHI禁止に同意する</span>
       </label>
 
@@ -53,7 +53,7 @@
 
       <div id="line-login-section" class="hidden space-y-4">
         <div class="text-center">
-          <p id="line-login-message" class="text-sm text-gray-600 mb-4"></p>
+          <p id="line-login-message" class="text-sm text-white/80 mb-4"></p>
           <button id="line-login-btn" type="button" class="w-full rounded-full bg-orange-500 text-white font-bold py-3 hover:bg-orange-600 transition">
             LINEでログイン
           </button>
@@ -74,7 +74,7 @@
         </div>
       </div>
 
-      <p id="line-user" class="text-xs text-gray-400"></p>
+      <p id="line-user" class="text-xs text-white/40"></p>
     </form>
   </main>
 
@@ -104,7 +104,7 @@
 
     const setStatus = (msg, isError = true) => {
       statusEl.textContent = msg;
-      statusEl.className = isError ? "text-sm text-orange-500" : "text-sm text-gray-600";
+      statusEl.className = isError ? "text-sm text-orange-400" : "text-sm text-gray-200";
     };
 
     // QRコードを表示する関数
