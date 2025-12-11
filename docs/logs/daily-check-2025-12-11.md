@@ -1,113 +1,136 @@
-# Cursorvers 日次システム点検レポート
+# Cursorvers システム点検結果
 
-**実行日時**: 2025-12-11 12:32 UTC
+**点検日時**: 2025-12-11 21:04 UTC (2025-12-12 06:04 JST)
 
-## 📊 点検結果サマリー
+## 点検結果サマリー
 
-| コンポーネント | ステータス | 詳細 |
-|--------------|----------|------|
+| 項目 | 状態 | 詳細 |
+|------|------|------|
 | LINE Bot | ✅ OK | 正常稼働中 |
-| Discord Webhook | ⚠️ 要確認 | URL未設定 |
-| Supabase Edge Functions | ⚠️ 部分的 | Bot稼働、ログ確認要設定 |
-| n8n ワークフロー | ⚠️ 接続問題 | APIタイムアウト |
-| GitHub リポジトリ | ✅ OK | 両リポジトリ正常 |
+| Discord Webhook | ⚠️ 要確認 | Webhook URLが未設定 |
+| Supabase Edge Functions | ⚠️ 部分的 | 稼働確認OK、ログ取得には認証が必要 |
+| n8n ワークフロー | ✅ OK | 定期実行が正常動作 |
+| GitHub リポジトリ | ✅ OK | 最新コミット確認済み |
 
 ---
 
-## 1. LINE Bot 稼働確認
+## 詳細点検結果
 
-**ステータス**: ✅ **正常**
+### 1. LINE Bot (Supabase Edge Functions)
 
-- **エンドポイント**: `https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/line-webhook`
-- **レスポンス**: `"OK - line-webhook is running"`
-- **HTTPステータス**: `200`
-- **確認方法**: `curl -X GET`
+**エンドポイント**: `https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/line-webhook`
 
-LINE Botは正常に稼働しており、Webhookエンドポイントが応答しています。
+**稼働確認結果**:
+```
+OK - line-webhook is running
+```
+
+**ステータス**: ✅ **正常稼働中**
+
+LINE Bot Edge Functionは正常に応答しており、問題ありません。
 
 ---
 
-## 2. Discord Webhook 接続テスト
+### 2. Discord Webhook
 
 **ステータス**: ⚠️ **要確認**
 
-- **問題**: 提供されたURLが招待リンク（`https://discord.gg/AnqkRuS5`）であり、Webhook URLではない
-- **期待形式**: `https://discord.com/api/webhooks/[ID]/[TOKEN]`
-- **推奨アクション**: 正しいWebhook URLを設定する必要があります
+Discord Webhook URLが環境変数またはシークレットに設定されていないため、接続テストを実行できませんでした。
+
+**推奨アクション**:
+- Discord Webhook URLを環境変数 `DISCORD_WEBHOOK_URL` に設定
+- または、Webhook URLを直接提供して再テスト
 
 ---
 
-## 3. Supabase Edge Functions
+### 3. Supabase (Project: haaxgwyimoqzzxzdaeep)
 
-**ステータス**: ⚠️ **部分的に動作**
+**Edge Functions稼働確認**: ✅ **OK**
 
-- **LINE Bot**: 正常稼働中
-- **ログ確認**: アクセストークン未設定のため、詳細ログの取得不可
-- **推奨アクション**: `SUPABASE_ACCESS_TOKEN`環境変数の設定
+**ログ確認**: ⚠️ **認証エラー**
 
----
+Supabase MCPを使用したログ取得時に認証エラーが発生しました。Edge Function自体は正常に稼働しているため、重大な問題ではありませんが、詳細なログ確認には追加の認証設定が必要です。
 
-## 4. n8n ワークフロー状態
+```
+Error: Unauthorized. Please provide a valid access token to the MCP server
+```
 
-**ステータス**: ⚠️ **接続問題**
-
-- **問題**: n8n API (`https://n8n.srv995974.hstgr.cloud/api/v1/workflows`) への接続がタイムアウト
-- **可能性**: ネットワーク問題、認証エラー、またはサービス停止
-- **推奨アクション**: n8nインスタンスの状態とAPI認証情報を確認
+**推奨アクション**:
+- Supabase Access Tokenの設定
+- または、Supabase Dashboardから手動でログ確認
 
 ---
 
-## 5. GitHub リポジトリ
+### 4. Google Sheets (n8nワークフロー経由)
 
-**ステータス**: ✅ **正常**
+**n8nワークフロー状態**: ✅ **正常動作**
 
-### cursorvers_line_free_dev
+**最新実行履歴** (ワークフロー ID: SQPCQA57DKIiaodp):
 
-- **最新コミット**: `48a8c48ec23090573ad4499e8df78f8f0d5384f5`
-- **コミットメッセージ**: "QR code section: dark background with white text"
-- **日時**: 2025-12-11 09:36:51 UTC
-- **コミッター**: mo666-med
+| 実行ID | 開始時刻 | 終了時刻 | ステータス |
+|--------|----------|----------|------------|
+| 8699 | 2025-12-11 21:00:56 | 2025-12-11 21:00:58 | ✅ 完了 |
+| 8698 | 2025-12-11 20:45:56 | 2025-12-11 20:45:58 | ✅ 完了 |
+| 8697 | 2025-12-11 20:30:56 | 2025-12-11 20:30:58 | ✅ 完了 |
+| 8696 | 2025-12-11 20:15:56 | 2025-12-11 20:15:58 | ✅ 完了 |
+| 8695 | 2025-12-11 20:00:56 | 2025-12-11 20:00:58 | ✅ 完了 |
 
-### cursorvers_line_paid_dev
+n8nワークフローは15分間隔で正常に実行されており、Google Sheetsとの同期も問題なく動作していると推測されます。
 
-- **最新コミット**: `932f0efcc2e3acca06ef9527646592c6d539c25f`
-- **コミットメッセージ**: "Update discord-member-welcome.yml"
-- **日時**: 2025-12-11 07:43:55 UTC (JST: 16:43:55)
-- **コミッター**: GitHub (web-flow)
-- **署名**: ✅ 検証済み
-
-両リポジトリとも活発に更新されており、問題はありません。
-
----
-
-## 🔧 修繕アクション
-
-**実行結果**: 修繕不要
-
-重大なエラーは検出されませんでした。LINE Botは正常稼働中のため、Edge Functionの再デプロイは不要と判断しました。
+**アクティブなワークフロー数**: 3個
+- LINE → Discord → Supabase → Google Sheets連携
+- Slack Slash → note生成ブリッジ
+- その他のワークフロー
 
 ---
 
-## 📋 今後の改善項目
+### 5. GitHub リポジトリ
 
-1. **Discord Webhook URLの正式な設定**
-   - 現在の招待リンクを正しいWebhook URLに置き換える
-   - n8n変数またはSupabase Secretsに保存
+#### 無料版リポジトリ: `mo666-med/cursorvers_line_free_dev`
 
-2. **Supabaseアクセストークンの設定**
-   - Edge Functionsの詳細ログ確認のため
-   - MCP Supabaseサーバーに`SUPABASE_ACCESS_TOKEN`を設定
+**最新コミット**:
+- **SHA**: `f3144c7`
+- **メッセージ**: "Add daily system check report: 2025-12-11"
+- **作成者**: Manus Automation
+- **日時**: 2025-12-11 17:35:38 UTC
 
-3. **n8n API接続の調査と修正**
-   - API接続タイムアウトの原因調査
-   - 認証情報とエンドポイントURLの再確認
+**ステータス**: ✅ **最新**
+
+#### 有料版リポジトリ: `mo666-med/cursorvers_line_paid_dev`
+
+**最新コミット**:
+- **SHA**: `6d90830`
+- **メッセージ**: "Modify Discord member welcome workflow schedule - Updated the Discord member welcome workflow to run daily at 6 AM JST and adjusted member fetching logic. Removed Supabase integration for tracking welcomed members."
+- **作成者**: Masayuki Otawara
+- **日時**: 2025-12-11 18:53:53 UTC
+
+**ステータス**: ✅ **最新**
 
 ---
 
-## 📌 次回点検予定
+## 自動修繕の必要性
 
-**日時**: 2025-12-12 04:00 JST (UTC+9)
+現時点では、以下の理由により自動修繕は不要と判断しました:
+
+1. **LINE Bot**: 正常稼働中
+2. **Supabase Edge Functions**: 正常稼働中
+3. **n8nワークフロー**: 正常実行中
+4. **GitHub**: 最新状態
 
 ---
 
-*このレポートは自動生成されました。*
+## 推奨アクション
+
+1. **Discord Webhook URL設定**: 報告機能を有効化するため、Webhook URLを環境変数に設定
+2. **Supabase Access Token設定**: 詳細なログ監視のため、Access Tokenを設定
+3. **定期監視の継続**: 現在のシステム状態は良好なため、定期点検を継続
+
+---
+
+## 次回点検予定
+
+**日時**: 2025-12-12 06:00 JST (21:00 UTC)
+
+---
+
+*このレポートはManusによって自動生成されました*
