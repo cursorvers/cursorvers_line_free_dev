@@ -60,6 +60,18 @@
         </div>
       </div>
 
+      <!-- QRコード表示セクション -->
+      <div id="qr-code-section" class="hidden space-y-4">
+        <div class="text-center bg-white rounded-2xl p-6">
+          <p class="text-gray-800 font-semibold mb-4">LINE公式アカウントを友だち追加してください</p>
+          <img id="line-qr-code" src="https://qr-official.line.me/gs/M_529ybhfo_GW.png" alt="LINE QRコード" class="mx-auto w-48 h-48 mb-4">
+          <p class="text-gray-600 text-sm mb-4">スマートフォンでQRコードを読み取ってください</p>
+          <a href="https://line.me/R/ti/p/@529ybhfo" target="_blank" rel="noopener" class="inline-block rounded-full bg-[#06C755] text-white font-bold py-3 px-8 hover:bg-[#05b04d] transition">
+            LINEで友だち追加
+          </a>
+        </div>
+      </div>
+
       <p id="line-user" class="text-xs text-white/40"></p>
     </form>
   </main>
@@ -76,6 +88,7 @@
     const lineLoginMessage = document.getElementById("line-login-message");
     const emailOptIn = document.getElementById("email-opt-in");
     const emailInputSection = document.getElementById("email-input-section");
+    const qrCodeSection = document.getElementById("qr-code-section");
 
     let savedEmail = "";
     let savedOptIn = true;
@@ -91,6 +104,19 @@
       statusEl.textContent = msg;
       statusEl.className = isError ? "text-sm text-orange-400" : "text-sm text-gray-200";
     };
+
+    // QRコードを表示する関数
+    function showQRCode() {
+      form.querySelector('label.flex.items-start').style.display = 'none';
+      emailInputSection.style.display = 'none';
+      emailSubmitBtn.style.display = 'none';
+      lineLoginSection.classList.add('hidden');
+      qrCodeSection.classList.remove('hidden');
+      
+      // すべてのチェックボックスラベルを非表示
+      const checkboxLabels = form.querySelectorAll('label.flex.items-start');
+      checkboxLabels.forEach(label => label.style.display = 'none');
+    }
 
     // メール送信（任意）
     emailSubmitBtn.addEventListener("click", async (e) => {
@@ -122,21 +148,17 @@
           savedOptIn = optIn;
           sessionStorage.setItem("savedEmail", email);
           sessionStorage.setItem("savedOptIn", optIn.toString());
-          lineLoginMessage.textContent = "メールアドレスを登録しました。LINEログインに進みます。";
-          setStatus("メールアドレスを登録しました。LINEログインに進みます。", false);
+          setStatus("メールアドレスを登録しました！下のQRコードからLINE公式アカウントを友だち追加してください。", false);
         } else {
           savedEmail = "";
           savedOptIn = optIn;
           sessionStorage.setItem("savedEmail", "");
           sessionStorage.setItem("savedOptIn", optIn.toString());
-          lineLoginMessage.textContent = "LINEログインに進みます。";
-          setStatus("LINEログインに進みます。", false);
+          setStatus("下のQRコードからLINE公式アカウントを友だち追加してください。", false);
         }
 
-        form.querySelector('label.flex.items-start').style.display = 'none';
-        emailInputSection.style.display = 'none';
-        emailSubmitBtn.style.display = 'none';
-        lineLoginSection.classList.remove('hidden');
+        // QRコードを表示
+        showQRCode();
       } catch (err) {
         console.error(err);
         setStatus(err.message || "処理に失敗しました");
@@ -146,7 +168,7 @@
       }
     });
 
-    // LINEログインボタン
+    // LINEログインボタン（QRコード表示後は使用しないが、互換性のため残す）
     lineLoginBtn.addEventListener("click", async () => {
       const qsId = new URLSearchParams(location.search).get("liffId");
       liffId = qsId || LIFF_FALLBACK_ID;
