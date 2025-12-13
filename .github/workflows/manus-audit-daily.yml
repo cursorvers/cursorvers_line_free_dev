@@ -26,7 +26,7 @@ jobs:
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief?mode=daily" \
             -H "Content-Type: application/json" \
-            -H "X-API-Key: ${MANUS_AUDIT_API_KEY}")
+　　　　　　　-H "Authorization: Bearer ${MANUS_AUDIT_API_KEY}" )
           
           HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
           BODY=$(echo "$RESPONSE" | sed '$d')
