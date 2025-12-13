@@ -1,272 +1,79 @@
+# .github/workflows/manus-audit-daily.yml
+# 日次監査: カード在庫・配信成功率をチェック
+
 name: Manus Audit (Daily)
 
 on:
   schedule:
-    - cron: '0 19 * * *'  # 毎日04:00 JST (19:00 UTC)
+    # 毎日 04:00 JST (19:00 UTC前日)
+    - cron: '0 19 * * *'
   workflow_dispatch:
+    # 手動実行も可能
 
 jobs:
   audit:
     runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
+    timeout-minutes: 5
 
+    steps:
       - name: Run daily audit
-        id: audit
         env:
-          MANUS_AUDIT_API_KEY: ${{ secrets.MANUS_AUDIT_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          MANUS_AUDIT_API_KEY: ${{ secrets.MANUS_AUDIT_API_KEY }}
         run: |
           echo "🔍 日次監査を実行中..."
           
-          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \
-            "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief" \
-            -H "Authorization: Bearer ${MANUS_AUDIT_API_KEY}" \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief?mode=daily" \
             -H "Content-Type: application/json" \
-            -d '{"type":"daily","timestamp":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}')
+            -H "Authorization: Bearer ${MANUS_AUDIT_API_KEY}")
           
-          HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
-          BODY=$(echo "$RESPONSE" | sed '/HTTP_CODE:/d')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
           
           echo "Response: $BODY"
           echo "HTTP Code: $HTTP_CODE"
           
-          if [ "$HTTP_CODE" != "200" ]; then
+          if [ "$HTTP_CODE" -ne 200 ]; then
             echo "❌ 監査が失敗しました (HTTP $HTTP_CODE)"
-            echo "error_type=api_error" >> $GITHUB_OUTPUT
-            echo "error_message=$BODY" >> $GITHUB_OUTPUT
-            echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
             exit 1
           fi
           
-          echo "✅ 監査が正常に完了しました"
-          echo "result=$BODY" >> $GITHUB_OUTPUT
-
-      - name: Detect error type
-        if: failure()
-        id: detect_error
-        run: |
-          ERROR_MSG="${{ steps.audit.outputs.error_message }}"
-          HTTP_CODE="${{ steps.audit.outputs.http_code }}"
+          # Check if there are warnings or errors
+          ALL_PASSED=$(echo "$BODY" | jq -r '.summary.allPassed // false')
+          WARNING_COUNT=$(echo "$BODY" | jq -r '.summary.warningCount // 0')
+          ERROR_COUNT=$(echo "$BODY" | jq -r '.summary.errorCount // 0')
           
-          if echo "$ERROR_MSG" | grep -q "Missing authorization header"; then
-            echo "error_type=missing_auth_header" >> $GITHUB_OUTPUT
-            echo "auto_fixable=true" >> $GITHUB_OUTPUT
-          elif echo "$ERROR_MSG" | grep -q "Invalid JWT"; then
-            echo "error_type=invalid_jwt" >> $GITHUB_OUTPUT
-            echo "auto_fixable=false" >> $GITHUB_OUTPUT
-          elif echo "$ERROR_MSG" | grep -q "syntax"; then
-            echo "error_type=yaml_syntax" >> $GITHUB_OUTPUT
-            echo "auto_fixable=true" >> $GITHUB_OUTPUT
+          if [ "$ALL_PASSED" = "true" ]; then
+            echo "✅ 監査完了: 全て正常"
           else
-            echo "error_type=unknown" >> $GITHUB_OUTPUT
-            echo "auto_fixable=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Auto-fix errors
-        if: failure() && steps.detect_error.outputs.auto_fixable == 'true'
-        id: auto_fix
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ERROR_TYPE="${{ steps.detect_error.outputs.error_type }}"
-          
-          echo "🔧 自動修正を実行中: $ERROR_TYPE"
-          
-          case "$ERROR_TYPE" in
-            missing_auth_header)
-              bash scripts/auto-fix/fix-auth-headers.sh
-              ;;
-            yaml_syntax)
-              bash scripts/auto-fix/fix-yaml-syntax.sh
-              ;;
-            *)
-              echo "⚠️ 自動修正スクリプトが見つかりません"
+            echo "⚠️ 監査完了: ${WARNING_COUNT}件の警告、${ERROR_COUNT}件のエラー"
+            # Don't fail the workflow for warnings, only for errors
+            if [ "$ERROR_COUNT" -gt 0 ]; then
               exit 1
-              ;;
-          esac
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ 自動修正が完了しました"
-            echo "fixed=true" >> $GITHUB_OUTPUT
-          else
-            echo "❌ 自動修正に失敗しました"
-            echo "fixed=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-      - name: Record to GitHub
-        if: always()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          LOG_DATE=$(date -u +"%Y-%m-%d")
-          
-          mkdir -p docs/logs/audit
-          
-          LOG_FILE="docs/logs/audit/daily-${LOG_DATE}.md"
-          
-          cat > "$LOG_FILE" <<EOF
-          # Manus Audit (Daily) - ${LOG_DATE}
-          
-          **実行時刻**: ${TIMESTAMP}
-          **ワークフロー**: [Run #${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
-          
-          ## 結果
-          
-          EOF
-          
-          if [ "${{ job.status }}" == "success" ]; then
-            cat >> "$LOG_FILE" <<EOF
-          ✅ **ステータス**: 成功
-          
-          **監査結果**:
-          \`\`\`json
-          ${{ steps.audit.outputs.result }}
-          \`\`\`
-          EOF
-          else
-            cat >> "$LOG_FILE" <<EOF
-          ❌ **ステータス**: 失敗
-          
-          **エラータイプ**: ${{ steps.detect_error.outputs.error_type }}
-          **エラーメッセージ**: ${{ steps.audit.outputs.error_message }}
-          **HTTP Code**: ${{ steps.audit.outputs.http_code }}
-          
-          EOF
-            
-            if [ "${{ steps.auto_fix.outputs.fixed }}" == "true" ]; then
-              cat >> "$LOG_FILE" <<EOF
-          **自動修正**: ✅ 完了
-          EOF
-            else
-              cat >> "$LOG_FILE" <<EOF
-          **自動修正**: ❌ 不可
-          EOF
             fi
           fi
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$LOG_FILE"
-          git commit -m "chore: add daily audit log ${LOG_DATE}" || echo "No changes to commit"
-          git push || echo "Failed to push"
 
-      - name: Create GitHub Issue
-        if: failure() && steps.detect_error.outputs.auto_fixable == 'false'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const errorType = '${{ steps.detect_error.outputs.error_type }}';
-            const errorMessage = '${{ steps.audit.outputs.error_message }}';
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            
-            const issueTitle = `🚨 Manus Audit Failed: ${errorType}`;
-            const issueBody = `## エラー詳細
-            
-            **エラータイプ**: \`${errorType}\`
-            **エラーメッセージ**: 
-            \`\`\`
-            ${errorMessage}
-            \`\`\`
-            
-            **ワークフロー実行**: ${runUrl}
-            
-            ## 必要な対応
-            
-            ${errorType === 'invalid_jwt' ? '- Supabase API Key (`MANUS_AUDIT_API_KEY`) を更新してください' : '- 手動での修正が必要です'}
-            
-            ## 参考情報
-            
-            - [MANUS_AUTOMATION.md](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/blob/main/docs/MANUS_AUTOMATION.md)
-            - [RECOVERY.md](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/blob/main/RECOVERY.md)
-            `;
-            
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: issueTitle,
-              body: issueBody,
-              labels: ['bug', 'automation', 'manus-audit']
-            });
-
-      - name: Notify Discord (success)
-        if: success() && vars.DISCORD_ADMIN_WEBHOOK_URL != ''
+      - name: Notify on success
+        if: success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
         run: |
-          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S JST")
-          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          
-          curl -X POST "${{ vars.DISCORD_ADMIN_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "embeds": [{
-                "title": "✅ Manus Audit (Daily) 成功",
-                "description": "日次監査が正常に完了しました",
-                "color": 3066993,
-                "fields": [
-                  {
-                    "name": "日時",
-                    "value": "'"$TIMESTAMP"'",
-                    "inline": true
-                  },
-                  {
-                    "name": "ステータス",
-                    "value": "正常",
-                    "inline": true
-                  }
-                ],
-                "url": "'"$RUN_URL"'"
-              }]
-            }'
-
-      - name: Notify Discord (failure)
-        if: failure() && vars.DISCORD_ADMIN_WEBHOOK_URL != ''
-        run: |
-          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S JST")
-          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          ERROR_TYPE="${{ steps.detect_error.outputs.error_type }}"
-          AUTO_FIXED="${{ steps.auto_fix.outputs.fixed }}"
-          
-          if [ "$AUTO_FIXED" == "true" ]; then
-            TITLE="⚠️ Manus Audit (Daily) 失敗 → 自動修正完了"
-            DESCRIPTION="エラーを検出しましたが、自動修正が完了しました"
-            COLOR=16776960
-          else
-            TITLE="❌ Manus Audit (Daily) 失敗"
-            DESCRIPTION="エラーを検出しました。手動での対応が必要です"
-            COLOR=15158332
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            TIMESTAMP=$(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M:%S JST')
+            curl -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"embeds\": [{\"title\": \"✅ Manus日次監査 成功\", \"description\": \"システムは正常に稼働しています。\", \"color\": 5763719, \"fields\": [{\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"ステータス\", \"value\": \"正常\", \"inline\": true}], \"footer\": {\"text\": \"Cursorvers System\"}, \"url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
           fi
-          
-          curl -X POST "${{ vars.DISCORD_ADMIN_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "embeds": [{
-                "title": "'"$TITLE"'",
-                "description": "'"$DESCRIPTION"'",
-                "color": '"$COLOR"',
-                "fields": [
-                  {
-                    "name": "日時",
-                    "value": "'"$TIMESTAMP"'",
-                    "inline": true
-                  },
-                  {
-                    "name": "エラータイプ",
-                    "value": "'"$ERROR_TYPE"'",
-                    "inline": true
-                  },
-                  {
-                    "name": "自動修正",
-                    "value": "'"$([ "$AUTO_FIXED" == "true" ] && echo "✅ 完了" || echo "❌ 不可")"'",
-                    "inline": true
-                  }
-                ],
-                "url": "'"$RUN_URL"'"
-              }]
-            }'
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            TIMESTAMP=$(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M:%S JST')
+            curl -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"embeds\": [{\"title\": \"🚨 Manus日次監査 失敗\", \"description\": \"システムに問題が発生しました。\", \"color\": 15158332, \"fields\": [{\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"ステータス\", \"value\": \"エラー\", \"inline\": true}], \"footer\": {\"text\": \"Cursorvers System\"}, \"url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
+          fi
