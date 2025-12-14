@@ -1,6 +1,6 @@
 # Cursorvers 日次システム点検レポート
 
-**点検日時**: 2025-12-14 08:09 UTC (2025-12-14 17:09 JST)  
+**点検日時**: 2025-12-14 19:10 UTC (2025-12-15 04:10 JST)  
 **実行者**: Manus Automation  
 **点検バージョン**: v3.1 (データ保全確認機能付き + セキュリティ改善)
 
@@ -12,10 +12,10 @@
 |---------|----------|------|
 | LINE Bot | ✅ OK | 正常稼働中 |
 | Discord Webhook | ✅ OK | 接続成功 |
-| **Supabaseデータ保全** | **✅ OK** | **users: 5件, members: 64件, logs: 19件, 最新ログ: 2025-12-11T02:08:12.248947+09:00** |
+| **Supabaseデータ保全** | **✅ OK** | **users: 5件, members: 65件, logs: 19件, 最新ログ: 2025-12-11T02:08:12.248947+09:00** |
 | **Google Sheetsデータ** | **⚠️ PARTIAL** | **n8nワークフローで間接的に確認（認証情報なし）** |
 | n8n ワークフロー | ✅ OK | 6個のワークフローがアクティブ |
-| GitHub (Free) | ✅ OK | 最新: 646dbe0 (2025-12-14) |
+| GitHub (Free) | ✅ OK | 最新: bb109ef (2025-12-14) |
 | GitHub (Paid) | UNKNOWN |  |
 
 ---
@@ -29,11 +29,11 @@
 
 **ステータス**: ✅ OK
 
-**詳細**: users: 5件, members: 64件, logs: 19件, 最新ログ: 2025-12-11T02:08:12.248947+09:00
+**詳細**: users: 5件, members: 65件, logs: 19件, 最新ログ: 2025-12-11T02:08:12.248947+09:00
 
 **テーブル別レコード数**:
 - `users`: 5件
-- `members`: 64件
+- `members`: 65件
 - `interaction_logs`: 19件
 
 **最新アクティビティ**: 2025-12-11T02:08:12.248947+09:00
@@ -94,9 +94,9 @@ export GOOGLE_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
 #### cursorvers_line_free_dev
 
 **最新コミット**:
-- **ハッシュ**: `646dbe0`
+- **ハッシュ**: `bb109ef`
 - **日時**: 2025-12-14
-- **メッセージ**: `fix: GitHub Actions環境を検出してGitHub確認処理を最適化 (v3.1)`
+- **メッセージ**: `Create stats-exporter-cron.yml`
 
 #### cursorvers_line_paid_dev
 
@@ -153,8 +153,8 @@ export GOOGLE_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
 
 ## 🏁 点検完了
 
-**点検完了時刻**: 2025-12-14 08:09 UTC (2025-12-14 17:09 JST)  
-**次回点検予定**: 2025-12-15 16:00 UTC (2025-12-15 01:00 JST)
+**点検完了時刻**: 2025-12-14 19:10 UTC (2025-12-15 04:10 JST)  
+**次回点検予定**: 2025-12-15 16:00 UTC (2025-12-16 01:00 JST)
 
 ---
 
