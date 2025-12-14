@@ -389,8 +389,7 @@ ${LINE_BOT_DETAIL}
 
 ### 2. Discord Webhook
 
-**Webhook URL**: \`${DISCORD_WEBHOOK_URL}\`
-
+**Webhook URL**: \`***MASKED***\`
 **結果**: ${DISCORD_STATUS}
 
 ${DISCORD_DETAIL}
@@ -524,6 +523,6 @@ echo "✅ GitHubへのプッシュ完了"
 echo ""
 
 echo "=========================================="
-echo "✅ 自動点検完了 v3.0"
-echo "データ保全確認機能付き"
+echo "✅ 自動点検完了 v3.1"
+echo "データ保全確認機能付き + セキュリティ改善"
 echo "=========================================="

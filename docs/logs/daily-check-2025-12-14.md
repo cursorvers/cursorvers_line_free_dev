@@ -72,7 +72,7 @@ export GOOGLE_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
 
 ### 2. Discord Webhook
 
-**Webhook URL**: `https://discord.com/api/webhooks/1443439317283373188/ugh_DFZig51DqDuAmzn5N__0edLAHvgjfMbRAxZrK2NPIU4lsBviKjB-2eQCYe1eLutb`
+**Webhook URL**: `***MASKED***`
 
 **結果**: ✅ OK
 
