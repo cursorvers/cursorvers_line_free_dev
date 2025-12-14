@@ -215,22 +215,7 @@ GITHUB_FREE_STATUS="✅ OK"
 GITHUB_FREE_DETAIL="最新: ${GITHUB_FREE_COMMIT} (${GITHUB_FREE_DATE})"
 echo -e "${GREEN}✅ GitHub Free: ${GITHUB_FREE_COMMIT} (${GITHUB_FREE_DATE})${NC}"
 
-# Paid版リポジトリ
-if [[ -d "/tmp/cursorvers_line_paid_dev" ]]; then
-    cd /tmp/cursorvers_line_paid_dev
-    git pull origin main > /dev/null 2>&1
-else
-    cd /tmp
-    gh repo clone mo666-med/cursorvers_line_paid_dev > /dev/null 2>&1
-    cd cursorvers_line_paid_dev
-fi
-
-GITHUB_PAID_COMMIT=$(git log -1 --pretty=format:"%h")
-GITHUB_PAID_DATE=$(git log -1 --pretty=format:"%ad" --date=short)
-GITHUB_PAID_MSG=$(git log -1 --pretty=format:"%s")
-GITHUB_PAID_STATUS="✅ OK"
-GITHUB_PAID_DETAIL="最新: ${GITHUB_PAID_COMMIT} (${GITHUB_PAID_DATE})"
-echo -e "${GREEN}✅ GitHub Paid: ${GITHUB_PAID_COMMIT} (${GITHUB_PAID_DATE})${NC}"
+# Paid版リポジトリは削除されたため、確認不要
 echo ""
 
 # 7. システム健全性スコア計算
