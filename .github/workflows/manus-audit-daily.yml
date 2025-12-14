@@ -96,8 +96,17 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           git add docs/logs/
-          git diff --staged --quiet || git commit -m "docs: Add daily audit and system check log ($(date -u +%Y-%m-%d))"
-          git push
+          
+          # ログファイルの変更がある場合のみコミット
+          if ! git diff --staged --quiet; then
+            git commit -m "docs: Add daily audit and system check log ($(date -u +%Y-%m-%d))"
+            
+            # プッシュ前にリモートの変更を取得（競合解決）
+            git pull --rebase origin main || true
+            
+            # 再度プッシュを試みる
+            git push || echo "⚠️ ログのプッシュに失敗（続行）"
+          fi
         continue-on-error: true
 
       # ========================================
