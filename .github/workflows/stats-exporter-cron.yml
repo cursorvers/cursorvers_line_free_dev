@@ -1,0 +1,97 @@
+name: Stats Exporter to Google Sheets
+
+on:
+  schedule:
+    # 12時間ごとに実行（00:00 JST と 12:00 JST）
+    - cron: '0 15,3 * * *'  # 00:00 JST (15:00 UTC) と 12:00 JST (03:00 UTC)
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  export-stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Export stats to Google Sheets
+        run: |
+          echo "📊 Exporting stats to Google Sheets..."
+          
+          # stats-exporter Supabase Functionを呼び出し
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/stats-exporter?mode=full" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            echo "✅ Stats exported successfully"
+          else
+            echo "❌ Stats export failed with status $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Notify Discord on failure
+        if: failure()
+        run: |
+          if [ -n "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "embeds": [{
+                  "title": "❌ Stats Exporter Failed",
+                  "description": "Google Sheetsへの統計情報エクスポートが失敗しました。",
+                  "color": 15158332,
+                  "fields": [
+                    {
+                      "name": "Repository",
+                      "value": "'"$GITHUB_REPOSITORY"'",
+                      "inline": true
+                    },
+                    {
+                      "name": "Workflow",
+                      "value": "Stats Exporter",
+                      "inline": true
+                    },
+                    {
+                      "name": "Run",
+                      "value": "[View Logs]('"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"')",
+                      "inline": false
+                    }
+                  ],
+                  "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
+                }]
+              }'
+          fi
+
+      - name: Notify Discord on success
+        if: success()
+        run: |
+          if [ -n "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "embeds": [{
+                  "title": "✅ Stats Exported",
+                  "description": "Google Sheetsへの統計情報エクスポートが完了しました。",
+                  "color": 3066993,
+                  "fields": [
+                    {
+                      "name": "Repository",
+                      "value": "'"$GITHUB_REPOSITORY"'",
+                      "inline": true
+                    },
+                    {
+                      "name": "Workflow",
+                      "value": "Stats Exporter",
+                      "inline": true
+                    }
+                  ],
+                  "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
+                }]
+              }'
+          fi
