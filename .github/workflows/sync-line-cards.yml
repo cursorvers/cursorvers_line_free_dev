@@ -20,6 +20,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Checkout Obsidian Vault
+        uses: actions/checkout@v4
+        with:
+          repository: mo666-med/obsidian-pro-kit-for-market-vault
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: vault
+
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
@@ -29,7 +36,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          VAULT_PATH: ${{ secrets.OBSIDIAN_VAULT_PATH }}
+          VAULT_PATH: ./vault
         run: |
           echo "📚 Obsidian VaultからLINEカードを同期中..."
           
