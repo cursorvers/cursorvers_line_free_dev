@@ -6,10 +6,6 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <script>
-    // Redirect to community-v2.html
-    window.location.replace('community-v2.html');
-  </script>
   <title>Cursorvers Edu | Free Community Join</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -87,18 +83,16 @@
         <div class="text-xs text-white/70 space-y-1">
           <p class="font-semibold">iPhoneでの手順</p>
           <p>1) メール送信 → 下のQRを長押しして「写真に追加」</p>
-          <p>2) LINEの友だち追加 ＞ QRコード ＞ アルバム から保存したQRを選択</p>
-          <p>3) 友だち追加で完了（自動遷移なし／手動で開く）</p>
-          <p class="text-white/50 mt-2">PCの場合: このQRをスマホで読み取るだけで追加できます。</p>
+          <p>2) LINEの友だち追加 ＞ QRコード ＞ アルバム から保存画像を選ぶ</p>
+          <p>3) 友だち追加で完了（自動遷移なし）</p>
+          <p class="text-white/50 mt-2">PC: スマホでこのQRを読み取れば追加できます。</p>
         </div>
       </div>
     </div>
   </main>
 
   <script>
-    const LIFF_FALLBACK_ID = "2008640048-jnoneGg0"; // 新LIFF (Cursorvers Edu Login)
     const API_ENDPOINT = "https://haaxgwyimoqzzxzdaeep.functions.supabase.co/line-register";
-    const LINE_ADD_FRIEND_URL = "https://page.line.me/s2yyhfo"; // 友だち追加リンク（Cursorvers ボット）
     const statusEl = document.getElementById("status");
     const form = document.getElementById("community-form");
     const emailSubmitBtn = document.getElementById("email-submit-btn");
