@@ -30,7 +30,7 @@ jobs:
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
-          deno-version: v2.x  # v1.x から v2.x に変更（ロックファイルバージョン5に対応）
+          deno-version: v2.x
 
       - name: Sync cards from Obsidian Vault
         env:
@@ -41,8 +41,7 @@ jobs:
           echo "📚 Obsidian VaultからLINEカードを同期中..."
           
           cd scripts/export-line-cards
-          # ロックファイルの整合性問題を回避するため --reload フラグを追加
-          deno run --allow-read --allow-env --allow-net --reload src/main.ts
+          deno run --allow-read --allow-env --allow-net src/main.ts
           
           echo "✅ 同期完了"
 
