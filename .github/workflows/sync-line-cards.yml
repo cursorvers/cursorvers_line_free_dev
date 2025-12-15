@@ -34,8 +34,9 @@ jobs:
           echo "📚 Obsidian VaultからLINEカードを同期中..."
           
           cd scripts/export-line-cards
-　　　　　　# ロックファイルの整合性問題を回避するため --reload フラグを追加
-　　　　　　deno run --allow-read --allow-env --allow-net --reload src/main.ts
+　　　　　　          # ロックファイルの整合性問題を回避するため --reload フラグを追加
+          deno run --allow-read --allow-env --allow-net --reload src/main.ts
+
           echo "✅ 同期完了"
 
       - name: Notify on failure
