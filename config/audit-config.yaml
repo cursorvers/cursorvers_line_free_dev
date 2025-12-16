@@ -1,9 +1,9 @@
 # Cursorvers System Audit Configuration
-# Created: 2025-12-16
+# Updated: 2025-12-16
 # Description: 日次システム点検用の設定ファイル
 
 # ===========================================
-# サービス設定
+# 監査対象サービス
 # ===========================================
 
 services:
@@ -12,35 +12,42 @@ services:
     name: "LINE Bot"
     endpoint: "https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/line-bot"
     method: "GET"
-    expected_status: 200
+    # HTTP 401は認証ヘッダーなしの正常応答として許容
+    expected_status: [200, 401]
     enabled: true
+    notes: "401は認証ヘッダーなしの正常応答"
 
   # n8n Workflow
   n8n:
     name: "n8n Workflow"
     base_url: "https://n8n.srv995974.hstgr.cloud"
     api_endpoint: "/api/v1/workflows"
-    # API Keyは環境変数から取得
-    # 有効なAPI Key: n8n for Cursorver LINE-Discord (末尾: XHBU, Never expires)
-    api_key_env: "N8N_API_KEY"
-    # 注意: 環境変数が期限切れの場合は以下のAPI Keyを使用
-    # 新しいAPI Key (2025-12-14作成): 末尾XHBU
+    # GitHub Secrets: N8N_API_KEY (末尾XHBU, Never expires)
+    api_key_source: "github_secrets"
+    api_key_name: "N8N_API_KEY"
     enabled: true
+    notes: "2025-12-16にAPI Key更新済み"
 
   # Supabase
   supabase:
     name: "Supabase"
     project_url: "https://haaxgwyimoqzzxzdaeep.supabase.co"
-    # Access Tokenは環境変数から取得
-    access_token_env: "SUPABASE_ACCESS_TOKEN"
+    # GitHub Secrets: SUPABASE_ACCESS_TOKEN
+    access_token_source: "github_secrets"
+    access_token_name: "SUPABASE_ACCESS_TOKEN"
+    # MCP経由のログ取得は環境変数未設定のためスキップ
+    mcp_log_check: false
     enabled: true
+    notes: "Edge Function稼働確認のみ、MCPログ取得はスキップ"
 
   # Discord Webhook
   discord:
     name: "Discord Webhook"
-    # Webhook URLは環境変数から取得
-    webhook_url_env: "DISCORD_WEBHOOK_URL"
-    enabled: false  # URL未設定のため無効化
+    # GitHub Secrets: DISCORD_ADMIN_WEBHOOK_URL
+    webhook_source: "github_secrets"
+    webhook_name: "DISCORD_ADMIN_WEBHOOK_URL"
+    enabled: true
+    notes: "2025-12-16に接続テスト成功"
 
   # GitHub Repositories
   github:
@@ -49,10 +56,11 @@ services:
       - owner: "mo666-med"
         repo: "cursorvers_line_free_dev"
         enabled: true
-      # paid_devは削除済みのため監査対象から除外
-      # - owner: "mo666-med"
-      #   repo: "cursorvers_line_paid_dev"
-      #   enabled: false
+    # 除外リポジトリ（監査対象外）
+    excluded_repositories:
+      - repo: "cursorvers_line_paid_dev"
+        reason: "削除済みリポジトリ"
+    notes: "paid_devは削除済みのため監査対象外"
 
 # ===========================================
 # 監査スケジュール
@@ -70,7 +78,8 @@ schedule:
 reporting:
   # Discord報告
   discord:
-    enabled: false  # Webhook URL設定後にtrueに変更
+    enabled: true
+    webhook_name: "DISCORD_ADMIN_WEBHOOK_URL"
     channel: "system-alerts"
   
   # GitHub ログ保存
@@ -81,15 +90,50 @@ reporting:
     auto_push: true
 
 # ===========================================
-# 環境変数メモ
+# 正常応答の定義（誤検出防止）
 # ===========================================
-# 
-# 必要な環境変数:
-# - N8N_API_KEY: n8n API Key (末尾XHBUのものを使用)
-# - SUPABASE_ACCESS_TOKEN: Supabase Access Token
-# - DISCORD_WEBHOOK_URL: Discord Webhook URL (オプション)
-#
-# n8n API Key更新履歴:
-# - 2025-12-14: "n8n for Cursorver LINE-Discord" 作成 (Never expires, 末尾XHBU)
-# - 旧API Key "test1" (末尾uyB0) は期限切れ
-#
+
+expected_responses:
+  # LINE Bot Edge Function
+  line_bot_no_auth:
+    status: 401
+    message: "Missing authorization header"
+    is_normal: true
+    description: "認証ヘッダーなしでのアクセスは401が正常"
+
+  # Supabase MCP
+  supabase_mcp_no_token:
+    error: "Unauthorized"
+    is_normal: true
+    description: "Manus環境変数にSUPABASE_ACCESS_TOKEN未設定のため、MCPログ取得はスキップ"
+
+# ===========================================
+# 除外項目（監査対象外）
+# ===========================================
+
+exclusions:
+  # 削除済みリポジトリ
+  - type: "github_repository"
+    name: "mo666-med/cursorvers_line_paid_dev"
+    reason: "削除済み"
+    date: "2025-12-16"
+
+  # Manus環境変数未設定項目
+  - type: "mcp_check"
+    name: "supabase_logs"
+    reason: "SUPABASE_ACCESS_TOKEN未設定"
+    date: "2025-12-16"
+
+# ===========================================
+# 更新履歴
+# ===========================================
+
+changelog:
+  - date: "2025-12-16"
+    changes:
+      - "N8N_API_KEY更新（末尾XHBU, Never expires）"
+      - "N8N_INSTANCE_URL修正"
+      - "Discord Webhook接続テスト成功"
+      - "paid_devリポジトリを監査対象から除外"
+      - "LINE Bot 401応答を正常として定義"
+      - "Supabase MCPログ取得をスキップに設定"
