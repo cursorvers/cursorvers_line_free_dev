@@ -6,6 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <meta name="liff-id" content="2008640048-jnoneGgO">
   <title>Free Community Join</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -31,7 +32,6 @@
       <p class="text-xs uppercase tracking-[0.4em] text-brand-flame font-bold">Free Community</p>
       <h1 class="text-3xl font-bold">参加フォーム</h1>
       <p class="text-sm text-white/80">LINEで友だち追加し、最新のSafety &amp; Literacyアップデートを受け取ります。<span class="text-brand-flame font-semibold">メール登録は任意（OFFでスキップ可）。登録すると「Safetyスタートパック」（最新AI副業トレンド＋安全プロンプトLite）を配布</span>。メール送信後にQRがポップアップします。</p>
-      <p class="text-xs text-brand-flame">PHI（診療情報）は絶対に入力しないでください。</p>
     </div>
 
     <div id="status" class="text-sm"></div>
@@ -48,14 +48,24 @@
         <p class="text-xs text-white/50">メール登録で「Safetyスタートパック」を配布します。</p>
       </div>
 
-      <label class="flex items-start gap-3 text-sm text-white/80">
-        <input id="opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" checked>
-        <span>ニュースレター／アップデートをメールで受け取る（任意、初期ON）</span>
-      </label>
+      <div class="bg-gradient-to-r from-brand-flame/10 to-transparent border border-brand-flame/30 rounded-xl p-4 space-y-2">
+        <label class="flex items-start gap-3 text-sm text-white">
+          <input id="opt-in" type="checkbox" class="mt-1 w-5 h-5 rounded border-brand-flame/50 bg-black/30 text-brand-flame focus:ring-brand-flame" checked>
+          <div class="space-y-1">
+            <span class="font-semibold">週1回のメルマガで最新情報を受け取る</span>
+            <ul class="text-xs text-white/70 space-y-0.5 ml-1">
+              <li>🔥 AI副業の最新トレンド・稼ぎ方</li>
+              <li>🛡️ 詐欺・リスク回避の実例レポート</li>
+              <li>🎁 メルマガ限定の無料コンテンツ</li>
+            </ul>
+            <p class="text-xs text-white/50">※ いつでも配信停止可能です</p>
+          </div>
+        </label>
+      </div>
 
       <label class="flex items-start gap-3 text-sm text-white/80">
         <input id="agree" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" required>
-        <span><a href="terms.html" class="underline hover:text-brand-flame" target="_blank" rel="noopener">利用規約</a>・<a href="privacy.html" class="underline hover:text-brand-flame" target="_blank" rel="noopener">プライバシーポリシー</a>・PHI禁止に同意する</span>
+        <span><a href="terms.html" class="underline hover:text-brand-flame" target="_blank" rel="noopener">利用規約</a>・<a href="privacy.html" class="underline hover:text-brand-flame" target="_blank" rel="noopener">プライバシーポリシー</a>に同意する</span>
       </label>
 
       <button id="email-submit-btn" type="submit" class="w-full rounded-full bg-brand-flame text-white font-bold py-3 hover:bg-brand-flame/80 transition focus:outline-none focus:ring-2 focus:ring-brand-flame focus:ring-offset-2 focus:ring-offset-brand-bg">

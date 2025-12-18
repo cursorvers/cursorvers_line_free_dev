@@ -182,7 +182,7 @@ echo ""
 echo "🔍 5. n8n ワークフロー状態確認..."
 if [[ -n "$N8N_API_KEY" ]] && [[ -n "$N8N_INSTANCE_URL" ]]; then
     # タイムアウト10秒でAPIリクエスト
-    N8N_RESPONSE=$(curl -s --max-time 10 -H "X-N8N-API-KEY: ${N8N_API_KEY}" "https://n8n.srv995974.hstgr.cloud/api/v1/workflows" 2>&1)
+    N8N_RESPONSE=$(curl -s --max-time 10 -H "X-N8N-API-KEY: ${N8N_API_KEY}" "${N8N_INSTANCE_URL}/api/v1/workflows" 2>&1)
     
     # curlの終了コードを確認
     if [[ $? -ne 0 ]]; then

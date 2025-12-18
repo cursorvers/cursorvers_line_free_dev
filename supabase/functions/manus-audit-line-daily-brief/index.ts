@@ -612,7 +612,7 @@ function buildNotificationMessage(result: AuditResult, audience: "admin" | "main
     }
   }
 
-  i  // LINE registration system
+  // LINE registration system
   if (result.checks.lineRegistrationSystem) {
     if (result.checks.lineRegistrationSystem.warnings.length > 0 || !result.checks.lineRegistrationSystem.passed || audience !== "admin") {
       message += `**🔐 LINE登録システム**
