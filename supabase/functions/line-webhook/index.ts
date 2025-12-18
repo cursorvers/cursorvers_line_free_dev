@@ -108,6 +108,17 @@ function normalizeKeyword(raw: string): string {
   return raw.replace(/　/g, " ").trim();
 }
 
+// メールアドレス形式かどうかを判定
+function isEmailFormat(text: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(text.trim());
+}
+
+// メールアドレスを正規化
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 function detectCourseKeyword(text: string): DiagnosisKeyword | null {
   const normalized = normalizeKeyword(text);
   const match = COURSE_KEYWORDS.find((kw) => kw === normalized);
@@ -147,6 +158,7 @@ interface QuickReplyItem {
     label: string;
     text?: string;
     data?: string;
+    displayText?: string;
   };
 }
 
@@ -156,12 +168,15 @@ interface QuickReply {
 
 // LINE 返信（reply API）
 async function replyText(replyToken: string, text: string, quickReply?: QuickReply) {
-  if (!replyToken) return;
+  if (!replyToken) {
+    console.log("[line-webhook] replyText: No replyToken");
+    return;
+  }
   const message: Record<string, unknown> = { type: "text", text: withSafetyFooter(text) };
   if (quickReply) {
     message.quickReply = quickReply;
   }
-  await fetch("https://api.line.me/v2/bot/message/reply", {
+  const res = await fetch("https://api.line.me/v2/bot/message/reply", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -172,6 +187,10 @@ async function replyText(replyToken: string, text: string, quickReply?: QuickRep
       messages: [message],
     }),
   });
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error("[line-webhook] replyText error:", res.status, errorBody);
+  }
 }
 
 // 診断キーワード選択用のクイックリプライを生成
@@ -261,6 +280,74 @@ async function pushText(lineUserId: string, text: string) {
       messages: [{ type: "text", text }],
     }),
   });
+}
+
+// メルマガ同意確認用のクイックリプライを生成
+function buildNewsletterConfirmQuickReply(): QuickReply {
+  return {
+    items: [
+      {
+        type: "action" as const,
+        action: {
+          type: "postback" as const,
+          label: "OK",
+          data: "email_opt_in=yes",
+          displayText: "OK",
+        },
+      },
+      {
+        type: "action" as const,
+        action: {
+          type: "postback" as const,
+          label: "配信しない",
+          data: "email_opt_in=no",
+          displayText: "配信しない",
+        },
+      },
+    ],
+  };
+}
+
+// メルマガ同意確認メッセージを送信（Push API + Quick Reply）
+async function pushNewsletterConfirmation(lineUserId: string, email: string) {
+  const text = [
+    "📧 メール登録",
+    `${email}`,
+    "",
+    "━━━━━━━━━━━━━━━",
+    "📬 メルマガ内容",
+    "━━━━━━━━━━━━━━━",
+    "・AI副業の最新トレンド",
+    "・詐欺・リスク回避の実例",
+    "・限定コンテンツのお知らせ",
+    "",
+    "配信しますか？",
+    "※ いつでも配信停止できます",
+  ].join("\n");
+
+  // 登録確認画面にはsafety footerを付けない
+  const message: Record<string, unknown> = {
+    type: "text",
+    text: text,
+    quickReply: buildNewsletterConfirmQuickReply(),
+  };
+
+  const res = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify({
+      to: lineUserId,
+      messages: [message],
+    }),
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error("[line-webhook] pushNewsletterConfirmation error:", res.status, errorBody);
+  }
 }
 
 // Supabase users: line_user_id から user.id を解決 or 作成
@@ -373,6 +460,7 @@ type UserMode = "polish" | "risk_check" | null;
 interface UserState {
   mode?: UserMode;
   diagnosis?: DiagnosisState;
+  pendingEmail?: string; // メルマガ同意確認待ちのメールアドレス
 }
 
 // ユーザー状態を取得
@@ -446,9 +534,159 @@ async function getToolMode(lineUserId: string): Promise<UserMode> {
   return state?.mode ?? null;
 }
 
+// 保留中のメールアドレスを設定
+async function setPendingEmail(lineUserId: string, email: string): Promise<void> {
+  try {
+    console.log("[line-webhook] setPendingEmail called for:", lineUserId.slice(-4));
+    const currentState = await getUserState(lineUserId);
+    console.log("[line-webhook] Current state:", JSON.stringify(currentState));
+    await updateUserState(lineUserId, { ...currentState, pendingEmail: email });
+    console.log("[line-webhook] State updated with pendingEmail");
+  } catch (err) {
+    console.error("[line-webhook] ❌ setPendingEmail error:", err);
+    throw err;
+  }
+}
+
+// 保留中のメールアドレスを取得
+async function getPendingEmail(lineUserId: string): Promise<string | null> {
+  const state = await getUserState(lineUserId);
+  return state?.pendingEmail ?? null;
+}
+
+// 保留中のメールアドレスをクリア
+async function clearPendingEmail(lineUserId: string): Promise<void> {
+  const currentState = await getUserState(lineUserId);
+  if (currentState) {
+    const { pendingEmail, ...rest } = currentState;
+    await updateUserState(lineUserId, Object.keys(rest).length > 0 ? rest : null);
+  }
+}
+
 // =======================
 // 機能ハンドラー
 // =======================
+
+// メールアドレス登録ハンドラー（LINE上でメールを入力 → members保存 → Discord招待返信）
+async function handleEmailRegistration(
+  email: string,
+  lineUserId: string,
+  optInEmail: boolean,
+  replyToken?: string
+): Promise<void> {
+  const normalizedEmail = normalizeEmail(email);
+
+  try {
+    // 既存レコードを確認（emailまたはline_user_idで）
+    let existingRecord: { id: string; email: string | null; line_user_id: string | null; tier: string | null } | null = null;
+
+    const { data: emailRecord } = await supabase
+      .from("members")
+      .select("id,email,line_user_id,tier")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+
+    if (emailRecord) {
+      existingRecord = emailRecord as typeof existingRecord;
+    } else {
+      const { data: lineRecord } = await supabase
+        .from("members")
+        .select("id,email,line_user_id,tier")
+        .eq("line_user_id", lineUserId)
+        .maybeSingle();
+      existingRecord = lineRecord as typeof existingRecord;
+    }
+
+    const now = new Date().toISOString();
+    const payload: Record<string, unknown> = {
+      email: normalizedEmail,
+      line_user_id: lineUserId,
+      tier: existingRecord?.tier ?? "free",
+      status: "active",
+      opt_in_email: optInEmail,
+      updated_at: now,
+    };
+
+    let error;
+    if (existingRecord) {
+      // 既存レコードを更新（有料会員のtierは変更しない）
+      const paidTiers = ["library", "master"];
+      if (paidTiers.includes(existingRecord.tier ?? "")) {
+        // 有料会員の場合はline_user_idとemailの紐付けのみ
+        const { error: updateError } = await supabase
+          .from("members")
+          .update({
+            email: normalizedEmail,
+            line_user_id: lineUserId,
+            updated_at: now,
+          })
+          .eq("id", existingRecord.id);
+        error = updateError;
+      } else {
+        const { error: updateError } = await supabase
+          .from("members")
+          .update(payload)
+          .eq("id", existingRecord.id);
+        error = updateError;
+      }
+    } else {
+      // 新規作成
+      const { error: insertError } = await supabase
+        .from("members")
+        .insert(payload);
+      error = insertError;
+    }
+
+    if (error) {
+      console.error("[line-webhook] Email registration DB error:", error);
+      if (replyToken) {
+        await replyText(replyToken, "登録処理中にエラーが発生しました。しばらくしてから再度お試しください。");
+      }
+      return;
+    }
+
+    // 成功 → Discord招待URLを返信
+    if (replyToken) {
+      await replyText(replyToken, [
+        "🎉 登録完了！特典をGETしました",
+        "",
+        "━━━━━━━━━━━━━━━",
+        "🎁 あなたの特典",
+        "━━━━━━━━━━━━━━━",
+        "",
+        "📚 Discordコミュニティ",
+        "🤖 AI記事の自動要約（毎日更新）",
+        "🛡️ 医療向けセキュリティレポート",
+        "💬 Q&A・相談チャンネル",
+        "⚡ 開発効率化Tips",
+        "📎 資料・リンク集",
+        "",
+        "▼ Discord参加はこちら",
+        DISCORD_INVITE_URL,
+        "",
+        "━━━━━━━━━━━━━━━",
+        "💎 さらに活用したい方へ",
+        "━━━━━━━━━━━━━━━",
+        "",
+        "【Library Member】月額¥2,980",
+        "🌟 無料特典すべて ＋",
+        "📝 有料記事の全文閲覧",
+        "⚡ 検証済みプロンプト集",
+        "",
+        "▼ 詳細・お申込み",
+        SERVICES_LP_URL,
+      ].join("\n"));
+    }
+
+    console.log("[line-webhook] Email registered:", normalizedEmail.slice(0, 5) + "***");
+
+  } catch (err) {
+    console.error("[line-webhook] Email registration error:", err);
+    if (replyToken) {
+      await replyText(replyToken, "エラーが発生しました。時間をおいて再度お試しください。");
+    }
+  }
+}
 
 // Prompt Polisher ハンドラー（プレフィックスありでもなしでも動作）
 async function handlePromptPolisher(
@@ -565,13 +803,50 @@ async function handleRiskChecker(
 // =======================
 
 async function handleEvent(event: LineEvent): Promise<void> {
-  const source = event.source;
-  const replyToken = event.replyToken;
+  try {
+    console.log("[line-webhook] 📥 イベント受信:", event.type);
 
-  if (!source.userId) return;
-  const lineUserId = source.userId;
+    const source = event.source;
+    const replyToken = event.replyToken;
+
+    if (!source.userId) {
+      console.log("[line-webhook] ⚠️ userId なし - スキップ");
+      return;
+    }
+    const lineUserId = source.userId;
+    console.log("[line-webhook] 🔍 検証中... userId:", lineUserId.slice(-8));
 
   const userId = await getOrCreateUser(lineUserId);
+
+  // ========================================
+  // Follow イベント（友だち追加時）
+  // ========================================
+  if (event.type === "follow") {
+    console.log("[line-webhook] Follow event from:", lineUserId);
+    if (replyToken) {
+      await replyText(replyToken, [
+        "🎉 友だち追加ありがとうございます！",
+        "",
+        "━━━━━━━━━━━━━━━",
+        "🎁 無料特典（メール登録で即GET）",
+        "━━━━━━━━━━━━━━━",
+        "",
+        "📚 Discordコミュニティ参加",
+        "🤖 AI記事の自動要約（毎日更新）",
+        "🛡️ 医療向けセキュリティレポート",
+        "💬 Q&A・相談チャンネル",
+        "⚡ 開発効率化Tips",
+        "📎 資料・リンク集",
+        "",
+        "━━━━━━━━━━━━━━━",
+        "",
+        "▼ メールアドレスを入力して特典GET",
+        "📱 左下のキーボードアイコンをタップ",
+        "例: your@email.com",
+      ].join("\n"));
+    }
+    return;
+  }
 
   let text: string | null = null;
   if (event.type === "message" && event.message?.type === "text") {
@@ -617,10 +892,90 @@ async function handleEvent(event: LineEvent): Promise<void> {
     }
   }
 
+  // デバッグ: 入力内容を確認
+  console.log("[line-webhook] trimmed input:", trimmed);
+  console.log("[line-webhook] isEmailFormat result:", isEmailFormat(trimmed));
+
+  // ========================================
+  // 0.5) メルマガ同意確認のpostback処理
+  // ========================================
+  if (trimmed === "email_opt_in=yes" || trimmed === "email_opt_in=no") {
+    const pendingEmail = await getPendingEmail(lineUserId);
+    if (!pendingEmail) {
+      if (replyToken) {
+        await replyText(replyToken, "セッションが切れました。もう一度メールアドレスを入力してください。");
+      }
+      return;
+    }
+
+    const optIn = trimmed === "email_opt_in=yes";
+    await clearPendingEmail(lineUserId);
+    await handleEmailRegistration(pendingEmail, lineUserId, optIn, replyToken);
+    return;
+  }
+
+  // ========================================
+  // 0.6) メールアドレス入力の検知 → 同意確認ボタン表示
+  // ========================================
+  if (isEmailFormat(trimmed)) {
+    console.log("[line-webhook] ✅ Email detected:", trimmed.slice(0, 5) + "***");
+
+    // 同期的に処理（バックグラウンドではなくawaitで待つ）
+    try {
+      const normalizedEmail = normalizeEmail(trimmed);
+      console.log("[line-webhook] Normalized email:", normalizedEmail.slice(0, 5) + "***");
+
+      await setPendingEmail(lineUserId, normalizedEmail);
+      console.log("[line-webhook] ✅ Pending email saved");
+
+      // Reply APIで確認メッセージ送信（Quick Reply付き）
+      if (replyToken) {
+        const text = [
+          "📧 メール登録",
+          `${trimmed}`,
+          "",
+          "━━━━━━━━━━━━━━━",
+          "📬 メルマガ内容",
+          "━━━━━━━━━━━━━━━",
+          "・AIを活用した副業最前線",
+          "・「経験知」をAIで増幅させる思考法",
+          "・「有料級」限定コンテンツ配信",
+          "",
+          "配信しますか？",
+          "※ いつでも配信停止できます",
+        ].join("\n");
+
+        const res = await fetch("https://api.line.me/v2/bot/message/reply", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+          },
+          body: JSON.stringify({
+            replyToken,
+            messages: [{
+              type: "text",
+              text: text,
+              quickReply: buildNewsletterConfirmQuickReply(),
+            }],
+          }),
+        });
+        console.log("[line-webhook] ✅ Newsletter confirmation sent:", res.status);
+      }
+    } catch (err) {
+      console.error("[line-webhook] ❌ Email handling error:", err instanceof Error ? err.message : String(err));
+      if (replyToken) {
+        await replyText(replyToken, "エラーが発生しました。もう一度お試しください。");
+      }
+    }
+
+    return;
+  }
+
   // ========================================
   // 1) 明示的プレフィックスコマンド
   // ========================================
-  
+
   // Prompt Polisher（プレフィックス付き）
   if (trimmed.startsWith("洗練:") || trimmed.startsWith("polish:")) {
     const rawInput = trimmed.replace(/^洗練:|^polish:/, "").trim();
@@ -764,18 +1119,74 @@ async function handleEvent(event: LineEvent): Promise<void> {
   }
 
   // ========================================
-  // 3) 「コミュニティ」→ Discord
+  // 3) 「特典」→ メール登録でDiscord招待
+  // ========================================
+  if (trimmed === "特典" || trimmed === "特典GET") {
+    // 既にメール登録済みか確認
+    const { data: existingMember } = await supabase
+      .from("members")
+      .select("email")
+      .eq("line_user_id", lineUserId)
+      .maybeSingle();
+
+    if (existingMember?.email) {
+      // 登録済み → Discord URLを再送 + 特典内容リマインド
+      if (replyToken) {
+        await replyText(replyToken, [
+          "✅ 登録済みです！特典をご活用ください",
+          "",
+          "━━━━━━━━━━━━━━━",
+          "🎁 あなたの特典",
+          "━━━━━━━━━━━━━━━",
+          "",
+          "📚 Discordコミュニティ",
+          "🤖 AI記事の自動要約（毎日更新）",
+          "🛡️ 医療向けセキュリティレポート",
+          "💬 Q&A・相談チャンネル",
+          "⚡ 開発効率化Tips",
+          "📎 資料・リンク集",
+          "",
+          "▼ Discord参加はこちら",
+          DISCORD_INVITE_URL,
+        ].join("\n"));
+      }
+    } else {
+      // 未登録 → メール入力を促す
+      if (replyToken) {
+        await replyText(replyToken, [
+          "━━━━━━━━━━━━━━━",
+          "🎁 無料特典（メール登録で即GET）",
+          "━━━━━━━━━━━━━━━",
+          "",
+          "📚 Discordコミュニティ参加",
+          "🤖 AI記事の自動要約（毎日更新）",
+          "🛡️ 医療向けセキュリティレポート",
+          "💬 Q&A・相談チャンネル",
+          "⚡ 開発効率化Tips",
+          "📎 資料・リンク集",
+          "",
+          "━━━━━━━━━━━━━━━",
+          "",
+          "▼ メールアドレスを入力して特典GET",
+          "📱 左下のキーボードアイコンをタップ",
+          "例: your@email.com",
+        ].join("\n"));
+      }
+    }
+    return;
+  }
+
+  // ========================================
+  // 3.5) 「コミュニティ」→ 特典案内へ誘導
   // ========================================
   if (trimmed === "コミュニティ") {
     if (replyToken) {
       await replyText(replyToken, [
-        "🎉 Cursorvers コミュニティへようこそ！",
+        "Discord コミュニティへの参加は、",
+        "メールアドレス登録が必要です。",
         "",
-        "Discord で医療 × AI の最新情報や、",
-        "他のメンバーとの交流ができます。",
-        "",
-        "▼ 参加はこちら",
-        DISCORD_INVITE_URL,
+        "「特典」と入力するか、",
+        "リッチメニューの「特典GET」をタップしてください。",
       ].join("\n"));
     }
     return;
@@ -806,10 +1217,20 @@ async function handleEvent(event: LineEvent): Promise<void> {
       await replyText(replyToken, [
         "✨ Cursorvers Edu サービス",
         "",
-        "LINE上で使えるツールと、",
-        "詳細ページへのリンクをご用意しています。",
+        "【無料】LINE上で使えるツール",
+        "・プロンプト整形",
+        "・リスクチェック",
+        "・AI導入診断",
         "",
-        "▼ 下のボタンから選んでください",
+        "【有料】Library Member ¥2,980/月",
+        "・有料記事の全文閲覧",
+        "・検証済みプロンプト集",
+        "・Master Class への充当可能",
+        "",
+        "▼ 詳細・お申込みはこちら",
+        SERVICES_LP_URL,
+        "",
+        "▼ または下のボタンから選択",
       ].join("\n"), buildServicesQuickReply());
     }
     return;
@@ -899,6 +1320,10 @@ async function handleEvent(event: LineEvent): Promise<void> {
 
     await replyText(replyToken, helpMessage, buildDiagnosisQuickReply());
   }
+  } catch (err) {
+    console.error("[line-webhook] ❌ handleEvent エラー:", err instanceof Error ? err.message : String(err));
+    console.error("[line-webhook] Stack:", err instanceof Error ? err.stack : "no stack");
+  }
 }
 
 // =======================
@@ -906,6 +1331,8 @@ async function handleEvent(event: LineEvent): Promise<void> {
 // =======================
 
 serve(async (req: Request): Promise<Response> => {
+  console.log("[line-webhook] 🚀 リクエスト受信:", req.method);
+
   // GET リクエストは疎通確認用
   if (req.method === "GET") {
     return new Response("OK - line-webhook is running", { status: 200 });
@@ -916,13 +1343,15 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   const rawBody = await req.text();
+  console.log("[line-webhook] 📦 Body長さ:", rawBody.length);
 
   // LINE 署名検証
   const valid = await verifyLineSignature(req, rawBody);
   if (!valid) {
-    console.error("[line-webhook] Invalid signature");
+    console.error("[line-webhook] ❌ 署名検証失敗");
     return new Response("Invalid signature", { status: 401 });
   }
+  console.log("[line-webhook] ✅ 署名検証OK");
 
   let body: LineWebhookRequestBody;
   try {
@@ -933,10 +1362,14 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   const events = body.events ?? [];
-  
-  // 重い処理は非同期キック（タイムアウト解消のため即200を返す）
-  void Promise.all(events.map((ev) => handleEvent(ev)));
 
-  // 即200を返す（処理はバックグラウンドで継続）
+  // 全イベントを処理してから200を返す
+  try {
+    await Promise.all(events.map((ev) => handleEvent(ev)));
+    console.log("[line-webhook] ✅ 全イベント処理完了");
+  } catch (err) {
+    console.error("[line-webhook] ❌ イベント処理エラー:", err);
+  }
+
   return new Response("OK", { status: 200 });
 });

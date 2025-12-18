@@ -2,7 +2,7 @@
 // 共通定数
 
 // Discord コミュニティリンク
-export const DISCORD_INVITE_URL = "https://discord.gg/hmMz3pHH";
+export const DISCORD_INVITE_URL = "https://discord.gg/TkmmX5Z4vx";
 
 // お問い合わせフォーム
 export const CONTACT_FORM_URL = "https://script.google.com/macros/s/AKfycbwDP0d67qtifyms2h67LawjNWJi_Lh44faPC7Z4axfS_Gdmjzcd50rcl_kmTYBTysKirQ/exec";
