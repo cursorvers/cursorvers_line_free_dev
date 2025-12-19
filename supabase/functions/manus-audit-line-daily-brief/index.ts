@@ -25,6 +25,7 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
 import { createLogger } from "../_shared/logger.ts";
+import { triggerAutoRemediation } from "../_shared/manus-api.ts";
 
 const log = createLogger("manus-audit");
 
@@ -85,6 +86,12 @@ interface AuditResult {
     allPassed: boolean;
     warningCount: number;
     errorCount: number;
+  };
+  remediation?: {
+    triggered: boolean;
+    taskId?: string;
+    taskUrl?: string;
+    error?: string;
   };
 }
 
@@ -630,6 +637,18 @@ function buildNotificationMessage(result: AuditResult, audience: "admin" | "main
     message += "\n";
   }
 
+  // 自動修繕情報
+  if (result.remediation?.triggered) {
+    message += `**🤖 自動修繕**\n`;
+    if (result.remediation.taskUrl) {
+      message += `✅ Manusタスク作成済み\n`;
+      message += `📎 ${result.remediation.taskUrl}\n`;
+    } else if (result.remediation.error) {
+      message += `❌ タスク作成失敗: ${result.remediation.error}\n`;
+    }
+    message += "\n";
+  }
+
   return message.trim();
 }
 
@@ -755,6 +774,31 @@ Deno.serve(async (req) => {
     ].filter(Boolean).length;
 
     result.summary.allPassed = result.summary.warningCount === 0 && result.summary.errorCount === 0;
+
+    // 自動修繕: エラーがある場合はManusにタスクを作成
+    if (!result.summary.allPassed && !isReportMode) {
+      log.info("Triggering auto-remediation via Manus", {
+        warningCount: result.summary.warningCount,
+        errorCount: result.summary.errorCount,
+      });
+
+      const remediationResult = await triggerAutoRemediation(result);
+      result.remediation = {
+        triggered: true,
+        taskId: remediationResult.taskId,
+        taskUrl: remediationResult.taskUrl,
+        error: remediationResult.error,
+      };
+
+      if (remediationResult.success) {
+        log.info("Auto-remediation task created", {
+          taskId: remediationResult.taskId,
+          taskUrl: remediationResult.taskUrl,
+        });
+      } else {
+        log.warn("Auto-remediation failed", { error: remediationResult.error });
+      }
+    }
 
     if (isReportMode) {
       await sendManusNotification(result, { force: true });
