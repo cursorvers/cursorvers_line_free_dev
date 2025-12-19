@@ -12,8 +12,14 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Setup log directory
+        run: |
+          mkdir -p workflow-logs
+          echo "LOG_FILE=workflow-logs/stats-exporter-$(date -u +%Y%m%d_%H%M%S).log" >> $GITHUB_ENV
+
       - name: Export stats to Google Sheets
         run: |
+          exec > >(tee -a "$LOG_FILE") 2>&1
           echo "📊 Exporting stats to Google Sheets..."
           
           # stats-exporter Supabase Functionを呼び出し
@@ -95,3 +101,11 @@ jobs:
                 }]
               }'
           fi
+
+      - name: Upload workflow logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stats-exporter-logs-${{ github.run_number }}-${{ github.run_attempt }}
+          path: workflow-logs/
+          retention-days: 90

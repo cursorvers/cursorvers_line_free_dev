@@ -28,31 +28,48 @@ jobs:
         with:
           version: latest
 
+      - name: Setup log directory
+        run: |
+          mkdir -p deploy-logs
+          echo "DEPLOY_LOG=deploy-logs/deploy-$(date -u +%Y%m%d_%H%M%S).log" >> $GITHUB_ENV
+
       # ========================================
       # Core Functions (JWT検証あり)
       # ========================================
       - name: Deploy line-webhook
-        run: supabase functions deploy line-webhook --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy line-webhook ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy line-webhook --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy line-daily-brief
-        run: supabase functions deploy line-daily-brief --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy line-daily-brief ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy line-daily-brief --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy stats-exporter
-        run: supabase functions deploy stats-exporter --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy stats-exporter ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy stats-exporter --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy health-check
-        run: supabase functions deploy health-check --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy health-check ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy health-check --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy manus-audit-line-daily-brief
-        run: supabase functions deploy manus-audit-line-daily-brief --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy manus-audit-line-daily-brief ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy manus-audit-line-daily-brief --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy relay
-        run: supabase functions deploy relay --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy relay ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy relay --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       # ========================================
@@ -67,27 +84,39 @@ jobs:
       #   - generate-sec-brief: API Key認証
       # ========================================
       - name: Deploy stripe-webhook
-        run: supabase functions deploy stripe-webhook --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy stripe-webhook (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy stripe-webhook --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy create-checkout-session
-        run: supabase functions deploy create-checkout-session --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy create-checkout-session (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy create-checkout-session --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy ingest-hij
-        run: supabase functions deploy ingest-hij --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy ingest-hij (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy ingest-hij --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy generate-sec-brief
-        run: supabase functions deploy generate-sec-brief --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy generate-sec-brief (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy generate-sec-brief --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy line-register
-        run: supabase functions deploy line-register --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy line-register (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy line-register --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       - name: Deploy discord-bot
-        run: supabase functions deploy discord-bot --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          echo "=== Deploy discord-bot (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
+          supabase functions deploy discord-bot --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"
         continue-on-error: true
 
       # ========================================
@@ -110,3 +139,14 @@ jobs:
           curl -X POST "$DISCORD_SYSTEM_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "{\"embeds\": [{\"title\": \"${EMOJI} Edge Functions Deploy ${STATUS}\", \"description\": \"全12関数のデプロイを実行\", \"color\": ${COLOR}, \"fields\": [{\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}], \"url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
+
+      # ========================================
+      # Log Artifact
+      # ========================================
+      - name: Upload deploy logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-logs-${{ github.run_number }}-${{ github.run_attempt }}
+          path: deploy-logs/
+          retention-days: 90

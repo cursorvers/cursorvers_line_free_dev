@@ -20,11 +20,17 @@ jobs:
     timeout-minutes: 5
 
     steps:
+      - name: Setup log directory
+        run: |
+          mkdir -p workflow-logs
+          echo "LOG_FILE=workflow-logs/line-daily-brief-$(date -u +%Y%m%d_%H%M%S).log" >> $GITHUB_ENV
+
       - name: Trigger line-daily-brief Edge Function
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
+          exec > >(tee -a "$LOG_FILE") 2>&1
           echo "📤 LINE Daily Brief を配信中..."
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
@@ -63,3 +69,11 @@ jobs:
               -H "Content-Type: application/json" \
               -d '{"content": "⚠️ **LINE Daily Brief ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
           fi
+
+      - name: Upload workflow logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: line-daily-brief-logs-${{ github.run_number }}-${{ github.run_attempt }}
+          path: workflow-logs/
+          retention-days: 90
