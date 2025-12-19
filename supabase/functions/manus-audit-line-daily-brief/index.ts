@@ -24,6 +24,9 @@
  */
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("manus-audit");
 
 type CardTheme = "ai_gov" | "tax" | "law" | "biz" | "career" | "asset" | "general";
 type AuditMode = "daily" | "weekly" | "monthly";
@@ -107,21 +110,12 @@ const MANUS_WEBHOOK_URL = Deno.env.get("MANUS_WEBHOOK_URL");
 
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-function log(level: "info" | "warn" | "error", message: string, data?: unknown): void {
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    level,
-    message,
-    ...(data && { data }),
-  };
-  console.log(JSON.stringify(logEntry));
-}
 
 function verifyAuth(req: Request): boolean {
   // Method 1: X-API-Key header
   const apiKeyHeader = req.headers.get("X-API-Key");
   if (MANUS_AUDIT_API_KEY && apiKeyHeader === MANUS_AUDIT_API_KEY) {
-    log("info", "Authentication successful via X-API-Key");
+    log.info( "Authentication successful via X-API-Key");
     return true;
   }
 
@@ -130,12 +124,12 @@ function verifyAuth(req: Request): boolean {
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
     if (token === SUPABASE_SERVICE_ROLE_KEY) {
-      log("info", "Authentication successful via Bearer token");
+      log.info( "Authentication successful via Bearer token");
       return true;
     }
   }
 
-  log("warn", "Authentication failed", {
+  log.warn("Authentication failed", {
     hasApiKey: !!MANUS_AUDIT_API_KEY,
     hasApiKeyHeader: !!apiKeyHeader,
   });
@@ -147,7 +141,7 @@ async function checkCardInventory(client: SupabaseClient): Promise<{
   warnings: string[];
   details: CardInventory[];
 }> {
-  log("info", "Checking card inventory");
+  log.info( "Checking card inventory");
 
   const { data, error } = await client
     .from("line_cards")
@@ -155,7 +149,7 @@ async function checkCardInventory(client: SupabaseClient): Promise<{
     .in("status", ["ready", "used", "archived"]);
 
   if (error) {
-    log("error", "Failed to fetch card inventory", { error: error.message });
+    log.error("Failed to fetch card inventory", { error: error.message });
     return { passed: false, warnings: [`Failed to fetch inventory: ${error.message}`], details: [] };
   }
 
@@ -200,7 +194,7 @@ async function checkCardInventory(client: SupabaseClient): Promise<{
     }
   }
 
-  log("info", "Card inventory check completed", { passed: allPassed, warningCount: warnings.length });
+  log.info( "Card inventory check completed", { passed: allPassed, warningCount: warnings.length });
 
   return { passed: allPassed, warnings, details };
 }
@@ -210,7 +204,7 @@ async function checkBroadcastSuccess(client: SupabaseClient): Promise<{
   warnings: string[];
   details: BroadcastStats[];
 }> {
-  log("info", "Checking broadcast success rate");
+  log.info( "Checking broadcast success rate");
 
   const { data, error } = await client
     .from("line_card_broadcasts")
@@ -219,7 +213,7 @@ async function checkBroadcastSuccess(client: SupabaseClient): Promise<{
     .order("sent_at", { ascending: false });
 
   if (error) {
-    log("error", "Failed to fetch broadcast history", { error: error.message });
+    log.error("Failed to fetch broadcast history", { error: error.message });
     return { passed: false, warnings: [`Failed to fetch history: ${error.message}`], details: [] };
   }
 
@@ -276,7 +270,7 @@ async function checkBroadcastSuccess(client: SupabaseClient): Promise<{
     allPassed = false;
   }
 
-  log("info", "Broadcast success check completed", {
+  log.info( "Broadcast success check completed", {
     passed: allPassed,
     overallSuccessRate: overallSuccessRate.toFixed(1),
     warningCount: warnings.length,
@@ -291,7 +285,7 @@ async function checkDatabaseHealth(client: SupabaseClient): Promise<{
   duplicates?: number;
   anomalies?: string[];
 }> {
-  log("info", "Checking database health");
+  log.info( "Checking database health");
 
   const warnings: string[] = [];
   let duplicates = 0;
@@ -354,7 +348,7 @@ async function checkDatabaseHealth(client: SupabaseClient): Promise<{
   }
 
   const passed = warnings.length === 0;
-  log("info", "Database health check completed", { passed, warningCount: warnings.length });
+  log.info( "Database health check completed", { passed, warningCount: warnings.length });
 
   return { passed, warnings, duplicates, anomalies };
 }
@@ -363,7 +357,7 @@ async function performMaintenance(client: SupabaseClient): Promise<{
   archivedBroadcasts: number;
   archivedCards: number;
 }> {
-  log("info", "Performing monthly maintenance");
+  log.info( "Performing monthly maintenance");
 
   let archivedBroadcasts = 0;
   let archivedCards = 0;
@@ -381,7 +375,7 @@ async function performMaintenance(client: SupabaseClient): Promise<{
   archivedBroadcasts = oldBroadcasts || 0;
 
   if (archivedBroadcasts > 0) {
-    log("info", "Found old broadcast records", { count: archivedBroadcasts });
+    log.info( "Found old broadcast records", { count: archivedBroadcasts });
     // In production, you might want to move these to an archive table
     // For now, we just log the count
   }
@@ -404,7 +398,7 @@ async function performMaintenance(client: SupabaseClient): Promise<{
       .select("*", { count: "exact", head: true });
 
     archivedCards = count || 0;
-    log("info", "Archived unused cards", { count: archivedCards });
+    log.info( "Archived unused cards", { count: archivedCards });
   }
 
   return { archivedBroadcasts, archivedCards };
@@ -419,7 +413,7 @@ async function checkLineRegistrationSystem(): Promise<{
     landingPageAccess: { passed: boolean; responseTime?: number; error?: string };
   };
 }> {
-  log("info", "Checking LINE registration system");
+  log.info( "Checking LINE registration system");
 
   const warnings: string[] = [];
   let allPassed = true;
@@ -448,7 +442,7 @@ async function checkLineRegistrationSystem(): Promise<{
       const data = await response.json();
       if (data.ok) {
         apiHealth.passed = true;
-        log("info", "LINE register API is healthy", { responseTime });
+        log.info( "LINE register API is healthy", { responseTime });
       } else {
         apiHealth.error = data.error || "Unknown error";
         warnings.push(`⚠️ LINE登録API: エラーレスポンス - ${apiHealth.error}`);
@@ -489,7 +483,7 @@ async function checkLineRegistrationSystem(): Promise<{
     } else if (data) {
       googleSheetsSync.passed = true;
       googleSheetsSync.lastUpdate = data.updated_at;
-      log("info", "Google Sheets sync is working", { lastUpdate: data.updated_at });
+      log.info( "Google Sheets sync is working", { lastUpdate: data.updated_at });
 
       // Check if the update is recent (within 1 hour)
       const lastUpdateTime = new Date(data.updated_at).getTime();
@@ -525,7 +519,7 @@ async function checkLineRegistrationSystem(): Promise<{
       // Check if LIFF ID is present
       if (html.includes("2008640048-jnoneGgO")) {
         landingPageAccess.passed = true;
-        log("info", "Landing page is accessible", { responseTime });
+        log.info( "Landing page is accessible", { responseTime });
       } else {
         landingPageAccess.error = "LIFF ID not found in HTML";
         warnings.push(`🚨 ランディングページ: LIFF IDが見つかりません`);
@@ -547,7 +541,7 @@ async function checkLineRegistrationSystem(): Promise<{
     allPassed = false;
   }
 
-  log("info", "LINE registration system check completed", { passed: allPassed, warningCount: warnings.length });
+  log.info( "LINE registration system check completed", { passed: allPassed, warningCount: warnings.length });
 
   return {
     passed: allPassed,
@@ -648,12 +642,12 @@ async function sendDiscordNotification(
   const audience = options?.audience ?? "admin";
 
   if (!force && result.summary.allPassed && result.summary.warningCount === 0 && result.summary.errorCount === 0) {
-    log("info", "Audit passed, skipping Discord notification (alerts only mode)");
+    log.info( "Audit passed, skipping Discord notification (alerts only mode)");
     return;
   }
 
   if (!webhookUrl) {
-    log("warn", "Discord webhook URL not configured, skipping notification");
+    log.warn("Discord webhook URL not configured, skipping notification");
     return;
   }
 
@@ -665,9 +659,9 @@ async function sendDiscordNotification(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: message }),
     });
-    log("info", "Discord notification sent", { audience });
+    log.info( "Discord notification sent", { audience });
   } catch (error) {
-    log("error", "Failed to send Discord notification", { error: error instanceof Error ? error.message : String(error) });
+    log.error("Failed to send Discord notification", { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -675,12 +669,12 @@ async function sendManusNotification(result: AuditResult, options?: { force?: bo
   const force = options?.force ?? false;
 
   if (!force && result.summary.allPassed && result.summary.warningCount === 0 && result.summary.errorCount === 0) {
-    log("info", "Audit passed, skipping Manus notification (alerts only mode)");
+    log.info( "Audit passed, skipping Manus notification (alerts only mode)");
     return;
   }
 
   if (!MANUS_WEBHOOK_URL) {
-    log("warn", "Manus webhook URL not configured, skipping Manus notification");
+    log.warn("Manus webhook URL not configured, skipping Manus notification");
     return;
   }
 
@@ -692,9 +686,9 @@ async function sendManusNotification(result: AuditResult, options?: { force?: bo
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: message }),
     });
-    log("info", "Manus notification sent");
+    log.info( "Manus notification sent");
   } catch (error) {
-    log("error", "Failed to send Manus notification", { error: error instanceof Error ? error.message : String(error) });
+    log.error("Failed to send Manus notification", { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -720,7 +714,7 @@ Deno.serve(async (req) => {
     const effectiveMode: AuditMode = isReportMode ? "daily" : mode;
     const triggerMode: AuditTrigger = isReportMode ? "report" : effectiveMode;
 
-    log("info", "Starting audit", { mode: triggerMode, effectiveMode, report: isReportMode });
+    log.info( "Starting audit", { mode: triggerMode, effectiveMode, report: isReportMode });
 
     const result: AuditResult = {
       timestamp: new Date().toISOString(),
@@ -773,7 +767,7 @@ Deno.serve(async (req) => {
       await sendDiscordNotification(result, { force: false, webhookUrl: DISCORD_ADMIN_WEBHOOK_URL, audience: "admin" });
     }
 
-    log("info", "Audit completed", {
+    log.info( "Audit completed", {
       mode,
       allPassed: result.summary.allPassed,
       warningCount: result.summary.warningCount,
@@ -788,7 +782,7 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
-    log("error", "Audit failed", {
+    log.error("Audit failed", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });

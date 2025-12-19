@@ -15,6 +15,9 @@
  */
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("line-daily-brief");
 
 type CardTheme = "ai_gov" | "tax" | "law" | "biz" | "career" | "asset" | "general";
 type CardStatus = "ready" | "used" | "archived";
@@ -39,8 +42,6 @@ interface BroadcastResult {
   requestId?: string | null;
   error?: string;
 }
-
-type LogLevel = "info" | "warn" | "error";
 
 const REQUIRED_ENV_VARS = [
   "SUPABASE_URL",
@@ -69,21 +70,6 @@ const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   },
 });
 
-const log = (level: LogLevel, message: string, context: Record<string, unknown> = {}) => {
-  const entry = {
-    level,
-    message,
-    ...context,
-    timestamp: new Date().toISOString(),
-  };
-  const output = JSON.stringify(entry);
-  if (level === "error") {
-    console.error(output);
-  } else {
-    console.log(output);
-  }
-};
-
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -93,7 +79,7 @@ function verifyAuth(req: Request): boolean {
   // Method 1: X-API-Key header (same pattern as generate-sec-brief)
   const apiKeyHeader = req.headers.get("X-API-Key");
   if (LINE_DAILY_BRIEF_API_KEY && apiKeyHeader === LINE_DAILY_BRIEF_API_KEY) {
-    log("info", "Authentication successful via X-API-Key");
+    log.info( "Authentication successful via X-API-Key");
     return true;
   }
 
@@ -102,12 +88,12 @@ function verifyAuth(req: Request): boolean {
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
     if (token === SUPABASE_SERVICE_ROLE_KEY) {
-      log("info", "Authentication successful via Bearer token");
+      log.info( "Authentication successful via Bearer token");
       return true;
     }
   }
 
-  log("warn", "Authentication failed", {
+  log.warn( "Authentication failed", {
     hasApiKey: !!LINE_DAILY_BRIEF_API_KEY,
     hasApiKeyHeader: !!apiKeyHeader,
     apiKeyMatches: LINE_DAILY_BRIEF_API_KEY && apiKeyHeader === LINE_DAILY_BRIEF_API_KEY,
@@ -154,24 +140,24 @@ async function getLastDeliveredTheme(client: SupabaseClient): Promise<CardTheme 
  */
 async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
   const lastTheme = await getLastDeliveredTheme(client);
-  log("info", "Fetched last delivered theme", { lastTheme: lastTheme ?? "none" });
+  log.info( "Fetched last delivered theme", { lastTheme: lastTheme ?? "none" });
 
   const themeStats = await getThemeStats(client);
   let availableThemes = themeStats.filter((t) => t.ready_count > 0 || t.total_times_used > 0);
 
   if (lastTheme && availableThemes.length > 1) {
     availableThemes = availableThemes.filter((t) => t.theme !== lastTheme);
-    log("info", "Excluded last theme to avoid repetition", { lastTheme });
+    log.info( "Excluded last theme to avoid repetition", { lastTheme });
   }
 
   if (availableThemes.length === 0) {
-    log("warn", "No available themes after filtering");
+    log.warn( "No available themes after filtering");
     return null;
   }
 
   availableThemes.sort((a, b) => a.total_times_used - b.total_times_used);
   const selectedTheme = availableThemes[0].theme;
-  log("info", "Selected theme", {
+  log.info( "Selected theme", {
     selectedTheme,
     totalTimesUsed: availableThemes[0].total_times_used,
   });
@@ -189,14 +175,14 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
   }
 
   if (!cards || cards.length === 0) {
-    log("warn", "No available cards for selected theme", { selectedTheme });
+    log.warn( "No available cards for selected theme", { selectedTheme });
     return null;
   }
 
   const randomIndex = Math.floor(Math.random() * Math.min(cards.length, 5));
   const selectedCard = cards[randomIndex] as LineCard;
 
-  log("info", "Selected card", { cardId: selectedCard.id, timesUsed: selectedCard.times_used });
+  log.info( "Selected card", { cardId: selectedCard.id, timesUsed: selectedCard.times_used });
 
   return selectedCard;
 }
@@ -255,7 +241,7 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
 
     if (response.ok) {
       const requestId = response.headers.get("X-Line-Request-Id");
-      log("info", "Broadcast succeeded", { attempt, requestId });
+      log.info( "Broadcast succeeded", { attempt, requestId });
       return { success: true, requestId };
     }
 
@@ -264,12 +250,12 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
     const retryAfter = response.headers.get("Retry-After");
     const shouldRetry = response.status === 429 || response.status >= 500;
 
-    log(shouldRetry ? "warn" : "error", "Broadcast failed", {
-      attempt,
-      status: response.status,
-      errorBody,
-      retryAfter,
-    });
+    const logContext = { attempt, status: response.status, errorBody, retryAfter };
+    if (shouldRetry) {
+      log.warn("Broadcast failed, will retry", logContext);
+    } else {
+      log.error("Broadcast failed", logContext);
+    }
 
     if (!shouldRetry || attempt >= maxAttempts) {
       break;
@@ -313,13 +299,13 @@ async function recordBroadcastHistory(
   const { error } = await client.from("line_card_broadcasts").insert(insertData);
 
   if (error) {
-    log("warn", "Failed to record broadcast history", {
+    log.warn( "Failed to record broadcast history", {
       cardId: data.cardId,
       error: error.message,
     });
     // Don't throw - this is non-critical
   } else {
-    log("info", "Broadcast history recorded", {
+    log.info( "Broadcast history recorded", {
       cardId: data.cardId,
       status: data.broadcastStatus,
     });
@@ -333,11 +319,11 @@ async function updateCardAfterDelivery(client: SupabaseClient, cardId: string): 
   const { error } = await client.rpc("increment_times_used", { card_id: cardId });
 
   if (!error) {
-    log("info", "Card updated via RPC", { cardId });
+    log.info( "Card updated via RPC", { cardId });
     return;
   }
 
-  log("warn", "RPC increment_times_used failed, applying safe fallback", {
+  log.warn( "RPC increment_times_used failed, applying safe fallback", {
     cardId,
     error: error.message,
   });
@@ -365,7 +351,7 @@ async function updateCardAfterDelivery(client: SupabaseClient, cardId: string): 
     throw new Error(`Failed to update card: ${updateError.message}`);
   }
 
-  log("info", "Card updated via fallback", { cardId });
+  log.info( "Card updated via fallback", { cardId });
 }
 
 /**
@@ -380,7 +366,7 @@ Deno.serve(async (req) => {
   }
 
   if (!verifyAuth(req)) {
-    log("error", "Authentication failed");
+    log.error( "Authentication failed");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
@@ -388,11 +374,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    log("info", "Step 1: Selecting card");
+    log.info( "Step 1: Selecting card");
     const card = await selectCard(supabaseClient);
 
     if (!card) {
-      log("warn", "No card available to send");
+      log.warn( "No card available to send");
       return new Response(
         JSON.stringify({
           success: true,
@@ -406,17 +392,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    log("info", "Step 2: Formatting message", {
+    log.info( "Step 2: Formatting message", {
       cardId: card.id,
       messageLength: card.body.length,
     });
     const message = formatMessage(card);
 
-    log("info", "Step 3: Broadcasting via LINE", { cardId: card.id });
+    log.info( "Step 3: Broadcasting via LINE", { cardId: card.id });
     const broadcastResult = await broadcastMessage(message);
 
     if (!broadcastResult.success) {
-      log("error", "Broadcast failed", { error: broadcastResult.error });
+      log.error( "Broadcast failed", { error: broadcastResult.error });
       
       // Record failed broadcast history
       await recordBroadcastHistory(supabaseClient, {
@@ -427,7 +413,7 @@ Deno.serve(async (req) => {
         lineRequestId: broadcastResult.requestId || null,
         lineResponseStatus: null,
       }).catch((err) => {
-        log("warn", "Failed to record broadcast history", { error: err.message });
+        log.warn( "Failed to record broadcast history", { error: err.message });
       });
 
       return new Response(
@@ -442,11 +428,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    log("info", "Step 4: Updating card record", { cardId: card.id });
+    log.info( "Step 4: Updating card record", { cardId: card.id });
     await updateCardAfterDelivery(supabaseClient, card.id);
 
     // Step 5: Record broadcast history
-    log("info", "Step 5: Recording broadcast history", { cardId: card.id });
+    log.info( "Step 5: Recording broadcast history", { cardId: card.id });
     await recordBroadcastHistory(supabaseClient, {
       cardId: card.id,
       theme: card.theme,
@@ -471,7 +457,7 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
-    log("error", "Error in line-daily-brief", {
+    log.error( "Error in line-daily-brief", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
     return new Response(
