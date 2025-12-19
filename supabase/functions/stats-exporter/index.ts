@@ -3,6 +3,10 @@
  * LINE イベントデータを Google Sheets にエクスポート
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createSheetsClientFromEnv, type SheetsClient } from "../_shared/google-sheets.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("stats-exporter");
 
 /** LINE イベントレコード */
 interface LineEvent {
@@ -71,18 +75,6 @@ interface DailySummary {
   generatedAt: string;
 }
 
-/** Google Service Account 認証情報 */
-interface GoogleServiceAccount {
-  client_email: string;
-  private_key: string;
-}
-
-/** Google Sheets クライアント */
-interface SheetsClient {
-  append(tabName: string, values: unknown[][]): Promise<void>;
-  update(tabName: string, values: unknown[][]): Promise<void>;
-  clearBelowHeader(tabName: string): Promise<void>;
-}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -116,7 +108,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .order("created_at", { ascending: true });
 
   if (eventsError) {
-    console.error("Failed to fetch line_events", eventsError);
+    log.error("Failed to fetch line_events", { errorMessage: eventsError.message });
     return new Response("Failed to fetch events", { status: 500 });
   }
 
@@ -163,7 +155,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
 
   if (membersError) {
-    console.error("Failed to fetch library_members", membersError);
+    log.error("Failed to fetch library_members", { errorMessage: membersError.message });
   }
 
   const membershipRows = ((members ?? []) as LibraryMember[]).map((member) => [
@@ -199,7 +191,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       "",
     ]);
 
-  const sheetsClient = await buildSheetsClient(JSON.parse(GOOGLE_SA_JSON));
+  const sheetsClient = await createSheetsClientFromEnv(GOOGLE_SA_JSON, SHEET_ID);
   if (rawRows.length > 0) {
     await appendRows(sheetsClient, RAW_TAB, rawRows);
   }
@@ -273,86 +265,6 @@ function buildDailySummary(events: LineEvent[]): DailySummary[] {
   }));
 }
 
-async function buildSheetsClient(serviceAccount: GoogleServiceAccount): Promise<SheetsClient> {
-  const now = Math.floor(Date.now() / 1000);
-  const jwtHeader = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const jwtPayload = btoa(JSON.stringify({
-    iss: serviceAccount.client_email,
-    scope: "https://www.googleapis.com/auth/spreadsheets",
-    aud: "https://www.googleapis.com/oauth2/v4/token",
-    exp: now + 3600,
-    iat: now,
-  }));
-  const encoder = new TextEncoder();
-  const keyData = strToUint8Array(serviceAccount.private_key);
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    keyData.buffer as ArrayBuffer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    encoder.encode(`${jwtHeader}.${jwtPayload}`),
-  );
-  const jwtSignature = uint8ToBase64(signature);
-
-  const tokenResponse = await fetch("https://www.googleapis.com/oauth2/v4/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: `${jwtHeader}.${jwtPayload}.${jwtSignature}`,
-    }),
-  }).then((res) => res.json());
-
-  if (!tokenResponse.access_token) {
-    throw new Error("Failed to obtain Google access token");
-  }
-
-  const authHeaders = {
-    Authorization: `Bearer ${tokenResponse.access_token}`,
-    "Content-Type": "application/json",
-  };
-
-  return {
-    async append(tabName: string, values: unknown[][]) {
-      await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${tabName}!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({ values }),
-        },
-      );
-    },
-    async update(tabName: string, values: unknown[][]) {
-      await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${tabName}!A2?valueInputOption=USER_ENTERED`,
-        {
-          method: "PUT",
-          headers: authHeaders,
-          body: JSON.stringify({ values }),
-        },
-      );
-    },
-    async clearBelowHeader(tabName: string) {
-      await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}:batchClear`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({
-            ranges: [`${tabName}!A2:Z`],
-          }),
-        },
-      );
-    },
-  };
-}
-
 async function appendRows(client: SheetsClient, tabName: string, rows: unknown[][]): Promise<void> {
   if (rows.length === 0) return;
   await client.append(tabName, rows);
@@ -362,24 +274,5 @@ async function overwriteRows(client: SheetsClient, tabName: string, rows: unknow
   await client.clearBelowHeader(tabName);
   if (rows.length === 0) return;
   await client.update(tabName, rows);
-}
-
-function strToUint8Array(pem: string): Uint8Array {
-  const cleaned = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
-  const binary = atob(cleaned);
-  const buffer = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    buffer[i] = binary.charCodeAt(i);
-  }
-  return buffer;
-}
-
-function uint8ToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
 }
 

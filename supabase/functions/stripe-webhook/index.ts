@@ -2,21 +2,13 @@
  * Stripe Webhook Edge Function
  * Stripe決済イベントを処理し、会員情報を更新
  */
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@12.0.0?target=deno";
 import { notifyDiscord } from "../_shared/alert.ts";
+import { createSheetsClientFromEnv } from "../_shared/google-sheets.ts";
+import { createLogger } from "../_shared/logger.ts";
 
-/** Google Service Account 認証情報 */
-interface GoogleServiceAccount {
-  client_email: string;
-  private_key: string;
-}
-
-/** Google Sheets クライアント */
-interface SheetsClient {
-  append(tabName: string, values: unknown[][]): Promise<void>;
-}
+const log = createLogger("stripe-webhook");
 
 // Google Sheets 連携（任意）
 const MEMBERS_SHEET_ID = Deno.env.get("MEMBERS_SHEET_ID") ?? "";
@@ -31,97 +23,20 @@ const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY") as string, {
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 // Google Sheets連携関数
-async function buildSheetsClient(serviceAccount: GoogleServiceAccount): Promise<SheetsClient> {
-  const now = Math.floor(Date.now() / 1000);
-  const jwtHeader = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const jwtPayload = btoa(
-    JSON.stringify({
-      iss: serviceAccount.client_email,
-      scope: "https://www.googleapis.com/auth/spreadsheets",
-      aud: "https://www.googleapis.com/oauth2/v4/token",
-      exp: now + 3600,
-      iat: now,
-    }),
-  );
-  const encoder = new TextEncoder();
-  const keyData = strToUint8Array(serviceAccount.private_key);
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    keyData.buffer as ArrayBuffer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    encoder.encode(`${jwtHeader}.${jwtPayload}`),
-  );
-  const jwtSignature = uint8ToBase64(signature);
-
-  const tokenResponse = await fetch("https://www.googleapis.com/oauth2/v4/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: `${jwtHeader}.${jwtPayload}.${jwtSignature}`,
-    }),
-  }).then((res) => res.json());
-
-  if (!tokenResponse.access_token) {
-    throw new Error("Failed to obtain Google access token");
-  }
-
-  const authHeaders = {
-    Authorization: `Bearer ${tokenResponse.access_token}`,
-    "Content-Type": "application/json",
-  };
-
-  return {
-    async append(tabName: string, values: unknown[][]) {
-      await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${MEMBERS_SHEET_ID}/values/${tabName}!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({ values }),
-        },
-      );
-    },
-  };
-}
-
 async function appendMemberRow(row: unknown[]) {
   if (!MEMBERS_SHEET_ID || !GOOGLE_SA_JSON) {
-    console.log("Google Sheets not configured, skipping append");
+    log.debug("Google Sheets not configured, skipping append");
     return;
   }
   try {
-    const client = await buildSheetsClient(JSON.parse(GOOGLE_SA_JSON));
+    const client = await createSheetsClientFromEnv(GOOGLE_SA_JSON, MEMBERS_SHEET_ID);
     await client.append(MEMBERS_SHEET_TAB, [row]);
-    console.log(`Appended member to sheet: ${MEMBERS_SHEET_TAB}`);
+    log.info("Appended member to sheet", { tab: MEMBERS_SHEET_TAB });
   } catch (err) {
-    console.warn("Failed to append to sheet:", err instanceof Error ? err.message : String(err));
+    log.warn("Failed to append to sheet", {
+      errorMessage: err instanceof Error ? err.message : String(err)
+    });
   }
-}
-
-function strToUint8Array(pem: string) {
-  const cleaned = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
-  const binary = atob(cleaned);
-  const buffer = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    buffer[i] = binary.charCodeAt(i);
-  }
-  return buffer;
-}
-
-function uint8ToBase64(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
 }
 
 // Discord招待リンクを送信
@@ -131,7 +46,7 @@ async function sendDiscordInvite(email: string, name: string | null, tier: strin
   const guildId = Deno.env.get("DISCORD_GUILD_ID") || "1316621823382728704"; // Cursorvers Discord Server ID
 
   if (!discordBotToken) {
-    console.warn("DISCORD_BOT_TOKEN not set, skipping Discord invite");
+    log.warn("DISCORD_BOT_TOKEN not set, skipping Discord invite");
     return;
   }
 
@@ -155,7 +70,7 @@ async function sendDiscordInvite(email: string, name: string | null, tier: strin
 
     if (!inviteResponse.ok) {
       const errorText = await inviteResponse.text();
-      console.error(`Failed to create Discord invite: ${inviteResponse.status} ${errorText}`);
+      log.error("Failed to create Discord invite", { status: inviteResponse.status, errorText });
       await notifyDiscord({
         title: "MANUS ALERT: Discord invite creation failed",
         message: `Status: ${inviteResponse.status}, Error: ${errorText}`,
@@ -167,11 +82,11 @@ async function sendDiscordInvite(email: string, name: string | null, tier: strin
     const invite = await inviteResponse.json();
     const inviteUrl = `https://discord.gg/${invite.code}`;
 
-    console.log(`Discord invite created: ${inviteUrl} for ${email}`);
+    log.info("Discord invite created", { email, inviteUrl });
 
     // 招待リンクをメールで送信（実装例）
     // TODO: メール送信機能を実装
-    console.log(`TODO: Send email to ${email} with invite link: ${inviteUrl}`);
+    log.debug("TODO: Send email with invite link", { email });
 
     // Discordに通知（管理者用）
     await notifyDiscord({
@@ -180,7 +95,7 @@ async function sendDiscordInvite(email: string, name: string | null, tier: strin
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error(`Failed to send Discord invite: ${errorMessage}`);
+    log.error("Failed to send Discord invite", { email, errorMessage });
     await notifyDiscord({
       title: "MANUS ALERT: Discord invite error",
       message: errorMessage,
@@ -189,7 +104,7 @@ async function sendDiscordInvite(email: string, name: string | null, tier: strin
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const signature = req.headers.get("Stripe-Signature");
   const body = await req.text();
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
@@ -206,7 +121,7 @@ serve(async (req) => {
     );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error(`Webhook signature verification failed: ${errorMessage}`);
+    log.error("Webhook signature verification failed", { errorMessage });
     await notifyDiscord({
       title: "MANUS ALERT: Stripe webhook signature failed",
       message: errorMessage,
@@ -226,7 +141,7 @@ serve(async (req) => {
       const paymentStatus = session.payment_status;
       const mode = session.mode;
 
-      console.log(`Checkout session completed: ${session.id}, email: ${customerEmail}, status: ${paymentStatus}, mode: ${mode}`);
+      log.info("Checkout session completed", { sessionId: session.id, email: customerEmail, paymentStatus, mode });
 
       // Payment Linkからの決済完了のみ処理（payment_statusがpaidの場合）
       if (customerEmail && paymentStatus === "paid") {
@@ -252,9 +167,9 @@ serve(async (req) => {
             nextBillingAt = subscription.current_period_end
               ? new Date(subscription.current_period_end * 1000).toISOString()
               : null;
-            console.log(`Subscription details: ${subscriptionId}, status: ${subscriptionStatus}`);
+            log.info("Subscription details retrieved", { subscriptionId, subscriptionStatus });
           } catch (err) {
-            console.error(`Failed to retrieve subscription: ${err instanceof Error ? err.message : String(err)}`);
+            log.error("Failed to retrieve subscription", { subscriptionId, errorMessage: err instanceof Error ? err.message : String(err) });
           }
         }
 
@@ -291,7 +206,7 @@ serve(async (req) => {
           );
 
         if (error) {
-          console.error("DB Insert Error:", error);
+          log.error("DB Insert Error", { errorMessage: error.message });
           await notifyDiscord({
             title: "MANUS ALERT: members upsert failed",
             message: error.message ?? "unknown DB error",
@@ -302,7 +217,7 @@ serve(async (req) => {
             headers: { "Content-Type": "application/json" },
           });
         } else {
-          console.log(`Member joined: ${customerEmail}, tier: ${membershipTier}`);
+          log.info("Member joined", { email: customerEmail, tier: membershipTier });
           
           // Google Sheets へ追記（設定されている場合のみ）
           await appendMemberRow([
@@ -320,7 +235,7 @@ serve(async (req) => {
           await sendDiscordInvite(customerEmail, customerName, membershipTier);
         }
       } else {
-        console.log(`Payment not completed: email=${customerEmail}, status=${paymentStatus}`);
+        log.info("Payment not completed", { email: customerEmail, paymentStatus });
       }
       break;
     }
@@ -337,7 +252,7 @@ serve(async (req) => {
             customerEmail = customer.email || null;
           }
         } catch (err) {
-          console.error(`Failed to retrieve customer: ${err instanceof Error ? err.message : String(err)}`);
+          log.error("Failed to retrieve customer", { customerId: subscription.customer, errorMessage: err instanceof Error ? err.message : String(err) });
         }
       }
 
@@ -355,8 +270,8 @@ serve(async (req) => {
           })
           .eq("email", customerEmail);
 
-        if (error) console.error("DB Update Error:", error);
-        else console.log(`Subscription updated: ${subscription.id}`);
+        if (error) log.error("DB Update Error", { errorMessage: error.message });
+        else log.info("Subscription updated", { subscriptionId: subscription.id });
       }
       break;
     }
@@ -373,7 +288,7 @@ serve(async (req) => {
             customerEmail = customer.email || null;
           }
         } catch (err) {
-          console.error(`Failed to retrieve customer: ${err instanceof Error ? err.message : String(err)}`);
+          log.error("Failed to retrieve customer", { customerId: subscription.customer, errorMessage: err instanceof Error ? err.message : String(err) });
         }
       }
 
@@ -387,8 +302,8 @@ serve(async (req) => {
           })
           .eq("email", customerEmail);
 
-        if (error) console.error("DB Update Error:", error);
-        else console.log(`Subscription canceled: ${subscription.id}`);
+        if (error) log.error("DB Update Error", { errorMessage: error.message });
+        else log.info("Subscription canceled", { subscriptionId: subscription.id });
       }
       break;
     }

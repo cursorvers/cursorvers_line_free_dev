@@ -1,13 +1,17 @@
-// LINE/LIFF用: 無料登録でメール任意取得し members にUPSERT
-// フロー1: メールアドレスのみ保存（line_user_idなし）
-// フロー2: LINEログイン後、メールアドレスとline_user_idを紐付け
-// - line_user_id: 任意（LIFFのuserId、紐付け時に必要）
-// - email: 任意（メールアドレス登録時）
-// - opt_in_email: デフォルト true（明示的に false 指定可）
-// セキュリティ: line_user_idがある場合はLINEのプロフィール取得で検証（LINE_CHANNEL_ACCESS_TOKENが必要）
-
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+/**
+ * LINE/LIFF用: 無料登録でメール任意取得し members にUPSERT
+ * フロー1: メールアドレスのみ保存（line_user_idなし）
+ * フロー2: LINEログイン後、メールアドレスとline_user_idを紐付け
+ * - line_user_id: 任意（LIFFのuserId、紐付け時に必要）
+ * - email: 任意（メールアドレス登録時）
+ * - opt_in_email: デフォルト true（明示的に false 指定可）
+ * セキュリティ: line_user_idがある場合はLINEのプロフィール取得で検証
+ */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createSheetsClientFromEnv } from "../_shared/google-sheets.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("line-register");
 
 // 日本時間（JST, UTC+9）を返すヘルパー関数
 function getJSTTimestamp(): string {
@@ -15,27 +19,6 @@ function getJSTTimestamp(): string {
   const jstOffset = 9 * 60; // JST is UTC+9
   const jstTime = new Date(now.getTime() + jstOffset * 60 * 1000);
   return jstTime.toISOString().replace('Z', '+09:00');
-}
-
-// 統一的なログ関数
-type LogLevel = "info" | "warn" | "error";
-
-function log(level: LogLevel, message: string, context: Record<string, unknown> = {}) {
-  const entry = {
-    level,
-    message,
-    ...context,
-    timestamp: getJSTTimestamp(),
-    function: "line-register",
-  };
-  const output = JSON.stringify(entry);
-  if (level === "error") {
-    console.error(output);
-  } else if (level === "warn") {
-    console.warn(output);
-  } else {
-    console.log(output);
-  }
 }
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -76,118 +59,40 @@ function normalizeEmail(email?: string | null): string | null {
   return trimmed.toLowerCase();
 }
 
-async function buildSheetsClient(serviceAccount: any) {
-  const now = Math.floor(Date.now() / 1000);
-  const jwtHeader = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const jwtPayload = btoa(
-    JSON.stringify({
-      iss: serviceAccount.client_email,
-      scope: "https://www.googleapis.com/auth/spreadsheets",
-      aud: "https://www.googleapis.com/oauth2/v4/token",
-      exp: now + 3600,
-      iat: now,
-    }),
-  );
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    strToUint8Array(serviceAccount.private_key),
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    encoder.encode(`${jwtHeader}.${jwtPayload}`),
-  );
-  const jwtSignature = uint8ToBase64(signature);
-
-  const tokenResponse = await fetch("https://www.googleapis.com/oauth2/v4/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: `${jwtHeader}.${jwtPayload}.${jwtSignature}`,
-    }),
-  }).then((res) => res.json());
-
-  if (!tokenResponse.access_token) {
-    throw new Error("Failed to obtain Google access token");
-  }
-
-  const authHeaders = {
-    Authorization: `Bearer ${tokenResponse.access_token}`,
-    "Content-Type": "application/json",
-  };
-
-  return {
-    async append(tabName: string, values: unknown[][]) {
-      await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${MEMBERS_SHEET_ID}/values/${tabName}!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({ values }),
-        },
-      );
-    },
-  };
-}
-
 async function appendMemberRow(row: unknown[]) {
   if (!MEMBERS_SHEET_ID || !GOOGLE_SA_JSON) {
     return;
   }
   try {
-    const client = await buildSheetsClient(JSON.parse(GOOGLE_SA_JSON));
+    const client = await createSheetsClientFromEnv(GOOGLE_SA_JSON, MEMBERS_SHEET_ID);
     await client.append(MEMBERS_SHEET_TAB, [row]);
-    log("info", "Appended member to sheet", { tab: MEMBERS_SHEET_TAB });
+    log.info("Appended member to sheet", { tab: MEMBERS_SHEET_TAB });
   } catch (err) {
-    log("warn", "Failed to append to sheet", {
-      error: err instanceof Error ? err.message : String(err),
+    log.warn("Failed to append to sheet", {
+      errorMessage: err instanceof Error ? err.message : String(err),
     });
   }
 }
 
-function strToUint8Array(pem: string) {
-  const cleaned = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
-  const binary = atob(cleaned);
-  const buffer = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    buffer[i] = binary.charCodeAt(i);
-  }
-  return buffer;
-}
-
-function uint8ToBase64(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
-}
-
-serve(async (req) => {
+Deno.serve(async (req) => {
   try {
   // 環境変数チェック
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    log("error", "Missing required environment variables", {
+    log.error("Missing required environment variables", {
       hasSupabaseUrl: !!SUPABASE_URL,
       hasServiceRoleKey: !!SUPABASE_SERVICE_ROLE_KEY,
     });
     return badRequest("Server configuration error", 500);
   }
 
-  log("info", "Request received", { method: req.method });
+  log.info("Request received", { method: req.method });
 
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers });
   }
 
   if (req.method !== "POST") {
-    log("warn", "Method not allowed", { method: req.method });
+    log.warn("Method not allowed", { method: req.method });
     return badRequest("Method not allowed", 405);
   }
 
@@ -199,14 +104,14 @@ serve(async (req) => {
 
   try {
     body = await req.json();
-    log("info", "Request body parsed", {
+    log.info("Request body parsed", {
       hasEmail: !!body.email,
       hasLineUserId: !!body.line_user_id,
       emailPrefix: body.email ? body.email.slice(0, 5) + "***" : null,
     });
   } catch (err) {
-    log("error", "Failed to parse JSON", {
-      error: err instanceof Error ? err.message : String(err),
+    log.error("Failed to parse JSON", {
+      errorMessage: err instanceof Error ? err.message : String(err),
     });
     return badRequest("Invalid JSON");
   }
@@ -218,7 +123,7 @@ serve(async (req) => {
 
   // line_user_idまたはemailのいずれかが必須
   if (!lineUserId && !email) {
-    log("warn", "Both line_user_id and email are missing");
+    log.warn("Both line_user_id and email are missing");
     return badRequest("line_user_id or email is required");
   }
 
@@ -232,7 +137,7 @@ serve(async (req) => {
       },
     });
     if (!res.ok) {
-        log("warn", "LINE profile fetch failed (user may not be a friend)", {
+        log.warn("LINE profile fetch failed (user may not be a friend)", {
           lineUserId: lineUserId?.slice(-4) ?? "null",
           status: res.status,
         });
@@ -241,14 +146,14 @@ serve(async (req) => {
         return badRequest("LINE verification failed", res.status);
       }
     } else {
-      log("info", "LINE profile verified", {
+      log.info("LINE profile verified", {
         lineUserId: lineUserId?.slice(-4) ?? "null",
       });
     }
   } catch (err) {
-      log("error", "LINE profile verification error", {
+      log.error("LINE profile verification error", {
         lineUserId: lineUserId?.slice(-4) ?? "null",
-        error: err instanceof Error ? err.message : String(err),
+        errorMessage: err instanceof Error ? err.message : String(err),
       });
     // エラーが発生しても処理を継続
   }
@@ -350,10 +255,10 @@ serve(async (req) => {
   }
 
   if (error) {
-    log("error", "Database upsert error", {
+    log.error("Database upsert error", {
       email: email ? email.slice(0, 5) + "***" : null,
       lineUserId: lineUserId ? lineUserId.slice(-4) : null,
-      error: error.message,
+      errorMessage: error.message,
       isUpdate: !!existingRecord,
     });
     return badRequest("Database error", 500);
@@ -377,17 +282,15 @@ serve(async (req) => {
 
     const { error: logError } = await supabase.from("logs").insert(logPayload);
     if (logError) {
-      log("warn", "Failed to save log to database", {
-        error: logError.message,
+      log.warn("Failed to save log to database", {
+        errorMessage: logError.message,
       });
     } else {
-      log("info", "Log saved to database", {
-        logId: "saved",
-      });
+      log.debug("Log saved to database");
     }
   } catch (logErr) {
-    log("warn", "Error saving log", {
-      error: logErr instanceof Error ? logErr.message : String(logErr),
+    log.warn("Error saving log", {
+      errorMessage: logErr instanceof Error ? logErr.message : String(logErr),
     });
   }
 
@@ -405,7 +308,7 @@ serve(async (req) => {
     "", // subscription_status（未設定）
   ]);
 
-  log("info", "Registration completed", {
+  log.info("Registration completed", {
     email: email ? email.slice(0, 5) + "***" : null,
     lineUserId: lineUserId ? lineUserId.slice(-4) : null,
     optInEmail: optInEmail,
@@ -422,8 +325,8 @@ serve(async (req) => {
     { status: 200, headers }
   );
   } catch (err) {
-    log("error", "Unhandled error in serve", {
-      error: err instanceof Error ? err.message : String(err),
+    log.error("Unhandled error in serve", {
+      errorMessage: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
     return new Response(
