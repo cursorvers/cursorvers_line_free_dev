@@ -1,15 +1,45 @@
 // supabase/functions/line-webhook/index.ts
 // LINE公式アカウント用 Webhook エントリポイント（Pocket Defense Tool）
-// - 型定義
-// - dispatcher（Prompt Polisher / Risk Checker / 診断キーワード）
-// - logInteraction helper
-// OpenAI呼び出しや個別ロジックは lib/ 以下に切り出す
+// 主要ロジックは lib/ 以下に分割
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// lib モジュール
+// lib モジュール - 定数・型
 import { DISCORD_INVITE_URL, CONTACT_FORM_URL, SERVICES_LP_URL, COURSE_KEYWORDS, type DiagnosisKeyword } from "./lib/constants.ts";
+
+// lib モジュール - LINE API
+import { verifyLineSignature, replyText, pushText, replyRaw, type QuickReply } from "./lib/line-api.ts";
+
+// lib モジュール - Quick Reply
+import {
+  buildDiagnosisQuickReply,
+  buildServicesQuickReply,
+  buildBackButtonQuickReply,
+  buildNewsletterConfirmQuickReply,
+} from "./lib/quick-reply.ts";
+
+// lib モジュール - ユーザー状態管理
+import {
+  getUserState,
+  updateUserState,
+  clearUserState,
+  getDiagnosisState,
+  updateDiagnosisState,
+  clearDiagnosisState,
+  setToolMode,
+  getToolMode,
+  setPendingEmail,
+  getPendingEmail,
+  clearPendingEmail,
+  type UserMode,
+  type UserState,
+} from "./lib/user-state.ts";
+
+// lib モジュール - レート制限
+import { getHourlyPolishCount, getHourlyRiskCheckCount, MAX_POLISH_PER_HOUR } from "./lib/rate-limit.ts";
+
+// lib モジュール - 機能
 import { runPromptPolisher } from "./lib/prompt-polisher.ts";
 import { runRiskChecker } from "./lib/risk-checker.ts";
 import { buildCourseEntryMessage } from "./lib/course-router.ts";
@@ -25,7 +55,6 @@ import {
   getTotalQuestions,
 } from "./lib/diagnosis-flow.ts";
 import { getArticlesByIds, getArticlesByTag } from "./lib/note-recommendations.ts";
-import { withSafetyFooter } from "../_shared/safety.ts";
 
 // =======================
 // 型定義
@@ -65,27 +94,13 @@ interface LineWebhookRequestBody {
 // 環境変数 & クライアント
 // =======================
 
-const LINE_CHANNEL_ACCESS_TOKEN =
-  Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
-const LINE_CHANNEL_SECRET = Deno.env.get("LINE_CHANNEL_SECRET") ?? "";
-
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-const SUPABASE_SERVICE_ROLE_KEY =
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-
-const MAX_POLISH_PER_HOUR = Number(Deno.env.get("MAX_POLISH_PER_HOUR") ?? "10");
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const MAX_INPUT_LENGTH = Number(Deno.env.get("MAX_INPUT_LENGTH") ?? "3000");
-
-if (!LINE_CHANNEL_ACCESS_TOKEN || !LINE_CHANNEL_SECRET) {
-  console.warn(
-    "[line-webhook] LINE environment variables are not fully set."
-  );
-}
+const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn(
-    "[line-webhook] Supabase environment variables are not fully set."
-  );
+  console.warn("[line-webhook] Supabase environment variables are not fully set.");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -123,231 +138,6 @@ function detectCourseKeyword(text: string): DiagnosisKeyword | null {
   const normalized = normalizeKeyword(text);
   const match = COURSE_KEYWORDS.find((kw) => kw === normalized);
   return match ?? null;
-}
-
-// LINE 署名検証
-async function verifyLineSignature(
-  req: Request,
-  rawBody: string
-): Promise<boolean> {
-  if (!LINE_CHANNEL_SECRET) return false;
-  const signature = req.headers.get("x-line-signature");
-  if (!signature) return false;
-
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(LINE_CHANNEL_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-
-  const hmac = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
-  const hashArray = Array.from(new Uint8Array(hmac));
-  const hashBase64 = btoa(String.fromCharCode(...hashArray));
-
-  return hashBase64 === signature;
-}
-
-// クイックリプライアイテムの型
-interface QuickReplyItem {
-  type: "action";
-  action: {
-    type: "message" | "postback";
-    label: string;
-    text?: string;
-    data?: string;
-    displayText?: string;
-  };
-}
-
-interface QuickReply {
-  items: QuickReplyItem[];
-}
-
-// LINE 返信（reply API）
-async function replyText(replyToken: string, text: string, quickReply?: QuickReply) {
-  if (!replyToken) {
-    console.log("[line-webhook] replyText: No replyToken");
-    return;
-  }
-  const message: Record<string, unknown> = { type: "text", text: withSafetyFooter(text) };
-  if (quickReply) {
-    message.quickReply = quickReply;
-  }
-  const res = await fetch("https://api.line.me/v2/bot/message/reply", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify({
-      replyToken,
-      messages: [message],
-    }),
-  });
-  if (!res.ok) {
-    const errorBody = await res.text();
-    console.error("[line-webhook] replyText error:", res.status, errorBody);
-  }
-}
-
-// 診断キーワード選択用のクイックリプライを生成
-function buildDiagnosisQuickReply(): QuickReply {
-  return {
-    items: [
-      // 診断キーワード
-      ...COURSE_KEYWORDS.map((keyword) => ({
-        type: "action" as const,
-        action: {
-          type: "message" as const,
-          label: keyword.replace("診断", ""), // ラベルは短く
-          text: keyword,
-        },
-      })),
-      // お問い合わせボタン
-      {
-        type: "action" as const,
-        action: {
-          type: "message" as const,
-          label: "お問い合わせ",
-          text: "お問い合わせ",
-        },
-      },
-    ],
-  };
-}
-
-// サービス一覧用のクイックリプライを生成（コミュニティは別メニューに集約）
-function buildServicesQuickReply(): QuickReply {
-  return {
-    items: [
-      {
-        type: "action" as const,
-        action: {
-          type: "message" as const,
-          label: "プロンプト整形",
-          text: "プロンプト整形の使い方",
-        },
-      },
-      {
-        type: "action" as const,
-        action: {
-          type: "message" as const,
-          label: "リスクチェック",
-          text: "リスクチェックの使い方",
-        },
-      },
-      {
-        type: "action" as const,
-        action: {
-          type: "message" as const,
-          label: "サービス詳細（Web）",
-          text: "サービス詳細を見る",
-        },
-      },
-    ],
-  };
-}
-
-// 「戻る」ボタン付きクイックリプライ（ツールモード用）
-function buildBackButtonQuickReply(): QuickReply {
-  return {
-    items: [
-      {
-        type: "action" as const,
-        action: {
-          type: "message" as const,
-          label: "← 戻る",
-          text: "戻る",
-        },
-      },
-    ],
-  };
-}
-
-// LINE push（非同期で結果を送る用）
-async function pushText(lineUserId: string, text: string) {
-  await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify({
-      to: lineUserId,
-      messages: [{ type: "text", text }],
-    }),
-  });
-}
-
-// メルマガ同意確認用のクイックリプライを生成
-function buildNewsletterConfirmQuickReply(): QuickReply {
-  return {
-    items: [
-      {
-        type: "action" as const,
-        action: {
-          type: "postback" as const,
-          label: "OK",
-          data: "email_opt_in=yes",
-          displayText: "OK",
-        },
-      },
-      {
-        type: "action" as const,
-        action: {
-          type: "postback" as const,
-          label: "配信しない",
-          data: "email_opt_in=no",
-          displayText: "配信しない",
-        },
-      },
-    ],
-  };
-}
-
-// メルマガ同意確認メッセージを送信（Push API + Quick Reply）
-async function pushNewsletterConfirmation(lineUserId: string, email: string) {
-  const text = [
-    "📧 メール登録",
-    `${email}`,
-    "",
-    "━━━━━━━━━━━━━━━",
-    "📬 メルマガ内容",
-    "━━━━━━━━━━━━━━━",
-    "・AI副業の最新トレンド",
-    "・詐欺・リスク回避の実例",
-    "・限定コンテンツのお知らせ",
-    "",
-    "配信しますか？",
-    "※ いつでも配信停止できます",
-  ].join("\n");
-
-  // 登録確認画面にはsafety footerを付けない
-  const message: Record<string, unknown> = {
-    type: "text",
-    text: text,
-    quickReply: buildNewsletterConfirmQuickReply(),
-  };
-
-  const res = await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify({
-      to: lineUserId,
-      messages: [message],
-    }),
-  });
-
-  if (!res.ok) {
-    const errorBody = await res.text();
-    console.error("[line-webhook] pushNewsletterConfirmation error:", res.status, errorBody);
-  }
 }
 
 // Supabase users: line_user_id から user.id を解決 or 作成
@@ -404,162 +194,6 @@ async function logInteraction(opts: LogOptions) {
 
   if (error) {
     console.error("[line-webhook] logInteraction error", error);
-  }
-}
-
-// 直近1時間の利用回数をチェック（汎用）
-async function getHourlyUsageCount(
-  userId: string, 
-  interactionType: string
-): Promise<{ count: number; nextAvailable: Date | null }> {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const oneHourAgoIso = oneHourAgo.toISOString();
-
-  const { data, error } = await supabase
-    .from("interaction_logs")
-    .select("created_at")
-    .eq("user_id", userId)
-    .eq("interaction_type", interactionType)
-    .gte("created_at", oneHourAgoIso)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    console.error(`[line-webhook] getHourlyUsageCount error for ${interactionType}:`, error);
-    return { count: 0, nextAvailable: null };
-  }
-
-  const count = data?.length ?? 0;
-  
-  // 5回以上使っている場合、最初の利用から1時間後を計算
-  let nextAvailable: Date | null = null;
-  if (count >= MAX_POLISH_PER_HOUR && data && data.length > 0) {
-    const oldestUsage = new Date(data[0].created_at);
-    nextAvailable = new Date(oldestUsage.getTime() + 60 * 60 * 1000);
-  }
-
-  return { count, nextAvailable };
-}
-
-// Prompt Polisher 用
-async function getHourlyPolishCount(userId: string) {
-  return getHourlyUsageCount(userId, "prompt_polisher");
-}
-
-// Risk Checker 用
-async function getHourlyRiskCheckCount(userId: string) {
-  return getHourlyUsageCount(userId, "risk_checker");
-}
-
-// =======================
-// ユーザー状態管理（診断フロー & ツールモード）
-// =======================
-
-// ユーザー状態の型（診断 or ツールモード）
-type UserMode = "polish" | "risk_check" | null;
-
-interface UserState {
-  mode?: UserMode;
-  diagnosis?: DiagnosisState;
-  pendingEmail?: string; // メルマガ同意確認待ちのメールアドレス
-}
-
-// ユーザー状態を取得
-async function getUserState(lineUserId: string): Promise<UserState | null> {
-  const { data, error } = await supabase
-    .from("users")
-    .select("diagnosis_state")
-    .eq("line_user_id", lineUserId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("[line-webhook] getUserState error", error);
-    return null;
-  }
-
-  return data?.diagnosis_state as UserState | null;
-}
-
-// ユーザー状態を更新
-async function updateUserState(
-  lineUserId: string,
-  state: UserState | null
-): Promise<void> {
-  const { error } = await supabase
-    .from("users")
-    .update({ diagnosis_state: state })
-    .eq("line_user_id", lineUserId);
-
-  if (error) {
-    console.error("[line-webhook] updateUserState error", error);
-  }
-}
-
-// ユーザー状態をクリア
-async function clearUserState(lineUserId: string): Promise<void> {
-  await updateUserState(lineUserId, null);
-}
-
-// 診断状態を取得（後方互換）
-async function getDiagnosisState(lineUserId: string): Promise<DiagnosisState | null> {
-  const state = await getUserState(lineUserId);
-  return state?.diagnosis ?? null;
-}
-
-// 診断状態を更新（後方互換）
-async function updateDiagnosisState(
-  lineUserId: string,
-  diagnosisState: DiagnosisState | null
-): Promise<void> {
-  if (diagnosisState) {
-    await updateUserState(lineUserId, { diagnosis: diagnosisState });
-  } else {
-    await clearUserState(lineUserId);
-  }
-}
-
-// 診断状態をクリア（後方互換）
-async function clearDiagnosisState(lineUserId: string): Promise<void> {
-  await clearUserState(lineUserId);
-}
-
-// ツールモードを設定
-async function setToolMode(lineUserId: string, mode: UserMode): Promise<void> {
-  console.log("[line-webhook] Setting tool mode:", mode, "for user:", lineUserId);
-  await updateUserState(lineUserId, { mode });
-}
-
-// ツールモードを取得
-async function getToolMode(lineUserId: string): Promise<UserMode> {
-  const state = await getUserState(lineUserId);
-  return state?.mode ?? null;
-}
-
-// 保留中のメールアドレスを設定
-async function setPendingEmail(lineUserId: string, email: string): Promise<void> {
-  try {
-    console.log("[line-webhook] setPendingEmail called for:", lineUserId.slice(-4));
-    const currentState = await getUserState(lineUserId);
-    console.log("[line-webhook] Current state:", JSON.stringify(currentState));
-    await updateUserState(lineUserId, { ...currentState, pendingEmail: email });
-    console.log("[line-webhook] State updated with pendingEmail");
-  } catch (err) {
-    console.error("[line-webhook] ❌ setPendingEmail error:", err);
-    throw err;
-  }
-}
-
-// 保留中のメールアドレスを取得
-async function getPendingEmail(lineUserId: string): Promise<string | null> {
-  const state = await getUserState(lineUserId);
-  return state?.pendingEmail ?? null;
-}
-
-// 保留中のメールアドレスをクリア
-async function clearPendingEmail(lineUserId: string): Promise<void> {
-  const currentState = await getUserState(lineUserId);
-  if (currentState) {
-    const { pendingEmail, ...rest } = currentState;
-    await updateUserState(lineUserId, Object.keys(rest).length > 0 ? rest : null);
   }
 }
 
