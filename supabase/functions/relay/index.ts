@@ -1,5 +1,7 @@
 // Front Door relay: verifies LINE signatures, enforces idempotency, sanitizes payload, and dispatches to GitHub repository_dispatch.
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("relay");
 
 const GH_OWNER = requireEnv("GH_OWNER");
 const GH_REPO = requireEnv("GH_REPO");
@@ -97,7 +99,7 @@ function recordSeen(id: string): void {
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (!FEATURE_BOT_ENABLED) {
     return new Response(JSON.stringify({ error: "Bot is disabled" }), {
       status: 503,
@@ -169,7 +171,7 @@ serve(async (req) => {
 
   if (!dispatchRes.ok) {
     const body = await dispatchRes.text();
-    console.error("Failed to dispatch to GitHub:", dispatchRes.status, body);
+    log.error("Failed to dispatch to GitHub", { status: dispatchRes.status, body });
     return new Response(
       JSON.stringify({
         error: "Failed to dispatch",

@@ -1,6 +1,9 @@
-// supabase/functions/line-webhook/lib/prompt-polisher.ts
-// Prompt Polisher: 雑なメモを医療安全・コンプライアンスを考慮した構造化プロンプトに変換
+/**
+ * Prompt Polisher: 雑なメモを医療安全・コンプライアンスを考慮した構造化プロンプトに変換
+ */
+import { createLogger } from "../../_shared/logger.ts";
 
+const log = createLogger("prompt-polisher");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
 
 // System Prompt: 医療従事者向けプロンプト整形の専門家
@@ -127,7 +130,7 @@ export async function runPromptPolisher(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[prompt-polisher] OpenAI API error:", response.status, errorText);
+      log.error("OpenAI API error", { status: response.status, errorText });
       
       if (response.status === 429) {
         return {
@@ -157,7 +160,7 @@ export async function runPromptPolisher(
       polishedPrompt: formatOutput(polishedPrompt),
     };
   } catch (err) {
-    console.error("[prompt-polisher] Unexpected error:", err);
+    log.error("Unexpected error", { errorMessage: err instanceof Error ? err.message : String(err) });
     return {
       success: false,
       error: "予期せぬエラーが発生しました。時間をおいて再度お試しください。",

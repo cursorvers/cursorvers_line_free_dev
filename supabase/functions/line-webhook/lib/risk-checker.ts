@@ -3,6 +3,9 @@
 
 import type { RiskCategory, RiskLevel, RiskCheckResult } from "./types.ts";
 import { DISCORD_INVITE_URL } from "./constants.ts";
+import { createLogger } from "../../_shared/logger.ts";
+
+const log = createLogger("risk-checker");
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
 
@@ -125,7 +128,7 @@ export async function runRiskChecker(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[risk-checker] OpenAI API error:", response.status, errorText);
+      log.error("OpenAI API error", { status: response.status, errorText });
       
       if (response.status === 429) {
         return {
@@ -171,7 +174,7 @@ export async function runRiskChecker(
     try {
       parsed = JSON.parse(content);
     } catch {
-      console.error("[risk-checker] Failed to parse JSON:", content);
+      log.error("Failed to parse JSON", { content: content.slice(0, 200) });
       return {
         success: false,
         error: "応答の解析に失敗しました。再度お試しください。",
@@ -191,7 +194,7 @@ export async function runRiskChecker(
       formattedMessage: formatOutput(parsed),
     };
   } catch (err) {
-    console.error("[risk-checker] Unexpected error:", err);
+    log.error("Unexpected error", { errorMessage: err instanceof Error ? err.message : String(err) });
     return {
       success: false,
       error: "予期せぬエラーが発生しました。時間をおいて再度お試しください。",

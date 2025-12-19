@@ -3,6 +3,9 @@
 
 import type { DiagnosisKeyword } from "./types.ts";
 import { DISCORD_INVITE_URL } from "./constants.ts";
+import { createLogger } from "../../_shared/logger.ts";
+
+const log = createLogger("diagnosis-flow");
 
 // 診断状態の型定義
 export interface DiagnosisState {
@@ -432,7 +435,7 @@ export function getNextQuestion(
 ): DiagnosisQuestion | null {
   const flow = getFlowForKeyword(state.keyword);
   if (!flow) {
-    console.error("[diagnosis-flow] Flow not found for keyword:", state.keyword);
+    log.error("Flow not found for keyword in getNextQuestion", { keyword: state.keyword });
     return null;
   }
 
@@ -447,7 +450,7 @@ export function getNextQuestion(
       return flow.layer2 as DiagnosisQuestion;
     }
     // 分岐型の場合（現在の実装では使用していない）
-    console.error("[diagnosis-flow] layer2 is branching type but not implemented");
+    log.error("layer2 is branching type but not implemented");
     return null;
   }
   if (layer === 3) {
@@ -459,7 +462,7 @@ export function getNextQuestion(
     const layer3Questions = flow.layer3 as Record<string, DiagnosisQuestion>;
     const question = layer3Questions[interest];
     if (!question) {
-      console.error("[diagnosis-flow] layer3 question not found for interest:", interest);
+      log.error("layer3 question not found for interest", { interest });
       // フォールバック: 最初の選択肢を返す
       const keys = Object.keys(layer3Questions);
       if (keys.length > 0) {
@@ -482,20 +485,20 @@ export function getNextQuestion(
 export function getConclusion(state: DiagnosisState): string[] | null {
   const flow = getFlowForKeyword(state.keyword);
   if (!flow) {
-    console.error("[diagnosis-flow] Flow not found for keyword:", state.keyword);
+    log.error("Flow not found for keyword", { keyword: state.keyword });
     return null;
   }
 
   // 3問すべて回答済みか確認
   if (state.answers.length < flow.totalQuestions) {
-    console.warn(`[diagnosis-flow] Not enough answers: ${state.answers.length} < ${flow.totalQuestions}`);
+    log.warn("Not enough answers", { answerCount: state.answers.length, required: flow.totalQuestions });
     return null;
   }
 
   // layer2 の回答（関心領域）で結論を決定
   const interest = state.answers[1];
   if (!interest) {
-    console.error("[diagnosis-flow] No interest found in answers:", state.answers);
+    log.error("No interest found in answers", { answers: state.answers });
     return null;
   }
   
@@ -508,7 +511,7 @@ export function getConclusion(state: DiagnosisState): string[] | null {
   
   // フォールバック: タグベースで取得を試みる
   // （将来的に conclusionsByInterest を空にして、タグベースに完全移行可能）
-  console.log(`[diagnosis-flow] No hardcoded articles for "${interest}", using tag-based fallback`);
+  log.debug("No hardcoded articles, using tag-based fallback", { interest });
   return null; // タグベースは getArticlesByTag で直接取得
 }
 

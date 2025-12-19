@@ -4,9 +4,11 @@
 // - /sec-brief-latest: 最新ドラフトのプレビュー
 // - /sec-brief-publish: ドラフトを#sec-briefに公開
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nacl from "https://esm.sh/tweetnacl@1.0.3";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("discord-bot");
 
 // 環境変数（起動時に検証）
 const DISCORD_PUBLIC_KEY = Deno.env.get("DISCORD_PUBLIC_KEY") ?? "";
@@ -38,10 +40,10 @@ interface DiscordInteraction {
   channel_id?: string;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // 0. 環境変数の検証
   if (!DISCORD_PUBLIC_KEY || !DISCORD_BOT_TOKEN || !supabase || !DISCORD_ROLE_ID) {
-    console.error("Missing required environment variables");
+    log.error("Missing required environment variables");
     return new Response("Server configuration error", { status: 500 });
   }
 
@@ -186,7 +188,7 @@ async function handleJoin(
 
     if (!roleRes.ok) {
       const errorText = await roleRes.text();
-      console.error(`Role assignment failed: ${errorText}`);
+      log.error("Role assignment failed", { errorText });
       return jsonResponse({
         type: 4,
         data: {
@@ -197,7 +199,7 @@ async function handleJoin(
     }
   } catch (err) {
     const isTimeout = err instanceof DOMException && err.name === "AbortError";
-    console.error(`Role assignment request failed${isTimeout ? " (timeout)" : ""}:`, err);
+    log.error("Role assignment request failed", { isTimeout, errorMessage: err instanceof Error ? err.message : String(err) });
     return jsonResponse({
       type: 4,
       data: {
@@ -218,7 +220,7 @@ async function handleJoin(
     .eq("id", member.id);
 
   if (updateError) {
-    console.error("DB update error (discord_user_id):", updateError);
+    log.error("DB update error (discord_user_id)", { errorMessage: updateError.message });
     return jsonResponse({
       type: 4,
       data: {
@@ -252,7 +254,7 @@ async function handleSecBriefLatest(supabase: SupabaseClient): Promise<Response>
     .maybeSingle();
 
   if (error) {
-    console.error("DB Error:", error);
+    log.error("DB Error in handleSecBriefLatest", { errorMessage: error.message });
     return jsonResponse({
       type: 4,
       data: {
@@ -305,7 +307,7 @@ async function handleSecBriefPublish(
     .maybeSingle();
 
   if (error) {
-    console.error("DB Error:", error);
+    log.error("DB Error in handleSecBriefPublish", { errorMessage: error.message });
     return jsonResponse({
       type: 4,
       data: {
@@ -328,7 +330,7 @@ async function handleSecBriefPublish(
   // #sec-briefチャンネルIDの確認
   const channelId = SEC_BRIEF_CHANNEL_ID;
   if (!channelId) {
-    console.error("SEC_BRIEF_CHANNEL_ID not set");
+    log.error("SEC_BRIEF_CHANNEL_ID not set");
     return jsonResponse({
       type: 4,
       data: {
@@ -359,7 +361,7 @@ async function handleSecBriefPublish(
 
     if (!sendRes.ok) {
       const errorText = await sendRes.text();
-      console.error(`Failed to send message to #sec-brief: ${errorText}`);
+      log.error("Failed to send message to #sec-brief", { errorText });
       return jsonResponse({
         type: 4,
         data: {
@@ -380,7 +382,7 @@ async function handleSecBriefPublish(
     .eq("id", data.id);
 
   if (updateError) {
-    console.error("DB Update Error:", updateError);
+    log.error("DB Update Error in handleSecBriefPublish", { errorMessage: updateError.message });
     // メッセージは投稿済みなので警告のみ
     return jsonResponse({
       type: 4,
@@ -392,7 +394,7 @@ async function handleSecBriefPublish(
     });
   }
 
-  console.log(`Published sec_brief: ${data.id}, title: ${data.title}`);
+  log.info("Published sec_brief", { briefId: data.id, title: data.title });
 
   return jsonResponse({
     type: 4,

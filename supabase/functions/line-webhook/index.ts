@@ -1,9 +1,11 @@
-// supabase/functions/line-webhook/index.ts
-// LINE公式アカウント用 Webhook エントリポイント（Pocket Defense Tool）
-// 主要ロジックは lib/ 以下に分割
-
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+/**
+ * LINE公式アカウント用 Webhook エントリポイント（Pocket Defense Tool）
+ * 主要ロジックは lib/ 以下に分割
+ */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createLogger, anonymizeUserId } from "../_shared/logger.ts";
+
+const log = createLogger("line-webhook");
 
 // lib モジュール - 定数・型
 import { DISCORD_INVITE_URL, CONTACT_FORM_URL, SERVICES_LP_URL, COURSE_KEYWORDS, type DiagnosisKeyword } from "./lib/constants.ts";
@@ -100,7 +102,7 @@ const MAX_INPUT_LENGTH = Number(Deno.env.get("MAX_INPUT_LENGTH") ?? "3000");
 const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn("[line-webhook] Supabase environment variables are not fully set.");
+  log.warn("Supabase environment variables are not fully set");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -149,7 +151,7 @@ async function getOrCreateUser(lineUserId: string): Promise<string> {
     .maybeSingle();
 
   if (error && error.code !== "PGRST116") {
-    console.error("[line-webhook] getOrCreateUser select error", error);
+    log.error("getOrCreateUser select error", { errorMessage: error.message });
     throw error;
   }
 
@@ -162,7 +164,7 @@ async function getOrCreateUser(lineUserId: string): Promise<string> {
     .single();
 
   if (insertError || !inserted) {
-    console.error("[line-webhook] getOrCreateUser insert error", insertError);
+    log.error("getOrCreateUser insert error", { errorMessage: insertError?.message });
     throw insertError;
   }
 
@@ -193,7 +195,7 @@ async function logInteraction(opts: LogOptions) {
   });
 
   if (error) {
-    console.error("[line-webhook] logInteraction error", error);
+    log.error("logInteraction error", { errorMessage: error.message });
   }
 }
 
@@ -272,7 +274,7 @@ async function handleEmailRegistration(
     }
 
     if (error) {
-      console.error("[line-webhook] Email registration DB error:", error);
+      log.error("Email registration DB error", { errorMessage: error.message });
       if (replyToken) {
         await replyText(replyToken, "登録処理中にエラーが発生しました。しばらくしてから再度お試しください。");
       }
@@ -312,10 +314,10 @@ async function handleEmailRegistration(
       ].join("\n"));
     }
 
-    console.log("[line-webhook] Email registered:", normalizedEmail.slice(0, 5) + "***");
+    log.info("Email registered", { email: normalizedEmail.slice(0, 5) + "***" });
 
   } catch (err) {
-    console.error("[line-webhook] Email registration error:", err);
+    log.error("Email registration error", { errorMessage: err instanceof Error ? err.message : String(err) });
     if (replyToken) {
       await replyText(replyToken, "エラーが発生しました。時間をおいて再度お試しください。");
     }
@@ -369,7 +371,7 @@ async function handlePromptPolisher(
         await pushText(lineUserId, result.error ?? "エラーが発生しました。");
       }
     } catch (err) {
-      console.error("[line-webhook] prompt_polisher error", err);
+      log.error("prompt_polisher error", { userId: anonymizeUserId(lineUserId), errorMessage: err instanceof Error ? err.message : String(err) });
       await pushText(lineUserId, "エラーが発生しました。時間をおいて再度お試しください。");
     }
   })();
@@ -424,7 +426,7 @@ async function handleRiskChecker(
         await pushText(lineUserId, result.error ?? "エラーが発生しました。");
       }
     } catch (err) {
-      console.error("[line-webhook] risk_checker error", err);
+      log.error("risk_checker error", { userId: anonymizeUserId(lineUserId), errorMessage: err instanceof Error ? err.message : String(err) });
       await pushText(lineUserId, "エラーが発生しました。時間をおいて再度お試しください。");
     }
   })();
@@ -438,17 +440,17 @@ async function handleRiskChecker(
 
 async function handleEvent(event: LineEvent): Promise<void> {
   try {
-    console.log("[line-webhook] 📥 イベント受信:", event.type);
+    log.debug("Event received", { eventType: event.type });
 
     const source = event.source;
     const replyToken = event.replyToken;
 
     if (!source.userId) {
-      console.log("[line-webhook] ⚠️ userId なし - スキップ");
+      log.debug("No userId - skipping");
       return;
     }
     const lineUserId = source.userId;
-    console.log("[line-webhook] 🔍 検証中... userId:", lineUserId.slice(-8));
+    log.debug("Processing event", { userId: anonymizeUserId(lineUserId) });
 
   const userId = await getOrCreateUser(lineUserId);
 
@@ -456,7 +458,7 @@ async function handleEvent(event: LineEvent): Promise<void> {
   // Follow イベント（友だち追加時）
   // ========================================
   if (event.type === "follow") {
-    console.log("[line-webhook] Follow event from:", lineUserId);
+    log.info("Follow event", { userId: anonymizeUserId(lineUserId) });
     if (replyToken) {
       await replyText(replyToken, [
         "🎉 友だち追加ありがとうございます！",
@@ -497,7 +499,7 @@ async function handleEvent(event: LineEvent): Promise<void> {
   // 0) ツールモード中の処理（最優先）
   // ========================================
   const toolMode = await getToolMode(lineUserId);
-  console.log("[line-webhook] toolMode:", toolMode, "for user:", lineUserId);
+  log.debug("Tool mode check", { mode: toolMode, userId: anonymizeUserId(lineUserId) });
   
   if (toolMode) {
     // 「キャンセル」「戻る」でモードを終了
@@ -511,7 +513,7 @@ async function handleEvent(event: LineEvent): Promise<void> {
 
     // プロンプト整形モード → 入力をそのままPolish
     if (toolMode === "polish") {
-      console.log("[line-webhook] Processing polish mode with input:", trimmed.substring(0, 50));
+      log.debug("Processing polish mode", { inputLength: trimmed.length });
       await clearUserState(lineUserId); // 1回使ったらモード終了
       await handlePromptPolisher(trimmed, lineUserId, userId, replyToken);
       return;
@@ -519,16 +521,12 @@ async function handleEvent(event: LineEvent): Promise<void> {
 
     // リスクチェックモード → 入力をそのままチェック
     if (toolMode === "risk_check") {
-      console.log("[line-webhook] Processing risk_check mode with input:", trimmed.substring(0, 50));
+      log.debug("Processing risk_check mode", { inputLength: trimmed.length });
       await clearUserState(lineUserId); // 1回使ったらモード終了
       await handleRiskChecker(trimmed, lineUserId, userId, replyToken);
       return;
     }
   }
-
-  // デバッグ: 入力内容を確認
-  console.log("[line-webhook] trimmed input:", trimmed);
-  console.log("[line-webhook] isEmailFormat result:", isEmailFormat(trimmed));
 
   // ========================================
   // 0.5) メルマガ同意確認のpostback処理
@@ -552,15 +550,14 @@ async function handleEvent(event: LineEvent): Promise<void> {
   // 0.6) メールアドレス入力の検知 → 同意確認ボタン表示
   // ========================================
   if (isEmailFormat(trimmed)) {
-    console.log("[line-webhook] ✅ Email detected:", trimmed.slice(0, 5) + "***");
+    log.info("Email detected", { email: trimmed.slice(0, 5) + "***" });
 
     // 同期的に処理（バックグラウンドではなくawaitで待つ）
     try {
       const normalizedEmail = normalizeEmail(trimmed);
-      console.log("[line-webhook] Normalized email:", normalizedEmail.slice(0, 5) + "***");
 
       await setPendingEmail(lineUserId, normalizedEmail);
-      console.log("[line-webhook] ✅ Pending email saved");
+      log.debug("Pending email saved");
 
       // Reply APIで確認メッセージ送信（Quick Reply付き）
       if (replyToken) {
@@ -594,10 +591,10 @@ async function handleEvent(event: LineEvent): Promise<void> {
             }],
           }),
         });
-        console.log("[line-webhook] ✅ Newsletter confirmation sent:", res.status);
+        log.debug("Newsletter confirmation sent", { status: res.status });
       }
     } catch (err) {
-      console.error("[line-webhook] ❌ Email handling error:", err instanceof Error ? err.message : String(err));
+      log.error("Email handling error", { errorMessage: err instanceof Error ? err.message : String(err) });
       if (replyToken) {
         await replyText(replyToken, "エラーが発生しました。もう一度お試しください。");
       }
@@ -675,9 +672,9 @@ async function handleEvent(event: LineEvent): Promise<void> {
         const interest = newState.answers[1]; // layer2の回答
         if (interest) {
           articles = getArticlesByTag(interest, 3);
-          console.log(`[line-webhook] Using tag-based fallback for "${interest}", found ${articles.length} articles`);
+          log.debug("Using tag-based fallback", { interest, articleCount: articles.length });
         } else {
-          console.error(`[line-webhook] No interest found in answers:`, newState.answers);
+          log.warn("No interest found in answers", { answers: newState.answers });
         }
       }
       
@@ -955,8 +952,10 @@ async function handleEvent(event: LineEvent): Promise<void> {
     await replyText(replyToken, helpMessage, buildDiagnosisQuickReply());
   }
   } catch (err) {
-    console.error("[line-webhook] ❌ handleEvent エラー:", err instanceof Error ? err.message : String(err));
-    console.error("[line-webhook] Stack:", err instanceof Error ? err.stack : "no stack");
+    log.error("handleEvent error", {
+      errorMessage: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack?.split("\n").slice(0, 3).join(" | ") : undefined
+    });
   }
 }
 
@@ -964,8 +963,8 @@ async function handleEvent(event: LineEvent): Promise<void> {
 // HTTP エントリポイント
 // =======================
 
-serve(async (req: Request): Promise<Response> => {
-  console.log("[line-webhook] 🚀 リクエスト受信:", req.method);
+Deno.serve(async (req: Request): Promise<Response> => {
+  log.debug("Request received", { method: req.method });
 
   // GET リクエストは疎通確認用
   if (req.method === "GET") {
@@ -977,21 +976,21 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   const rawBody = await req.text();
-  console.log("[line-webhook] 📦 Body長さ:", rawBody.length);
+  log.debug("Request body received", { bodyLength: rawBody.length });
 
   // LINE 署名検証
   const valid = await verifyLineSignature(req, rawBody);
   if (!valid) {
-    console.error("[line-webhook] ❌ 署名検証失敗");
+    log.error("Signature verification failed");
     return new Response("Invalid signature", { status: 401 });
   }
-  console.log("[line-webhook] ✅ 署名検証OK");
+  log.debug("Signature verified");
 
   let body: LineWebhookRequestBody;
   try {
     body = JSON.parse(rawBody) as LineWebhookRequestBody;
   } catch (err) {
-    console.error("[line-webhook] JSON parse error", err);
+    log.error("JSON parse error", { errorMessage: err instanceof Error ? err.message : String(err) });
     return new Response("Bad Request", { status: 400 });
   }
 
@@ -1000,9 +999,9 @@ serve(async (req: Request): Promise<Response> => {
   // 全イベントを処理してから200を返す
   try {
     await Promise.all(events.map((ev) => handleEvent(ev)));
-    console.log("[line-webhook] ✅ 全イベント処理完了");
+    log.debug("All events processed", { eventCount: events.length });
   } catch (err) {
-    console.error("[line-webhook] ❌ イベント処理エラー:", err);
+    log.error("Event processing error", { errorMessage: err instanceof Error ? err.message : String(err) });
   }
 
   return new Response("OK", { status: 200 });

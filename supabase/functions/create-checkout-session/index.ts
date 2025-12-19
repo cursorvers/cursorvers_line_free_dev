@@ -1,5 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("create-checkout-session");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +9,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -66,7 +68,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Creating checkout session for email: ${email}`);
+    log.info("Creating checkout session", { email });
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -88,7 +90,7 @@ serve(async (req) => {
       },
     });
 
-    console.log(`Checkout session created: ${session.id}`);
+    log.info("Checkout session created", { sessionId: session.id });
 
     // Return checkout URL
     return new Response(
@@ -99,7 +101,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error creating checkout session:", error);
+    log.error("Error creating checkout session", { errorMessage: error instanceof Error ? error.message : String(error) });
 
     // Send alert notification (optional)
     const manusWebhookUrl = Deno.env.get("MANUS_WEBHOOK_URL");
@@ -108,9 +110,9 @@ serve(async (req) => {
     if (manusWebhookUrl || discordAdminWebhookUrl) {
       const alertMessage = {
         content: `🚨 **MANUS ALERT: checkout session failed**\n\n` +
-          `**Error**: ${error.message}\n` +
+          `**Error**: ${error instanceof Error ? error.message : String(error)}\n` +
           `**Time**: ${new Date().toISOString()}\n` +
-          `**Stack**: ${error.stack || "N/A"}`,
+          `**Stack**: ${error instanceof Error ? error.stack || "N/A" : "N/A"}`,
       };
 
       if (manusWebhookUrl) {
@@ -118,7 +120,7 @@ serve(async (req) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(alertMessage),
-        }).catch(console.error);
+        }).catch((e) => log.error("Manus webhook failed", { errorMessage: e instanceof Error ? e.message : String(e) }));
       }
 
       if (discordAdminWebhookUrl) {
@@ -126,12 +128,12 @@ serve(async (req) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(alertMessage),
-        }).catch(console.error);
+        }).catch((e) => log.error("Discord alert failed", { errorMessage: e instanceof Error ? e.message : String(e) }));
       }
     }
 
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Internal server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

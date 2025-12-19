@@ -3,6 +3,9 @@
  * 環境変数 DISCORD_ALERT_WEBHOOK が設定されている場合のみ通知を送信
  */
 
+import { createLogger } from "./logger.ts";
+
+const log = createLogger("alert");
 const WEBHOOK_URL = Deno.env.get("DISCORD_ALERT_WEBHOOK");
 
 interface AlertPayload {
@@ -19,7 +22,7 @@ interface AlertPayload {
  */
 export async function notifyDiscord({ title, message, context }: AlertPayload): Promise<void> {
   if (!WEBHOOK_URL) {
-    console.log("[alert] DISCORD_ALERT_WEBHOOK not configured, skipping notification");
+    log.debug("DISCORD_ALERT_WEBHOOK not configured, skipping notification");
     return;
   }
 
@@ -43,11 +46,11 @@ export async function notifyDiscord({ title, message, context }: AlertPayload): 
     });
 
     if (!response.ok) {
-      console.error("[alert] Discord notification failed:", response.status);
+      log.error("Discord notification failed", { status: response.status });
     }
   } catch (err) {
     // 通知失敗時は握りつぶす（本処理を止めない）
-    console.error("[alert] Discord notification error:", err instanceof Error ? err.message : String(err));
+    log.error("Discord notification error", { errorMessage: err instanceof Error ? err.message : String(err) });
   } finally {
     clearTimeout(timeout);
   }

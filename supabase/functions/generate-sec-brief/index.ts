@@ -2,8 +2,10 @@
 // 週次セキュリティ・ブリーフ生成 Edge Function
 // 直近7日分のhij_rawからLLMで要約を生成し、sec_briefテーブルに保存
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("generate-sec-brief");
 
 // トピックカテゴリの型定義
 type SecBriefTopicCategory =
@@ -201,7 +203,7 @@ function splitMessage(text: string, maxLength: number): string[] {
 // Discordに自動投稿
 async function postToDiscord(bodyMarkdown: string): Promise<boolean> {
   if (!DISCORD_BOT_TOKEN || !SEC_BRIEF_CHANNEL_ID) {
-    console.log("Discord credentials not set, skipping auto-publish");
+    log.info("Discord credentials not set, skipping auto-publish");
     return false;
   }
 
@@ -222,7 +224,7 @@ async function postToDiscord(bodyMarkdown: string): Promise<boolean> {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error(`Discord post failed: ${errorText}`);
+      log.error("Discord post failed", { errorText });
       return false;
     }
   }
@@ -230,7 +232,7 @@ async function postToDiscord(bodyMarkdown: string): Promise<boolean> {
   return true;
 }
 
-serve(async (req: Request): Promise<Response> => {
+Deno.serve(async (req: Request): Promise<Response> => {
   // CORSプリフライト対応
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -255,7 +257,7 @@ serve(async (req: Request): Promise<Response> => {
   if (GENERATE_API_KEY) {
     const apiKey = req.headers.get("X-API-Key");
     if (apiKey !== GENERATE_API_KEY) {
-      console.error("Invalid API key");
+      log.warn("Invalid API key attempt");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -283,7 +285,7 @@ serve(async (req: Request): Promise<Response> => {
       .order("sent_at", { ascending: true });
 
     if (fetchError) {
-      console.error("DB Fetch Error:", fetchError);
+      log.error("DB Fetch Error", { errorMessage: fetchError.message });
       return new Response(
         JSON.stringify({ error: "Database Error", details: fetchError.message }),
         { status: 500, headers: { "Content-Type": "application/json" } }
@@ -291,14 +293,14 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     if (!rows || rows.length === 0) {
-      console.log("No data for this week");
+      log.info("No data for this week");
       return new Response(
         JSON.stringify({ status: "no_data", message: "No hij_raw records for this week" }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Found ${rows.length} records for the past 7 days`);
+    log.info("Found records for the past 7 days", { count: rows.length });
 
     // 週の開始日を計算
     const weekStart = getWeekStart(now);
@@ -311,7 +313,7 @@ serve(async (req: Request): Promise<Response> => {
       .maybeSingle();
 
     if (existingBrief) {
-      console.log(`Brief already exists for week ${weekStart}: ${existingBrief.id} (${existingBrief.status})`);
+      log.info("Brief already exists for week", { weekStart, existingId: existingBrief.id, existingStatus: existingBrief.status });
       return new Response(
         JSON.stringify({
           status: "skipped",
@@ -331,7 +333,7 @@ serve(async (req: Request): Promise<Response> => {
     // OpenAI API呼び出し
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiApiKey) {
-      console.error("OPENAI_API_KEY not set");
+      log.error("OPENAI_API_KEY not set");
       return new Response(
         JSON.stringify({ error: "Configuration Error", details: "OPENAI_API_KEY not set" }),
         { status: 500, headers: { "Content-Type": "application/json" } }
@@ -368,7 +370,7 @@ serve(async (req: Request): Promise<Response> => {
 
     if (!openaiRes.ok) {
       const errorText = await openaiRes.text();
-      console.error("OpenAI API Error:", errorText);
+      log.error("OpenAI API Error", { errorText });
       return new Response(
         JSON.stringify({ error: "LLM Error", details: errorText }),
         { status: 500, headers: { "Content-Type": "application/json" } }
@@ -378,7 +380,7 @@ serve(async (req: Request): Promise<Response> => {
     const openaiJson = await openaiRes.json();
     const brief: LLMResponse = JSON.parse(openaiJson.choices[0].message.content);
 
-    console.log(`Generated brief: ${brief.title}, ${brief.topics.length} topics`);
+    log.info("Generated brief", { title: brief.title, topicsCount: brief.topics.length });
 
     // sec_briefテーブルに挿入
     const sourceIds = rows.map((r) => r.id);
@@ -398,14 +400,14 @@ serve(async (req: Request): Promise<Response> => {
       .single();
 
     if (insertError) {
-      console.error("DB Insert Error:", insertError);
+      log.error("DB Insert Error", { errorMessage: insertError.message });
       return new Response(
         JSON.stringify({ error: "Database Error", details: insertError.message }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Inserted sec_brief: ${insertedBrief.id}`);
+    log.info("Inserted sec_brief", { briefId: insertedBrief.id });
 
     // 自動でDiscordに投稿
     let published = false;
@@ -422,10 +424,10 @@ serve(async (req: Request): Promise<Response> => {
         .eq("id", insertedBrief.id);
 
       if (updateError) {
-        console.error("Status update error:", updateError);
+        log.error("Status update error", { errorMessage: updateError.message });
       } else {
         published = true;
-        console.log(`Auto-published to Discord: ${brief.title}`);
+        log.info("Auto-published to Discord", { title: brief.title });
       }
     }
 
@@ -442,7 +444,7 @@ serve(async (req: Request): Promise<Response> => {
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {
-    console.error("Request processing error:", err);
+    log.error("Request processing error", { errorMessage: err instanceof Error ? err.message : String(err) });
     return new Response(
       JSON.stringify({ error: "Internal Server Error", details: String(err) }),
       { status: 500, headers: { "Content-Type": "application/json" } }

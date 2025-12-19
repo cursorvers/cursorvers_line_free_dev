@@ -2,8 +2,10 @@
 // Health-ISAC Japan メール取り込み Edge Function
 // Google Apps Script or 手動転送からのJSON POSTを受け取り、hij_rawテーブルに保存
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createLogger } from "../_shared/logger.ts";
+
+const log = createLogger("ingest-hij");
 
 // 入力ペイロードの型定義
 interface IngestPayload {
@@ -23,7 +25,7 @@ function extractTLP(text: string): string | null {
 // APIキー検証用（簡易認証）
 const INGEST_API_KEY = Deno.env.get("INGEST_HIJ_API_KEY");
 
-serve(async (req: Request): Promise<Response> => {
+Deno.serve(async (req: Request): Promise<Response> => {
   // CORSプリフライト対応
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -48,7 +50,7 @@ serve(async (req: Request): Promise<Response> => {
   if (INGEST_API_KEY) {
     const apiKey = req.headers.get("X-API-Key");
     if (apiKey !== INGEST_API_KEY) {
-      console.error("Invalid API key");
+      log.warn("Invalid API key attempt");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -95,7 +97,7 @@ serve(async (req: Request): Promise<Response> => {
     if (error) {
       // 重複エラー（UNIQUE制約違反）の場合は200を返す（冪等性）
       if (error.code === "23505") {
-        console.log(`Duplicate message_id: ${payload.message_id}`);
+        log.info("Duplicate message_id", { messageId: payload.message_id });
         return new Response(
           JSON.stringify({
             status: "duplicate",
@@ -109,7 +111,7 @@ serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      console.error("DB Insert Error:", error);
+      log.error("DB Insert Error", { errorMessage: error.message });
       return new Response(
         JSON.stringify({ error: "Database Error", details: error.message }),
         {
@@ -119,7 +121,7 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log(`Ingested: ${payload.message_id}, TLP: ${tlp || "none"}, ID: ${data.id}`);
+    log.info("Ingested message", { messageId: payload.message_id, tlp: tlp || "none", recordId: data.id });
 
     return new Response(
       JSON.stringify({
@@ -134,7 +136,7 @@ serve(async (req: Request): Promise<Response> => {
       }
     );
   } catch (err) {
-    console.error("Request processing error:", err);
+    log.error("Request processing error", { errorMessage: err instanceof Error ? err.message : String(err) });
     return new Response(
       JSON.stringify({ error: "Internal Server Error", details: String(err) }),
       {

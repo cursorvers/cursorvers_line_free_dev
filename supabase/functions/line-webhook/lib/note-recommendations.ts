@@ -2,6 +2,9 @@
 // 診断キーワードごとの note 記事推薦（静的設定）
 
 import type { CourseRecommendation, NoteArticle } from "./types.ts";
+import { createLogger } from "../../_shared/logger.ts";
+
+const log = createLogger("note-recommendations");
 
 // =======================
 // 1. 病院AIリスク診断
@@ -181,12 +184,12 @@ export function getArticlesByIds(articleIds: string[]): NoteArticle[] {
  */
 export function getArticlesByTag(tag: string, limit: number = 3): NoteArticle[] {
   if (!tag || typeof tag !== "string" || tag.trim().length === 0) {
-    console.warn("[note-recommendations] Invalid tag provided:", tag);
+    log.warn("Invalid tag provided", { tag });
     return [];
   }
-  
+
   if (limit < 1) {
-    console.warn("[note-recommendations] Invalid limit:", limit);
+    log.warn("Invalid limit", { limit });
     return [];
   }
   
