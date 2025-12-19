@@ -1,186 +1,138 @@
-# cursorvers_line-discord - Claude Code Context
+# cursorvers_line_free_dev - Claude Code Context
 
 ## プロジェクト概要
 
-**cursorvers_line-discord** - Miyabiフレームワークで構築された自律型開発プロジェクト
+**cursorvers_line_free_dev** - LINE友だち登録・決済・Discord連携システム
 
-このプロジェクトは識学理論(Shikigaku Theory)とAI Agentsを組み合わせた自律型開発環境で運用されています。
+Supabase Edge Functions + GitHub Actions による自動運用システム
 
-## 🌸 Miyabi Framework
+## 技術スタック
 
-### 7つの自律エージェント
+- **Backend**: Supabase Edge Functions (Deno)
+- **Database**: Supabase (PostgreSQL)
+- **CI/CD**: GitHub Actions
+- **決済**: Stripe
+- **通知**: LINE Messaging API, Discord Webhook
+- **監視**: Manus自動監査システム
 
-1. **CoordinatorAgent** - タスク統括・並列実行制御
-   - DAG（Directed Acyclic Graph）ベースのタスク分解
-   - Critical Path特定と並列実行最適化
+## ディレクトリ構成
 
-2. **IssueAgent** - Issue分析・ラベル管理
-   - 識学理論65ラベル体系による自動分類
-   - タスク複雑度推定（小/中/大/特大）
-
-3. **CodeGenAgent** - AI駆動コード生成
-   - Claude Sonnet 4による高品質コード生成
-   - TypeScript strict mode完全対応
-
-4. **ReviewAgent** - コード品質判定
-   - 静的解析・セキュリティスキャン
-   - 品質スコアリング（100点満点、80点以上で合格）
-
-5. **PRAgent** - Pull Request自動作成
-   - Conventional Commits準拠
-   - Draft PR自動生成
-
-6. **DeploymentAgent** - CI/CDデプロイ自動化
-   - 自動デプロイ・ヘルスチェック
-   - 自動Rollback機能
-
-7. **TestAgent** - テスト自動実行
-   - テスト実行・カバレッジレポート
-   - 80%+カバレッジ目標
-
-## GitHub OS Integration
-
-このプロジェクトは「GitHubをOSとして扱う」設計思想で構築されています:
-
-### 自動化されたワークフロー
-
-1. **Issue作成** → IssueAgentが自動ラベル分類
-2. **CoordinatorAgent** → タスクをDAG分解、並列実行プラン作成
-3. **CodeGenAgent** → コード実装、テスト生成
-4. **ReviewAgent** → 品質チェック（80点以上で次へ）
-5. **TestAgent** → テスト実行（カバレッジ確認）
-6. **PRAgent** → Draft PR作成
-7. **DeploymentAgent** → マージ後に自動デプロイ
-
-**全工程が自律実行、人間の介入は最小限。**
-
-## ラベル体系（識学理論準拠）
-
-### 10カテゴリー、53ラベル
-
-- **type:** bug, feature, refactor, docs, test, chore, security
-- **priority:** P0-Critical, P1-High, P2-Medium, P3-Low
-- **state:** pending, analyzing, implementing, reviewing, testing, deploying, done
-- **agent:** codegen, review, deployment, test, coordinator, issue, pr
-- **complexity:** small, medium, large, xlarge
-- **phase:** planning, design, implementation, testing, deployment
-- **impact:** breaking, major, minor, patch
-- **category:** frontend, backend, infra, dx, security
-- **effort:** 1h, 4h, 1d, 3d, 1w, 2w
-- **blocked:** waiting-review, waiting-deployment, waiting-feedback
-
-## 開発ガイドライン
-
-### TypeScript設定
-
-```json
-{
-  "compilerOptions": {
-    "strict": true,
-    "module": "ESNext",
-    "target": "ES2022"
-  }
-}
+```
+cursorvers_line_free_dev/
+├── .github/workflows/     # GitHub Actions ワークフロー
+│   ├── deploy-supabase.yml    # Edge Functions デプロイ
+│   ├── manus-audit-daily.yml  # 日次監査（毎朝6時JST）
+│   └── ...
+├── supabase/functions/    # Edge Functions
+│   ├── line-webhook/          # LINE Webhook受信
+│   ├── line-daily-brief/      # LINE日次配信
+│   ├── line-register/         # LINE友だち登録
+│   ├── stripe-webhook/        # Stripe決済Webhook
+│   ├── create-checkout-session/ # 決済セッション作成
+│   ├── discord-bot/           # Discord Bot
+│   ├── manus-audit-line-daily-brief/ # 監査機能
+│   ├── health-check/          # ヘルスチェック
+│   ├── relay/                 # イベント中継
+│   ├── stats-exporter/        # 統計エクスポート
+│   ├── ingest-hij/            # データ取り込み
+│   ├── generate-sec-brief/    # セキュリティブリーフ生成
+│   └── _shared/               # 共通モジュール
+├── scripts/               # 運用スクリプト
+│   ├── daily-check.sh         # 日次点検スクリプト
+│   └── auto-fix/              # 自動修繕スクリプト
+├── config/                # 設定ファイル
+│   └── audit-config.yaml      # 監査設定
+└── docs/                  # ドキュメント
+    └── logs/                  # 日次点検ログ
 ```
 
-### セキュリティ
+## 主要機能
 
-- **機密情報は環境変数で管理**: `GITHUB_TOKEN`, `ANTHROPIC_API_KEY`
-- **.env を .gitignore に含める**
-- **Webhook検証**: HMAC-SHA256署名検証
+### 1. LINE友だち登録システム
+- `line-register`: LIFF経由の友だち登録
+- `line-webhook`: LINE Webhookイベント処理
+- `line-daily-brief`: 日次カード配信
 
-### テスト
+### 2. Stripe決済連携
+- `create-checkout-session`: 決済セッション作成
+- `stripe-webhook`: 決済完了Webhook処理
+- Discord招待リンク自動発行
+
+### 3. 監視・監査システム
+- 毎朝6時JSTに自動監査実行
+- カード在庫・配信成功率チェック
+- エラー時はManus APIで自動修繕タスク作成
+- Discord/LINE通知
+
+## 環境変数
+
+### Supabase Secrets
+```bash
+# 必須
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+LINE_CHANNEL_ACCESS_TOKEN
+LINE_CHANNEL_SECRET
+STRIPE_API_KEY
+STRIPE_WEBHOOK_SECRET
+DISCORD_BOT_TOKEN
+DISCORD_GUILD_ID
+
+# オプション
+MANUS_API_KEY
+DISCORD_ADMIN_WEBHOOK_URL
+GOOGLE_SA_JSON
+```
+
+### GitHub Secrets
+```bash
+SUPABASE_ACCESS_TOKEN
+SUPABASE_PROJECT_ID
+N8N_API_KEY
+N8N_INSTANCE_URL
+```
+
+## 開発コマンド
 
 ```bash
-npm test                    # 全テスト実行
-npm run test:watch          # Watch mode
-npm run test:coverage       # カバレッジレポート
-```
+# Edge Functions デプロイ
+npx supabase functions deploy <function-name> --project-ref haaxgwyimoqzzxzdaeep
 
-目標: 80%+ カバレッジ
+# 日次監査手動実行
+gh workflow run manus-audit-daily.yml
 
-## 使用方法
-
-### Issue作成（Claude Code推奨）
-
-```bash
-# Claude Code から直接実行
-gh issue create --title "機能追加: ユーザー認証" --body "JWT認証を実装"
-```
-
-または Claude Code のスラッシュコマンド:
-
-```
-/create-issue
-```
-
-### 状態確認
-
-```bash
-npx miyabi status          # 現在の状態
-npx miyabi status --watch  # リアルタイム監視
-```
-
-### Agent実行
-
-```bash
-/agent-run                 # Claude Code から実行
-```
-
-## プロジェクト構造
-
-```
-cursorvers_line-discord/
-├── .claude/               # Claude Code設定
-│   ├── agents/           # Agent定義
-│   ├── commands/         # カスタムコマンド
-│   └── settings.json     # Claude設定
-├── .github/
-│   └── workflows/        # 26+ GitHub Actions
-├── src/                  # ソースコード
-├── tests/                # テストコード
-├── CLAUDE.md             # このファイル
-└── package.json
+# 全関数デプロイ
+gh workflow run "Deploy Supabase Edge Functions"
 ```
 
 ## カスタムスラッシュコマンド
 
-Claude Code で以下のコマンドが使用可能:
-
-- `/test` - プロジェクト全体のテストを実行
-- `/generate-docs` - コードからドキュメント自動生成
-- `/create-issue` - Agent実行用Issueを対話的に作成
+- `/test` - テスト実行
 - `/deploy` - デプロイ実行
-- `/verify` - システム動作確認（環境・コンパイル・テスト）
-- `/security-scan` - セキュリティ脆弱性スキャン実行
-- `/agent-run` - Autonomous Agent実行（Issue自動処理パイプライン）
+- `/verify` - システム動作確認
+- `/miyabi-status` - プロジェクトステータス確認
 
-## 識学理論（Shikigaku Theory）5原則
+## 監査スケジュール
 
-1. **責任の明確化** - 各AgentがIssueに対する責任を負う
-2. **権限の委譲** - Agentは自律的に判断・実行可能
-3. **階層の設計** - CoordinatorAgent → 各専門Agent
-4. **結果の評価** - 品質スコア、カバレッジ、実行時間で評価
-5. **曖昧性の排除** - DAGによる依存関係明示、状態ラベルで進捗可視化
+| ワークフロー | スケジュール | 内容 |
+|------------|-------------|------|
+| manus-audit-daily | 毎日6:00 JST | カード在庫・配信成功率 |
+| manus-audit-weekly | 毎週月曜 | 詳細監査 |
+| manus-audit-monthly | 毎月1日 | DBメンテナンス |
 
-## 環境変数
+## トラブルシューティング
 
+### LINE Bot応答なし
 ```bash
-# GitHub Personal Access Token（必須）
-GITHUB_TOKEN=ghp_xxxxx
-
-# Anthropic API Key（必須 - Agent実行時）
-ANTHROPIC_API_KEY=sk-ant-xxxxx
+npx supabase functions deploy line-webhook --project-ref haaxgwyimoqzzxzdaeep
 ```
 
-## サポート
+### Discord通知が届かない
+1. `DISCORD_ADMIN_WEBHOOK_URL` を確認
+2. Webhook URLが有効か確認
 
-- **Framework**: [Miyabi](https://github.com/ShunsukeHayashi/Autonomous-Operations)
-- **Documentation**: README.md
-- **Issues**: GitHub Issues で管理
-
----
-
-🌸 **Miyabi** - Beauty in Autonomous Development
-
-*このファイルは Claude Code が自動的に参照します。プロジェクトの変更に応じて更新してください。*
+### デプロイ失敗
+```bash
+gh run list --workflow "Deploy Supabase Edge Functions" --limit 3
+gh run view <run-id> --log
+```
