@@ -1,9 +1,22 @@
-// @ts-nocheck
-/// <reference types="https://deno.land/std@0.168.0/types.d.ts" />
+/**
+ * Stripe Webhook Edge Function
+ * Stripe決済イベントを処理し、会員情報を更新
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@12.0.0?target=deno";
 import { notifyDiscord } from "../_shared/alert.ts";
+
+/** Google Service Account 認証情報 */
+interface GoogleServiceAccount {
+  client_email: string;
+  private_key: string;
+}
+
+/** Google Sheets クライアント */
+interface SheetsClient {
+  append(tabName: string, values: unknown[][]): Promise<void>;
+}
 
 // Google Sheets 連携（任意）
 const MEMBERS_SHEET_ID = Deno.env.get("MEMBERS_SHEET_ID") ?? "";
@@ -18,7 +31,7 @@ const stripe = new Stripe(Deno.env.get("STRIPE_API_KEY") as string, {
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 // Google Sheets連携関数
-async function buildSheetsClient(serviceAccount: any) {
+async function buildSheetsClient(serviceAccount: GoogleServiceAccount): Promise<SheetsClient> {
   const now = Math.floor(Date.now() / 1000);
   const jwtHeader = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const jwtPayload = btoa(
@@ -31,9 +44,10 @@ async function buildSheetsClient(serviceAccount: any) {
     }),
   );
   const encoder = new TextEncoder();
+  const keyData = strToUint8Array(serviceAccount.private_key);
   const key = await crypto.subtle.importKey(
     "pkcs8",
-    strToUint8Array(serviceAccount.private_key),
+    keyData.buffer as ArrayBuffer,
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
     ["sign"],
@@ -165,10 +179,11 @@ async function sendDiscordInvite(email: string, name: string | null, tier: strin
       message: `**Email**: ${email}\n**Name**: ${name || "N/A"}\n**Tier**: ${tier}\n**Invite**: ${inviteUrl}`,
     });
   } catch (err) {
-    console.error(`Failed to send Discord invite: ${err.message}`);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error(`Failed to send Discord invite: ${errorMessage}`);
     await notifyDiscord({
       title: "MANUS ALERT: Discord invite error",
-      message: err.message,
+      message: errorMessage,
       context: { email, tier },
     });
   }
@@ -190,12 +205,13 @@ serve(async (req) => {
       cryptoProvider
     );
   } catch (err) {
-    console.error(`Webhook signature verification failed: ${err.message}`);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error(`Webhook signature verification failed: ${errorMessage}`);
     await notifyDiscord({
       title: "MANUS ALERT: Stripe webhook signature failed",
-      message: err.message,
+      message: errorMessage,
     });
-    return new Response(err.message, { status: 400 });
+    return new Response(errorMessage, { status: 400 });
   }
 
   const supabase = createClient(
@@ -238,7 +254,7 @@ serve(async (req) => {
               : null;
             console.log(`Subscription details: ${subscriptionId}, status: ${subscriptionStatus}`);
           } catch (err) {
-            console.error(`Failed to retrieve subscription: ${err.message}`);
+            console.error(`Failed to retrieve subscription: ${err instanceof Error ? err.message : String(err)}`);
           }
         }
 
@@ -321,7 +337,7 @@ serve(async (req) => {
             customerEmail = customer.email || null;
           }
         } catch (err) {
-          console.error(`Failed to retrieve customer: ${err.message}`);
+          console.error(`Failed to retrieve customer: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 
@@ -357,7 +373,7 @@ serve(async (req) => {
             customerEmail = customer.email || null;
           }
         } catch (err) {
-          console.error(`Failed to retrieve customer: ${err.message}`);
+          console.error(`Failed to retrieve customer: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
 

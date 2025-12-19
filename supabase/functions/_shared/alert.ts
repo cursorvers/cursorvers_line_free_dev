@@ -1,17 +1,27 @@
-// @ts-nocheck
-/// <reference types="https://deno.land/std@0.168.0/types.d.ts" />
-const WEBHOOK_URL =
-  Deno.env.get("DISCORD_ALERT_WEBHOOK") ??
-  "https://discord.com/api/webhooks/1443439317283373188/ugh_DFZig51DqDuAmzn5N__0edLAHvgjfMbRAxZrK2NPIU4lsBviKjB-2eQCYe1eLutb";
+/**
+ * Discord アラート通知モジュール
+ * 環境変数 DISCORD_ALERT_WEBHOOK が設定されている場合のみ通知を送信
+ */
 
-type AlertPayload = {
+const WEBHOOK_URL = Deno.env.get("DISCORD_ALERT_WEBHOOK");
+
+interface AlertPayload {
   title: string;
   message: string;
   context?: Record<string, unknown>;
-};
+}
 
-export async function notifyDiscord({ title, message, context }: AlertPayload) {
-  if (!WEBHOOK_URL) return;
+/**
+ * Discord に通知を送信
+ * - 環境変数未設定時はスキップ
+ * - タイムアウト 2.5秒
+ * - 失敗時は握り潰し（本処理を止めない）
+ */
+export async function notifyDiscord({ title, message, context }: AlertPayload): Promise<void> {
+  if (!WEBHOOK_URL) {
+    console.log("[alert] DISCORD_ALERT_WEBHOOK not configured, skipping notification");
+    return;
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 2500);
@@ -25,14 +35,19 @@ export async function notifyDiscord({ title, message, context }: AlertPayload) {
       .filter(Boolean)
       .join("\n");
 
-    await fetch(WEBHOOK_URL, {
+    const response = await fetch(WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
       signal: controller.signal,
     });
-  } catch (_err) {
+
+    if (!response.ok) {
+      console.error("[alert] Discord notification failed:", response.status);
+    }
+  } catch (err) {
     // 通知失敗時は握りつぶす（本処理を止めない）
+    console.error("[alert] Discord notification error:", err instanceof Error ? err.message : String(err));
   } finally {
     clearTimeout(timeout);
   }

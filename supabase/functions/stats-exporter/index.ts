@@ -1,6 +1,88 @@
-// @ts-nocheck
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+/**
+ * Stats Exporter Edge Function
+ * LINE イベントデータを Google Sheets にエクスポート
+ */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+
+/** LINE イベントレコード */
+interface LineEvent {
+  created_at: string | null;
+  line_user_id: string | null;
+  message_text: string | null;
+  normalized_keyword: string | null;
+  risk_level: string | null;
+  contains_phi: boolean | null;
+  membership_email: string | null;
+  membership_tier: string | null;
+  subscription_status: string | null;
+  billing_cycle_anchor: string | null;
+  tuition_credit_yen: number | null;
+  stripe_customer_email: string | null;
+  reply_success: boolean | null;
+  error_code: string | null;
+  metadata: {
+    discord_notify_id?: string;
+    replyTemplate?: string;
+    processingMs?: number;
+  } | null;
+}
+
+/** 会員情報レコード */
+interface LibraryMember {
+  line_user_id: string | null;
+  membership_tier: string | null;
+  subscription_status: string | null;
+  active_months: number | null;
+  next_billing_at: string | null;
+  last_payment_at: string | null;
+  stripe_customer_email: string | null;
+  last_interaction_at: string | null;
+}
+
+/** 日次サマリー中間データ */
+interface DailySummaryAccumulator {
+  date: string;
+  totalEvents: number;
+  uniqueUserSet: Set<string>;
+  riskSafe: number;
+  riskWarning: number;
+  riskDanger: number;
+  phiAlerts: number;
+  tierMatsu: number;
+  tierTake: number;
+  tierUme: number;
+  totalProcessingMs: number;
+  processingCount: number;
+}
+
+/** 日次サマリー出力データ */
+interface DailySummary {
+  date: string;
+  totalEvents: number;
+  uniqueUsers: number;
+  riskSafe: number;
+  riskWarning: number;
+  riskDanger: number;
+  phiAlerts: number;
+  tierMatsu: number;
+  tierTake: number;
+  tierUme: number;
+  avgProcessingMs: number | null;
+  generatedAt: string;
+}
+
+/** Google Service Account 認証情報 */
+interface GoogleServiceAccount {
+  client_email: string;
+  private_key: string;
+}
+
+/** Google Sheets クライアント */
+interface SheetsClient {
+  append(tabName: string, values: unknown[][]): Promise<void>;
+  update(tabName: string, values: unknown[][]): Promise<void>;
+  clearBelowHeader(tabName: string): Promise<void>;
+}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -20,7 +102,7 @@ if (!SHEET_ID || !GOOGLE_SA_JSON) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-serve(async (req) => {
+Deno.serve(async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
   const mode = url.searchParams.get("mode") ?? "full";
 
@@ -38,7 +120,7 @@ serve(async (req) => {
     return new Response("Failed to fetch events", { status: 500 });
   }
 
-  const rawRows = events.map((event) => [
+  const rawRows = (events as LineEvent[]).map((event) => [
     event.created_at ?? "",
     event.line_user_id ?? "",
     event.message_text ?? "",
@@ -58,7 +140,7 @@ serve(async (req) => {
     JSON.stringify(event.metadata ?? {}),
   ]);
 
-  const summaryByDay = buildDailySummary(events);
+  const summaryByDay = buildDailySummary(events as LineEvent[]);
   const summaryRows = summaryByDay.map((summary) => [
     summary.date,
     summary.totalEvents,
@@ -84,7 +166,7 @@ serve(async (req) => {
     console.error("Failed to fetch library_members", membersError);
   }
 
-  const membershipRows = (members ?? []).map((member) => [
+  const membershipRows = ((members ?? []) as LibraryMember[]).map((member) => [
     member.stripe_customer_email ?? "",
     member.line_user_id ?? "",
     member.membership_tier ?? "",
@@ -97,7 +179,7 @@ serve(async (req) => {
     member.last_interaction_at ?? "",
   ]);
 
-  const alertsRows = events
+  const alertsRows = (events as LineEvent[])
     .filter((event) =>
       event.contains_phi || event.subscription_status === "past_due"
     )
@@ -136,8 +218,8 @@ serve(async (req) => {
   });
 });
 
-function buildDailySummary(events: any[]) {
-  const summaryMap = new Map<string, any>();
+function buildDailySummary(events: LineEvent[]): DailySummary[] {
+  const summaryMap = new Map<string, DailySummaryAccumulator>();
 
   for (const event of events) {
     const dateKey = (event.created_at ?? "").slice(0, 10);
@@ -157,7 +239,7 @@ function buildDailySummary(events: any[]) {
         processingCount: 0,
       });
     }
-    const summary = summaryMap.get(dateKey);
+    const summary = summaryMap.get(dateKey)!;
     summary.totalEvents += 1;
     summary.uniqueUserSet.add(event.line_user_id ?? "unknown");
     if (event.risk_level === "safe") summary.riskSafe += 1;
@@ -191,7 +273,7 @@ function buildDailySummary(events: any[]) {
   }));
 }
 
-async function buildSheetsClient(serviceAccount: any) {
+async function buildSheetsClient(serviceAccount: GoogleServiceAccount): Promise<SheetsClient> {
   const now = Math.floor(Date.now() / 1000);
   const jwtHeader = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const jwtPayload = btoa(JSON.stringify({
@@ -202,9 +284,10 @@ async function buildSheetsClient(serviceAccount: any) {
     iat: now,
   }));
   const encoder = new TextEncoder();
+  const keyData = strToUint8Array(serviceAccount.private_key);
   const key = await crypto.subtle.importKey(
     "pkcs8",
-    strToUint8Array(serviceAccount.private_key),
+    keyData.buffer as ArrayBuffer,
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
     ["sign"],
@@ -270,18 +353,18 @@ async function buildSheetsClient(serviceAccount: any) {
   };
 }
 
-async function appendRows(client: any, tabName: string, rows: unknown[][]) {
+async function appendRows(client: SheetsClient, tabName: string, rows: unknown[][]): Promise<void> {
   if (rows.length === 0) return;
   await client.append(tabName, rows);
 }
 
-async function overwriteRows(client: any, tabName: string, rows: unknown[][]) {
+async function overwriteRows(client: SheetsClient, tabName: string, rows: unknown[][]): Promise<void> {
   await client.clearBelowHeader(tabName);
   if (rows.length === 0) return;
   await client.update(tabName, rows);
 }
 
-function strToUint8Array(pem: string) {
+function strToUint8Array(pem: string): Uint8Array {
   const cleaned = pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
   const binary = atob(cleaned);
   const buffer = new Uint8Array(binary.length);
@@ -291,7 +374,7 @@ function strToUint8Array(pem: string) {
   return buffer;
 }
 
-function uint8ToBase64(buffer: ArrayBuffer) {
+function uint8ToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = "";
   for (const byte of bytes) {
