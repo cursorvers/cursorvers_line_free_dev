@@ -1,14 +1,52 @@
 /**
  * Supabase Client for LINE Cards
+ * Includes retry logic for transient failures
  */
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import {
   ExtractedCard,
   LineCardInsert,
-  LineCardRecord,
   ExtractionStats,
 } from "./types.ts";
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
+
+/**
+ * Sleep utility
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Execute with retry logic
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      if (attempt < MAX_RETRIES) {
+        const delay = RETRY_DELAY_MS * attempt;
+        console.log(`⚠️  ${operationName} failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`);
+        console.log(`   Error: ${lastError.message}`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  throw new Error(`${operationName} failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+}
 
 /**
  * Initialize Supabase client
@@ -31,15 +69,42 @@ export function createSupabaseClient(
 export async function getExistingHashes(
   client: SupabaseClient
 ): Promise<Set<string>> {
-  const { data, error } = await client
-    .from("line_cards")
-    .select("content_hash");
+  return withRetry(async () => {
+    const { data, error } = await client
+      .from("line_cards")
+      .select("content_hash");
 
-  if (error) {
-    throw new Error(`Failed to fetch existing hashes: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to fetch existing hashes: ${error.message}`);
+    }
+
+    return new Set((data || []).map((row) => row.content_hash));
+  }, "Fetch existing hashes");
+}
+
+/**
+ * Insert a batch of cards with retry
+ */
+async function insertBatch(
+  client: SupabaseClient,
+  batch: LineCardInsert[],
+  batchNumber: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await withRetry(async () => {
+      const { error } = await client.from("line_cards").insert(batch);
+      if (error) {
+        throw new Error(error.message);
+      }
+    }, `Batch ${batchNumber} insert`);
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
-
-  return new Set((data || []).map((row) => row.content_hash));
 }
 
 /**
@@ -88,19 +153,20 @@ export async function insertCards(
 
   // Insert in batches to avoid timeout
   const safeBatchSize = Number.isFinite(batchSize) && batchSize > 0 ? batchSize : 50;
+  const totalBatches = Math.ceil(records.length / safeBatchSize);
+
   for (let i = 0; i < records.length; i += safeBatchSize) {
     const batch = records.slice(i, i + safeBatchSize);
+    const batchNumber = Math.floor(i / safeBatchSize) + 1;
 
-    const { error } = await client.from("line_cards").insert(batch);
+    const result = await insertBatch(client, batch, batchNumber);
 
-    if (error) {
-      stats.errors.push(`Batch insert error: ${error.message}`);
-      console.error(`❌ Batch ${Math.floor(i / safeBatchSize) + 1} failed:`, error.message);
-    } else {
+    if (result.success) {
       stats.newCardsInserted += batch.length;
-      console.log(
-        `✅ Batch ${Math.floor(i / safeBatchSize) + 1}: Inserted ${batch.length} cards`
-      );
+      console.log(`✅ Batch ${batchNumber}/${totalBatches}: Inserted ${batch.length} cards`);
+    } else {
+      stats.errors.push(`Batch ${batchNumber} error: ${result.error}`);
+      console.error(`❌ Batch ${batchNumber}/${totalBatches} failed: ${result.error}`);
     }
   }
 
@@ -115,44 +181,38 @@ export async function getCardStats(client: SupabaseClient): Promise<{
   byTheme: Record<string, number>;
   byStatus: Record<string, number>;
 }> {
-  const { data: themeStats, error: themeError } = await client
-    .from("line_cards")
-    .select("theme")
-    .then((res) => ({
-      data: res.data,
-      error: res.error,
-    }));
+  return withRetry(async () => {
+    const { data: themeData, error: themeError } = await client
+      .from("line_cards")
+      .select("theme");
 
-  if (themeError) {
-    throw new Error(`Failed to fetch theme stats: ${themeError.message}`);
-  }
+    if (themeError) {
+      throw new Error(`Failed to fetch theme stats: ${themeError.message}`);
+    }
 
-  const { data: statusStats, error: statusError } = await client
-    .from("line_cards")
-    .select("status")
-    .then((res) => ({
-      data: res.data,
-      error: res.error,
-    }));
+    const { data: statusData, error: statusError } = await client
+      .from("line_cards")
+      .select("status");
 
-  if (statusError) {
-    throw new Error(`Failed to fetch status stats: ${statusError.message}`);
-  }
+    if (statusError) {
+      throw new Error(`Failed to fetch status stats: ${statusError.message}`);
+    }
 
-  const byTheme: Record<string, number> = {};
-  const byStatus: Record<string, number> = {};
+    const byTheme: Record<string, number> = {};
+    const byStatus: Record<string, number> = {};
 
-  (themeStats || []).forEach((row) => {
-    byTheme[row.theme] = (byTheme[row.theme] || 0) + 1;
-  });
+    (themeData || []).forEach((row) => {
+      byTheme[row.theme] = (byTheme[row.theme] || 0) + 1;
+    });
 
-  (statusStats || []).forEach((row) => {
-    byStatus[row.status] = (byStatus[row.status] || 0) + 1;
-  });
+    (statusData || []).forEach((row) => {
+      byStatus[row.status] = (byStatus[row.status] || 0) + 1;
+    });
 
-  return {
-    total: themeStats?.length || 0,
-    byTheme,
-    byStatus,
-  };
+    return {
+      total: themeData?.length || 0,
+      byTheme,
+      byStatus,
+    };
+  }, "Fetch card stats");
 }

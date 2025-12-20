@@ -9,7 +9,20 @@ on:
     # 毎日 JST 06:00 (UTC 21:00 前日) に同期
     - cron: '0 21 * * *'
   workflow_dispatch:
-    # 手動実行も可能
+    inputs:
+      dry_run:
+        description: 'ドライラン（DBへの書き込みなし）'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+# 同時実行を防止
+concurrency:
+  group: sync-line-cards
+  cancel-in-progress: false
 
 jobs:
   sync-cards:
@@ -19,6 +32,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Validate secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OBSIDIAN_VAULT_TOKEN: ${{ secrets.OBSIDIAN_VAULT_TOKEN }}
+        run: |
+          MISSING=""
+          [ -z "$SUPABASE_URL" ] && MISSING="${MISSING}SUPABASE_URL "
+          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && MISSING="${MISSING}SUPABASE_SERVICE_ROLE_KEY "
+          [ -z "$OBSIDIAN_VAULT_TOKEN" ] && MISSING="${MISSING}OBSIDIAN_VAULT_TOKEN "
+
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing required secrets: ${MISSING}"
+            exit 1
+          fi
+          echo "All required secrets are configured"
 
       - name: Checkout Obsidian Vault
         uses: actions/checkout@v4
@@ -33,17 +63,56 @@ jobs:
           deno-version: v2.x
 
       - name: Sync cards from Obsidian Vault
+        id: sync
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VAULT_PATH: ${{ github.workspace }}/vault
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
-          echo "📚 Obsidian VaultからLINEカードを同期中..."
-          
+          echo "Obsidian VaultからLINEカードを同期中..."
+
           cd scripts/export-line-cards
-          deno run --allow-read --allow-env --allow-net --no-lock src/main.ts
-          
-          echo "✅ 同期完了"
+
+          # 実行オプション
+          OPTS=""
+          if [ "$DRY_RUN" = "true" ]; then
+            OPTS="--dry-run"
+            echo "mode=dry-run" >> $GITHUB_OUTPUT
+          else
+            echo "mode=live" >> $GITHUB_OUTPUT
+          fi
+
+          # 実行結果をキャプチャ
+          if OUTPUT=$(deno run --allow-read --allow-env --allow-net --no-lock src/main.ts $OPTS 2>&1); then
+            echo "$OUTPUT"
+
+            # 結果から数値を抽出
+            FOUND=$(echo "$OUTPUT" | grep -oP 'Total cards found:\s+\K\d+' || echo "0")
+            INSERTED=$(echo "$OUTPUT" | grep -oP 'New cards inserted:\s+\K\d+' || echo "0")
+            SKIPPED=$(echo "$OUTPUT" | grep -oP 'Duplicates skipped:\s+\K\d+' || echo "0")
+
+            echo "cards_found=$FOUND" >> $GITHUB_OUTPUT
+            echo "cards_inserted=$INSERTED" >> $GITHUB_OUTPUT
+            echo "cards_skipped=$SKIPPED" >> $GITHUB_OUTPUT
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "$OUTPUT"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Notify on success
+        if: success() && steps.sync.outputs.mode == 'live' && steps.sync.outputs.cards_inserted != '0'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
+            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"embeds\": [{\"title\": \"LINEカード同期完了\", \"color\": 5763719, \"fields\": [{\"name\": \"新規追加\", \"value\": \"${{ steps.sync.outputs.cards_inserted }}枚\", \"inline\": true}, {\"name\": \"重複スキップ\", \"value\": \"${{ steps.sync.outputs.cards_skipped }}枚\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}], \"footer\": {\"text\": \"Obsidian Vault Sync\"}}]}"
+          fi
 
       - name: Notify on failure
         if: failure()
@@ -51,7 +120,8 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
         run: |
           if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            curl -X POST "$DISCORD_WEBHOOK_URL" \
+            TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
+            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
               -H "Content-Type: application/json" \
-              -d '{"content": "⚠️ **LINEカード同期ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+              -d "{\"embeds\": [{\"title\": \"LINEカード同期失敗\", \"description\": \"Obsidian Vault同期でエラーが発生しました\", \"color\": 15158332, \"fields\": [{\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"ログ\", \"value\": \"[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}], \"footer\": {\"text\": \"Obsidian Vault Sync\"}}]}"
           fi
