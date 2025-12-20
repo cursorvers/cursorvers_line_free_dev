@@ -1,6 +1,6 @@
 #!/bin/bash
-# Cursorvers システム自動点検スクリプト v3.1
-# データ保全確認機能付き + セキュリティ改善
+# Cursorvers システム自動点検スクリプト v3.2
+# データ保全確認 + セキュリティ改善 + メタ監視機能
 
 set -e
 
@@ -36,8 +36,8 @@ CHECK_TIME_JST=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
 LOG_FILE="docs/logs/daily-check-${CHECK_DATE}.md"
 
 echo "=========================================="
-echo "Cursorvers システム自動点検 v3.1"
-echo "データ保全確認機能付き + セキュリティ改善"
+echo "Cursorvers システム自動点検 v3.2"
+echo "データ保全確認 + セキュリティ改善 + メタ監視機能"
 echo "実行日時: ${CHECK_TIME} (${CHECK_TIME_JST})"
 echo "=========================================="
 echo ""
@@ -55,8 +55,6 @@ GOOGLE_SHEETS_STATUS="UNKNOWN"
 GOOGLE_SHEETS_DETAIL=""
 GITHUB_FREE_STATUS="UNKNOWN"
 GITHUB_FREE_DETAIL=""
-GITHUB_PAID_STATUS="UNKNOWN"
-GITHUB_PAID_DETAIL=""
 
 # 1. LINE Bot稼働確認
 echo "🔍 1. LINE Bot稼働確認..."
@@ -259,9 +257,70 @@ fi
 # Paid版リポジトリは削除されたため、確認不要
 echo ""
 
-# 7. システム健全性スコア計算
+# 7. 監査関数（manus-audit）稼働確認
+echo "🔍 7. 監査関数（manus-audit）稼働確認..."
+MANUS_AUDIT_STATUS="UNKNOWN"
+MANUS_AUDIT_DETAIL=""
+
+if [[ -n "$MANUS_AUDIT_API_KEY" ]]; then
+    # APIキーがある場合は認証付きでリクエスト
+    MANUS_AUDIT_RESPONSE=$(curl -s --max-time 15 -o /tmp/manus_audit_response.json -w "%{http_code}" \
+        -X POST "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief?mode=health" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${MANUS_AUDIT_API_KEY}" 2>&1) || MANUS_AUDIT_RESPONSE="000"
+
+    if [[ "$MANUS_AUDIT_RESPONSE" == "200" ]]; then
+        # JSONレスポンスの形式を確認
+        if jq -e '.timestamp' /tmp/manus_audit_response.json > /dev/null 2>&1; then
+            MANUS_AUDIT_STATUS="✅ OK"
+            MANUS_AUDIT_DETAIL="監査関数正常稼働 (HTTP ${MANUS_AUDIT_RESPONSE})"
+            echo -e "${GREEN}✅ manus-audit: 正常稼働 (HTTP ${MANUS_AUDIT_RESPONSE})${NC}"
+        else
+            MANUS_AUDIT_STATUS="⚠️ WARNING"
+            MANUS_AUDIT_DETAIL="レスポンス形式異常 (HTTP ${MANUS_AUDIT_RESPONSE})"
+            echo -e "${YELLOW}⚠️ manus-audit: レスポンス形式異常${NC}"
+        fi
+    elif [[ "$MANUS_AUDIT_RESPONSE" == "401" ]] || [[ "$MANUS_AUDIT_RESPONSE" == "403" ]]; then
+        # 認証エラーだがエンドポイントは稼働
+        MANUS_AUDIT_STATUS="⚠️ WARNING"
+        MANUS_AUDIT_DETAIL="認証エラー (HTTP ${MANUS_AUDIT_RESPONSE}) - エンドポイントは稼働"
+        echo -e "${YELLOW}⚠️ manus-audit: 認証エラー (HTTP ${MANUS_AUDIT_RESPONSE})${NC}"
+    elif [[ "$MANUS_AUDIT_RESPONSE" == "000" ]]; then
+        MANUS_AUDIT_STATUS="⚠️ WARNING"
+        MANUS_AUDIT_DETAIL="接続タイムアウト"
+        echo -e "${YELLOW}⚠️ manus-audit: 接続タイムアウト${NC}"
+    else
+        MANUS_AUDIT_STATUS="⚠️ WARNING"
+        MANUS_AUDIT_DETAIL="応答異常 (HTTP ${MANUS_AUDIT_RESPONSE})"
+        echo -e "${YELLOW}⚠️ manus-audit: 応答異常 (HTTP ${MANUS_AUDIT_RESPONSE})${NC}"
+    fi
+    rm -f /tmp/manus_audit_response.json
+else
+    # APIキーがない場合は簡易確認（401が返れば稼働している）
+    MANUS_AUDIT_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+        -X GET "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief" 2>&1) || MANUS_AUDIT_HTTP_CODE="000"
+
+    if [[ "$MANUS_AUDIT_HTTP_CODE" == "401" ]] || [[ "$MANUS_AUDIT_HTTP_CODE" == "405" ]]; then
+        # 401/405 = エンドポイントは存在し稼働している
+        MANUS_AUDIT_STATUS="✅ OK"
+        MANUS_AUDIT_DETAIL="エンドポイント稼働確認 (HTTP ${MANUS_AUDIT_HTTP_CODE})"
+        echo -e "${GREEN}✅ manus-audit: エンドポイント稼働 (HTTP ${MANUS_AUDIT_HTTP_CODE})${NC}"
+        echo -e "${YELLOW}   ※詳細確認には MANUS_AUDIT_API_KEY が必要です${NC}"
+    elif [[ "$MANUS_AUDIT_HTTP_CODE" == "000" ]]; then
+        MANUS_AUDIT_STATUS="⚠️ WARNING"
+        MANUS_AUDIT_DETAIL="接続タイムアウト"
+        echo -e "${YELLOW}⚠️ manus-audit: 接続タイムアウト${NC}"
+    else
+        MANUS_AUDIT_STATUS="⚠️ WARNING"
+        MANUS_AUDIT_DETAIL="応答異常 (HTTP ${MANUS_AUDIT_HTTP_CODE})"
+        echo -e "${YELLOW}⚠️ manus-audit: 応答異常 (HTTP ${MANUS_AUDIT_HTTP_CODE})${NC}"
+    fi
+fi
+echo ""
+
+# 8. システム健全性スコア計算
 TOTAL_SCORE=0
-MAX_SCORE=100
+MAX_SCORE=105  # LINE(30) + Discord(15) + Supabase(25) + Sheets(10) + n8n(10) + GitHub(10) + 監査(5)
 
 # LINE Bot (30点)
 if [[ "$LINE_BOT_STATUS" == "✅ OK" ]]; then
@@ -297,6 +356,11 @@ if [[ "$GITHUB_FREE_STATUS" == "✅ OK" ]]; then
     TOTAL_SCORE=$((TOTAL_SCORE + 10))
 fi
 
+# 監査関数 (5点) - メタ監視として追加
+if [[ "$MANUS_AUDIT_STATUS" == "✅ OK" ]]; then
+    TOTAL_SCORE=$((TOTAL_SCORE + 5))
+fi
+
 echo "=========================================="
 echo "システム健全性スコア: ${TOTAL_SCORE}/${MAX_SCORE}"
 if [[ $TOTAL_SCORE -ge 90 ]]; then
@@ -322,7 +386,7 @@ cat > "${LOG_FILE}" << EOF
 
 **点検日時**: ${CHECK_TIME} (${CHECK_TIME_JST})  
 **実行者**: Manus Automation  
-**点検バージョン**: v3.1 (データ保全確認機能付き + セキュリティ改善)
+**点検バージョン**: v3.2 (データ保全確認 + セキュリティ改善 + メタ監視機能)
 
 ---
 
@@ -335,8 +399,8 @@ cat > "${LOG_FILE}" << EOF
 | **Supabaseデータ保全** | **${SUPABASE_DATA_STATUS}** | **${SUPABASE_DATA_DETAIL}** |
 | **Google Sheetsデータ** | **${GOOGLE_SHEETS_STATUS}** | **${GOOGLE_SHEETS_DETAIL}** |
 | n8n ワークフロー | ${N8N_STATUS} | ${N8N_DETAIL} |
-| GitHub (Free) | ${GITHUB_FREE_STATUS} | ${GITHUB_FREE_DETAIL} |
-| GitHub (Paid) | ${GITHUB_PAID_STATUS} | ${GITHUB_PAID_DETAIL} |
+| GitHub | ${GITHUB_FREE_STATUS} | ${GITHUB_FREE_DETAIL} |
+| **監査関数 (メタ監視)** | **${MANUS_AUDIT_STATUS}** | **${MANUS_AUDIT_DETAIL}** |
 
 ---
 
@@ -429,13 +493,6 @@ ${N8N_DETAIL}
 - **日時**: ${GITHUB_FREE_DATE}
 - **メッセージ**: \`${GITHUB_FREE_MSG}\`
 
-#### cursorvers_line_paid_dev
-
-**最新コミット**:
-- **ハッシュ**: \`${GITHUB_PAID_COMMIT}\`
-- **日時**: ${GITHUB_PAID_DATE}
-- **メッセージ**: \`${GITHUB_PAID_MSG}\`
-
 ---
 
 ## 📈 システム健全性スコア
@@ -449,27 +506,34 @@ ${N8N_DETAIL}
 | **Supabaseデータ保全** | **25** | **$(if [[ "$SUPABASE_DATA_STATUS" == "✅ OK" ]]; then echo "25"; elif [[ "$SUPABASE_DATA_STATUS" == "⚠️ PARTIAL" ]]; then echo "15"; else echo "0"; fi)** | **データ保全** |
 | **Google Sheets** | **10** | **$(if [[ "$GOOGLE_SHEETS_STATUS" == "✅ OK" ]]; then echo "10"; elif [[ "$GOOGLE_SHEETS_STATUS" == "⚠️ PARTIAL" ]]; then echo "5"; else echo "0"; fi)** | **データ同期** |
 | n8n ワークフロー | 10 | $(if [[ "$N8N_STATUS" == "✅ OK" ]]; then echo "10"; else echo "0"; fi) | 統合サービス |
-| GitHub | 10 | $(if [[ "$GITHUB_FREE_STATUS" == "✅ OK" ]] && [[ "$GITHUB_PAID_STATUS" == "✅ OK" ]]; then echo "10"; else echo "0"; fi) | バージョン管理 |
+| GitHub | 10 | $(if [[ "$GITHUB_FREE_STATUS" == "✅ OK" ]]; then echo "10"; else echo "0"; fi) | バージョン管理 |
+| **監査関数** | **5** | **$(if [[ "$MANUS_AUDIT_STATUS" == "✅ OK" ]]; then echo "5"; else echo "0"; fi)** | **メタ監視** |
 
 **評価**: $(if [[ $TOTAL_SCORE -ge 90 ]]; then echo "✅ 優秀"; elif [[ $TOTAL_SCORE -ge 70 ]]; then echo "✅ 良好"; elif [[ $TOTAL_SCORE -ge 50 ]]; then echo "⚠️ 注意"; else echo "❌ 要対応"; fi)
 
 ---
 
-## 🔧 v3.0の改善点
+## 🔧 v3.2の改善点
 
 ### 新機能
 
-1. **Supabaseデータ保全確認**
+1. **監査関数メタ監視（v3.2）**
+   - ✅ manus-audit関数の稼働確認
+   - ✅ エンドポイント応答チェック
+   - ✅ 監視システム自体の監視を実現
+
+2. **Supabaseデータ保全確認**
    - ✅ テーブル別レコード数の確認
    - ✅ 最新アクティビティの確認
    - ✅ データ欠損の検出
 
-2. **Google Sheetsデータ確認**
+3. **Google Sheetsデータ確認**
    - ✅ スプレッドシートへのアクセス確認
    - ⚠️ 詳細なデータ取得機能は次回実装予定
 
-3. **スコアリング改善**
+4. **スコアリング改善**
    - データ保全を重視した配点（Supabase: 25点、Google Sheets: 10点）
+   - 監査関数のメタ監視（5点）を追加
    - 総合評価の追加（優秀/良好/注意/要対応）
 
 ---
@@ -510,11 +574,12 @@ ${DISCORD_STATUS} Discord: ${DISCORD_DETAIL}
 ${SUPABASE_DATA_STATUS} **Supabaseデータ**: ${SUPABASE_DATA_DETAIL}
 ${GOOGLE_SHEETS_STATUS} **Google Sheets**: ${GOOGLE_SHEETS_DETAIL}
 ${N8N_STATUS} n8n: ${N8N_DETAIL}
-✅ GitHub: 両リポジトリ正常
+${GITHUB_FREE_STATUS} GitHub: ${GITHUB_FREE_DETAIL}
+${MANUS_AUDIT_STATUS} **監査関数**: ${MANUS_AUDIT_DETAIL}
 
 **システム健全性スコア**: ${TOTAL_SCORE}/${MAX_SCORE} $(if [[ $TOTAL_SCORE -ge 90 ]]; then echo "(優秀)"; elif [[ $TOTAL_SCORE -ge 70 ]]; then echo "(良好)"; elif [[ $TOTAL_SCORE -ge 50 ]]; then echo "(注意)"; else echo "(要対応)"; fi)
 
-詳細: https://github.com/mo666-med/cursorvers_line_paid_dev/blob/main/${LOG_FILE}
+詳細: https://github.com/mo666-med/cursorvers_line_free_dev/blob/main/${LOG_FILE}
 EOFMSG
 )
 
@@ -537,8 +602,8 @@ echo "✅ GitHubへのプッシュ完了"
 echo ""
 
 echo "=========================================="
-echo "✅ 自動点検完了 v3.1"
-echo "データ保全確認機能付き + セキュリティ改善"
+echo "✅ 自動点検完了 v3.2"
+echo "データ保全確認 + セキュリティ改善 + メタ監視機能"
 echo "=========================================="
 
 
