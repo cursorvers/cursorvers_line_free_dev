@@ -11,6 +11,59 @@ const log = createLogger("manus-api");
 const MANUS_API_KEY = Deno.env.get("MANUS_API_KEY") ?? "";
 const MANUS_BASE_URL = Deno.env.get("MANUS_BASE_URL") ?? "https://api.manus.ai";
 
+// プロンプトインジェクション対策: 最大文字数
+const MAX_WARNING_LENGTH = 500;
+const MAX_TOTAL_WARNINGS = 20;
+
+/**
+ * セキュリティ: ユーザー入力/DB値をプロンプトに含める前にサニタイズ
+ * - 長さを制限
+ * - 危険なパターンを除去
+ * - 特殊文字をエスケープ
+ */
+function sanitizeForPrompt(input: string): string {
+  if (!input || typeof input !== "string") {
+    return "";
+  }
+
+  let sanitized = input
+    // 長さ制限
+    .slice(0, MAX_WARNING_LENGTH)
+    // プロンプトインジェクションで使われそうなパターンを除去
+    .replace(/ignore\s+(all\s+)?previous\s+instructions?/gi, "[REMOVED]")
+    .replace(/disregard\s+(all\s+)?prior\s+(instructions?|context)/gi, "[REMOVED]")
+    .replace(/forget\s+(everything|all|previous)/gi, "[REMOVED]")
+    .replace(/override\s+(instructions?|rules?|constraints?)/gi, "[REMOVED]")
+    .replace(/system\s*:\s*/gi, "system: ")  // "system:" パターンを無害化
+    .replace(/```[\s\S]*?```/g, "[CODE BLOCK REMOVED]")  // コードブロックを除去
+    // 制御文字を除去
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+    // 連続する空白を正規化
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // 長さ超過の場合は末尾を示す
+  if (input.length > MAX_WARNING_LENGTH) {
+    sanitized += "...[truncated]";
+  }
+
+  return sanitized;
+}
+
+/**
+ * 警告メッセージ配列をサニタイズ
+ */
+function sanitizeWarnings(warnings: string[]): string[] {
+  if (!Array.isArray(warnings)) {
+    return [];
+  }
+
+  return warnings
+    .slice(0, MAX_TOTAL_WARNINGS)  // 最大数制限
+    .map(sanitizeForPrompt)
+    .filter(w => w.length > 0);  // 空文字を除去
+}
+
 type AgentProfile = "manus-1.6" | "manus-1.6-lite" | "manus-1.6-max";
 
 interface CreateTaskRequest {
@@ -108,19 +161,28 @@ export function buildRemediationPrompt(auditResult: {
 }): string {
   const issues: string[] = [];
 
-  // カード在庫問題
+  // カード在庫問題（警告メッセージをサニタイズ）
   if (!auditResult.checks.cardInventory.passed) {
-    issues.push(`【カード在庫問題】\n${auditResult.checks.cardInventory.warnings.join("\n")}`);
+    const sanitizedWarnings = sanitizeWarnings(auditResult.checks.cardInventory.warnings);
+    if (sanitizedWarnings.length > 0) {
+      issues.push(`【カード在庫問題】\n${sanitizedWarnings.join("\n")}`);
+    }
   }
 
-  // 配信成功率問題
+  // 配信成功率問題（警告メッセージをサニタイズ）
   if (!auditResult.checks.broadcastSuccess.passed) {
-    issues.push(`【配信成功率問題】\n${auditResult.checks.broadcastSuccess.warnings.join("\n")}`);
+    const sanitizedWarnings = sanitizeWarnings(auditResult.checks.broadcastSuccess.warnings);
+    if (sanitizedWarnings.length > 0) {
+      issues.push(`【配信成功率問題】\n${sanitizedWarnings.join("\n")}`);
+    }
   }
 
-  // DB健全性問題
+  // DB健全性問題（警告メッセージをサニタイズ）
   if (auditResult.checks.databaseHealth && !auditResult.checks.databaseHealth.passed) {
-    issues.push(`【データベース健全性問題】\n${auditResult.checks.databaseHealth.warnings.join("\n")}`);
+    const sanitizedWarnings = sanitizeWarnings(auditResult.checks.databaseHealth.warnings);
+    if (sanitizedWarnings.length > 0) {
+      issues.push(`【データベース健全性問題】\n${sanitizedWarnings.join("\n")}`);
+    }
   }
 
   const prompt = `
