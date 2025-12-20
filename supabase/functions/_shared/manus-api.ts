@@ -15,6 +15,86 @@ const MANUS_BASE_URL = Deno.env.get("MANUS_BASE_URL") ?? "https://api.manus.ai";
 const MAX_WARNING_LENGTH = 500;
 const MAX_TOTAL_WARNINGS = 20;
 
+// リトライ設定
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 1000;  // 1秒
+const MAX_RETRY_DELAY_MS = 10000;     // 10秒
+
+/**
+ * 指数バックオフでリトライ可能な関数を実行
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: {
+    maxRetries?: number;
+    initialDelay?: number;
+    maxDelay?: number;
+    shouldRetry?: (error: unknown) => boolean;
+    onRetry?: (attempt: number, error: unknown, nextDelay: number) => void;
+  } = {}
+): Promise<T> {
+  const {
+    maxRetries = MAX_RETRIES,
+    initialDelay = INITIAL_RETRY_DELAY_MS,
+    maxDelay = MAX_RETRY_DELAY_MS,
+    shouldRetry = () => true,
+    onRetry,
+  } = options;
+
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      if (attempt >= maxRetries || !shouldRetry(error)) {
+        throw error;
+      }
+
+      // 指数バックオフ: delay = min(initialDelay * 2^attempt, maxDelay)
+      const delay = Math.min(initialDelay * Math.pow(2, attempt), maxDelay);
+
+      if (onRetry) {
+        onRetry(attempt + 1, error, delay);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError;
+}
+
+/**
+ * リトライ可能なHTTPエラーかどうかを判定
+ * - 5xx: サーバーエラー（リトライ可能）
+ * - 429: レートリミット（リトライ可能）
+ * - 408: タイムアウト（リトライ可能）
+ * - ネットワークエラー（リトライ可能）
+ */
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof Error) {
+    // ネットワークエラー
+    if (error.message.includes("fetch") ||
+        error.message.includes("network") ||
+        error.message.includes("timeout") ||
+        error.message.includes("ECONNRESET") ||
+        error.message.includes("ETIMEDOUT")) {
+      return true;
+    }
+  }
+  return true;  // デフォルトでリトライ
+}
+
+/**
+ * HTTPレスポンスがリトライ可能かどうかを判定
+ */
+function isRetryableStatus(status: number): boolean {
+  return status >= 500 || status === 429 || status === 408;
+}
+
 /**
  * セキュリティ: ユーザー入力/DB値をプロンプトに含める前にサニタイズ
  * - 長さを制限
@@ -88,7 +168,7 @@ interface ManusError {
 }
 
 /**
- * Manus AIでタスクを作成
+ * Manus AIでタスクを作成（指数バックオフ付きリトライ対応）
  */
 export async function createManusTask(
   request: CreateTaskRequest
@@ -100,41 +180,69 @@ export async function createManusTask(
 
   const endpoint = `${MANUS_BASE_URL}/v1/tasks`;
 
+  log.info("Creating Manus task", {
+    promptLength: request.prompt.length,
+    agentProfile: request.agentProfile ?? "manus-1.6",
+  });
+
   try {
-    log.info("Creating Manus task", {
-      promptLength: request.prompt.length,
-      agentProfile: request.agentProfile ?? "manus-1.6",
-    });
+    const data = await withRetry(
+      async () => {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "API_KEY": MANUS_API_KEY,
+          },
+          body: JSON.stringify({
+            prompt: request.prompt,
+            agentProfile: request.agentProfile ?? "manus-1.6",
+            taskMode: request.taskMode ?? "agent",
+            locale: request.locale ?? "ja",
+            hideInTaskList: request.hideInTaskList ?? false,
+            createShareableLink: request.createShareableLink ?? true,
+          }),
+        });
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "API_KEY": MANUS_API_KEY,
+        if (!response.ok) {
+          const errorBody = await response.text();
+
+          // リトライ可能なステータスコードの場合はエラーをスロー
+          if (isRetryableStatus(response.status)) {
+            const retryError = new Error(`Manus API error ${response.status}: ${errorBody}`);
+            (retryError as Error & { status: number }).status = response.status;
+            throw retryError;
+          }
+
+          // リトライ不可能なエラー（4xx系）は即座に失敗として返す
+          log.error("Manus API error (non-retryable)", {
+            status: response.status,
+            errorBody,
+          });
+          throw new Error(`NON_RETRYABLE:${response.status}:${errorBody}`);
+        }
+
+        return await response.json() as CreateTaskResponse;
       },
-      body: JSON.stringify({
-        prompt: request.prompt,
-        agentProfile: request.agentProfile ?? "manus-1.6",
-        taskMode: request.taskMode ?? "agent",
-        locale: request.locale ?? "ja",
-        hideInTaskList: request.hideInTaskList ?? false,
-        createShareableLink: request.createShareableLink ?? true,
-      }),
-    });
+      {
+        maxRetries: MAX_RETRIES,
+        shouldRetry: (error) => {
+          // NON_RETRYABLE プレフィックスがある場合はリトライしない
+          if (error instanceof Error && error.message.startsWith("NON_RETRYABLE:")) {
+            return false;
+          }
+          return isRetryableError(error);
+        },
+        onRetry: (attempt, error, nextDelay) => {
+          log.warn("Manus API request failed, retrying", {
+            attempt,
+            error: error instanceof Error ? error.message : String(error),
+            nextDelayMs: nextDelay,
+          });
+        },
+      }
+    );
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      log.error("Manus API error", {
-        status: response.status,
-        errorBody,
-      });
-      return {
-        success: false,
-        error: `Manus API error ${response.status}: ${errorBody}`,
-      };
-    }
-
-    const data = await response.json() as CreateTaskResponse;
     log.info("Manus task created", {
       taskId: data.task_id,
       taskUrl: data.task_url,
@@ -143,8 +251,15 @@ export async function createManusTask(
     return { success: true, data };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    log.error("Failed to create Manus task", { error: errorMessage });
-    return { success: false, error: errorMessage };
+
+    // NON_RETRYABLE プレフィックスを除去
+    const cleanedMessage = errorMessage.replace(/^NON_RETRYABLE:/, "");
+
+    log.error("Failed to create Manus task after retries", {
+      error: cleanedMessage,
+      maxRetries: MAX_RETRIES,
+    });
+    return { success: false, error: cleanedMessage };
   }
 }
 
