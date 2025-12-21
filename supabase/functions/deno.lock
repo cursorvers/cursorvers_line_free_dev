@@ -1,5 +1,19 @@
 {
   "version": "5",
+  "specifiers": {
+    "npm:@types/node@*": "24.2.0"
+  },
+  "npm": {
+    "@types/node@24.2.0": {
+      "integrity": "sha512-3xyG3pMCq3oYCNg7/ZP+E1ooTaGB4cG8JWRsqqOYQdbWNY4zbaV0Ennrd7stjiJEFZCaybcIgpTjJWHRfBSIDw==",
+      "dependencies": [
+        "undici-types"
+      ]
+    },
+    "undici-types@7.10.0": {
+      "integrity": "sha512-t5Fy/nfn+14LuOc2KNYg75vZqClpAiqscVvMygNnlsHBFpSXdJaYtXMcdNLpl/Qvc3P2cB3s6lOV51nqsFq4ag=="
+    }
+  },
   "remote": {
     "https://deno.land/std@0.208.0/assert/_constants.ts": "8a9da298c26750b28b326b297316cdde860bc237533b07e1337c021379e6b2a9",
     "https://deno.land/std@0.208.0/assert/_diff.ts": "58e1461cc61d8eb1eacbf2a010932bf6a05b79344b02ca38095f9b805795dc48",
@@ -66,6 +80,8 @@
     "https://deno.land/std@0.210.0/assert/unimplemented.ts": "4e3e504792c87c485dbc5f4020489d8806ef697741403af2008dfa7b5a4711e8",
     "https://deno.land/std@0.210.0/assert/unreachable.ts": "1af8c99421cc5fb7332454b2b9eca074a4e394895a180bc837750dedcca75338",
     "https://deno.land/std@0.210.0/fmt/colors.ts": "2685c524bef9b16b3059a417daf6860c754eb755e19e812762ef5dff62f24481",
-    "https://deno.land/std@0.210.0/testing/mock.ts": "350211037129efa675592a3d7cdccbca3825000168ebebb3862a70b5af3b2f20"
+    "https://deno.land/std@0.210.0/testing/mock.ts": "350211037129efa675592a3d7cdccbca3825000168ebebb3862a70b5af3b2f20",
+    "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno": "8c1c3233f80bde3359192f205329957393c1847341c318ee8e907d15793fa615",
+    "https://esm.sh/stripe@14.21.0?target=deno": "c68b76780452938e9bbae9e312323e97869ccbdafeb83ddf372746ffa52f6b66"
   }
 }

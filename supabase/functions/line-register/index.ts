@@ -166,20 +166,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 既存レコードを確認（emailまたはline_user_idで）
-    let existingRecord: {
+    // 既存レコードの型定義
+    type MemberRecord = {
       id: string;
       email: string | null;
       line_user_id: string | null;
       tier: string | null;
-    } | null = null;
+    };
+
+    // 既存レコードを確認（emailまたはline_user_idで）
+    let existingRecord: MemberRecord | null = null;
     if (email) {
       const { data: emailRecord } = await supabase
         .from("members")
         .select("id,email,line_user_id,tier")
         .eq("email", email)
         .maybeSingle();
-      existingRecord = emailRecord as typeof existingRecord;
+      existingRecord = emailRecord as MemberRecord | null;
     }
 
     if (lineUserId && !existingRecord) {
@@ -188,7 +191,7 @@ Deno.serve(async (req) => {
         .select("id,email,line_user_id,tier")
         .eq("line_user_id", lineUserId)
         .maybeSingle();
-      existingRecord = lineRecord as typeof existingRecord;
+      existingRecord = lineRecord as MemberRecord | null;
     }
 
     // 有料会員を無料で上書きしない
@@ -223,6 +226,24 @@ Deno.serve(async (req) => {
             .eq("id", existingRecord.id);
           if (updatePaid) {
             error = updatePaid;
+          } else {
+            // 有料会員にLINE紐付け成功後、同じline_user_idの孤児レコードを削除
+            const { data: orphans } = await supabase
+              .from("members")
+              .select("id")
+              .eq("line_user_id", lineUserId)
+              .neq("id", existingRecord.id);
+
+            const orphanList = orphans as { id: string }[] | null;
+            if (orphanList && orphanList.length > 0) {
+              for (const orphan of orphanList) {
+                await supabase.from("members").delete().eq("id", orphan.id);
+                log.info("Deleted orphan record after LINE linking", {
+                  orphanId: orphan.id,
+                  lineUserId: lineUserId?.slice(-4),
+                });
+              }
+            }
           }
         }
       } else {
