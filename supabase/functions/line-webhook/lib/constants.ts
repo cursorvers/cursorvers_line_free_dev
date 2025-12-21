@@ -23,3 +23,7 @@ export const COURSE_KEYWORDS = [
 
 export type DiagnosisKeyword = (typeof COURSE_KEYWORDS)[number];
 
+// Auto-Fix テスト用（意図的なフォーマットエラー）
+const   TEST_AUTO_FIX   =    "this has bad formatting"   ;
+export { TEST_AUTO_FIX };
+
