@@ -1,275 +1,287 @@
-# LINE友だち登録システム - GitHub Actions中心運用 v2.0
+# Cursorvers LINE Platform
+
+医療AI教育プラットフォーム「Cursorvers」のLINE Bot + Stripe決済 + Discord連携システム
+
+[![CI Tests](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/test-line-webhook.yml/badge.svg)](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/test-line-webhook.yml)
+[![Deploy](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/deploy-supabase.yml/badge.svg)](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/deploy-supabase.yml)
 
 ## 概要
 
-LINE Official Accountの友だち登録システムを、GitHub Actions中心で運用する堅牢なアーキテクチャです。
+LINE Official Accountを通じて医療AI教育コンテンツを配信し、Stripe決済でプレミアムコースへのアップグレード、Discord連携でコミュニティ参加を実現するシステムです。
 
-### アーキテクチャ
+### 主要機能
 
-```
-[LINE] ─┐
-        ├→ Front Door（Supabase Edge Function）→ GitHub API repository_dispatch
-[Manus Progress] ─┘                                   └→ GitHub Actions
-                                                            ├→ GPT（解析/シミュレーション）
-                                                            ├→ Manus API（実行指示）
-                                                            ├→ Supabase（ログ/指標）
-                                                            └→ LINE返信
-```
-
-### 特徴
-
-- ✅ **止めない入口**: Front Doorは薄い関数（100～200行）で常時稼働
-- ✅ **見える運用**: すべての進捗・差分をGitに記録
-- ✅ **自動対策**: GPTが進捗を解析し、異常時は自動で対策
-- ✅ **完全な監査**: 全イベント・差分・ログを永続化
-- ✅ **段階的改善**: バージョン管理で安全にロールバック可能
+| 機能 | 説明 |
+|------|------|
+| **LINE Bot** | 診断フロー、Risk Checker、Prompt Polisher |
+| **Stripe決済** | サブスクリプション決済、Webhook処理 |
+| **Discord連携** | 有料会員向けコミュニティ招待 |
+| **自動監査** | 日次/週次/月次の自動監査・修繕 |
+| **Auto-Fix CI** | フォーマットエラーの自動修正 |
 
 ---
 
-## ディレクトリ構造
+## クイックスタート
+
+### 前提条件
+
+- [Deno](https://deno.land/) v1.40+
+- [Supabase CLI](https://supabase.com/docs/guides/cli)
+- [GitHub CLI](https://cli.github.com/)
+
+### ローカル開発
+
+```bash
+# リポジトリをクローン
+git clone https://github.com/mo666-med/cursorvers_line_free_dev.git
+cd cursorvers_line_free_dev
+
+# テスト実行
+deno test supabase/functions/line-webhook/test/ --allow-env --allow-net
+
+# フォーマット & Lint
+deno fmt supabase/functions/
+deno lint supabase/functions/
+
+# Edge Functionをローカル起動
+supabase start
+supabase functions serve line-webhook --env-file .env.local
+```
+
+### デプロイ
+
+```bash
+# 全Edge Functionsをデプロイ
+gh workflow run "Deploy Supabase Edge Functions"
+
+# 個別デプロイ
+supabase functions deploy line-webhook --project-ref haaxgwyimoqzzxzdaeep
+```
+
+---
+
+## アーキテクチャ
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         LINE Platform                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [LINE User] ──→ [LINE Webhook] ──→ [Supabase Edge Functions]  │
+│                                              │                  │
+│                    ┌─────────────────────────┼──────────────┐   │
+│                    │                         ▼              │   │
+│                    │   ┌─────────────────────────────────┐  │   │
+│                    │   │         line-webhook            │  │   │
+│                    │   │  ├─ Risk Checker (GPT-4o)       │  │   │
+│                    │   │  ├─ Prompt Polisher (GPT-4o)    │  │   │
+│                    │   │  ├─ Diagnosis Flow              │  │   │
+│                    │   │  └─ Course Router               │  │   │
+│                    │   └─────────────────────────────────┘  │   │
+│                    │                         │              │   │
+│  [Stripe] ◄───────►│   stripe-webhook        │              │   │
+│                    │         │               ▼              │   │
+│  [Discord] ◄──────►│   discord-bot    [Supabase DB]        │   │
+│                    │                                        │   │
+│                    └────────────────────────────────────────┘   │
+│                                                                 │
+│  [GitHub Actions] ──→ Auto-Fix / Audit / Deploy                │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## ディレクトリ構成
 
 ```
 .
-├── .github/workflows/          # GitHub Actionsワークフロー
-│   ├── manus-progress.yml      # Manus進捗ハンドラ
-│   ├── line-event.yml          # LINE受信ハンドラ
-│   ├── db-migrate.yml          # DBマイグレーション
-│   ├── backup.yml              # 設定バックアップ
-│   └── slo-monitor.yml         # SLO監視
-├── database/migrations/        # Supabaseマイグレーション
-├── functions/relay/            # Front Door（Edge Function）
-│   └── index.ts                # Webhook受信→repository_dispatch
-├── orchestration/              # オーケストレーション
-│   ├── plan/                   # Plan JSON
-│   │   ├── current_plan.json   # 現在のPlan
-│   │   └── plan_delta.json     # GPT解析結果
-│   └── MANUS_EXECUTION_BRIEF_v2.0.txt  # Manus実行指示書
-└── logs/progress/              # 進捗ログ（自動記録）
+├── .github/workflows/           # GitHub Actions
+│   ├── test-line-webhook.yml    # CI/CD + Auto-Fix
+│   ├── deploy-supabase.yml      # Edge Functions デプロイ
+│   ├── manus-audit-daily.yml    # 日次監査
+│   ├── manus-progress.yml       # Manus進捗ハンドラ
+│   └── line-event.yml           # LINEイベントハンドラ
+│
+├── supabase/functions/          # Edge Functions
+│   ├── line-webhook/            # LINE Bot メイン
+│   │   ├── index.ts             # エントリーポイント
+│   │   ├── lib/                 # ビジネスロジック
+│   │   │   ├── risk-checker.ts  # リスクチェッカー
+│   │   │   ├── prompt-polisher.ts # プロンプト改善
+│   │   │   ├── diagnosis-flow.ts  # 診断フロー
+│   │   │   └── course-router.ts   # コース分岐
+│   │   └── test/                # テスト
+│   ├── stripe-webhook/          # Stripe決済処理
+│   ├── line-daily-brief/        # 日次カード配信
+│   ├── line-register/           # LIFF友だち登録
+│   ├── discord-bot/             # Discord Bot
+│   └── _shared/                 # 共有モジュール
+│       ├── supabase.ts          # DBクライアント
+│       ├── logger.ts            # 構造化ログ
+│       ├── manus-api.ts         # Manus API
+│       └── retry.ts             # リトライロジック
+│
+├── orchestration/               # Manus連携
+│   ├── plan/                    # Plan JSON
+│   └── MANUS_EXECUTION_BRIEF_v2.0.txt
+│
+├── scripts/                     # 運用スクリプト
+│   ├── manus-api.js             # Manus API (Node.js)
+│   ├── daily-check.sh           # 日次点検
+│   └── auto-fix/                # 自動修繕
+│
+├── docs/                        # ドキュメント
+│   ├── logs/                    # 監査ログ
+│   └── MANUS_AUTOMATION.md      # 自動化ガイド
+│
+└── config/                      # 設定
+    └── audit-config.yaml        # 監査設定
 ```
 
 ---
 
-## データ契約
+## Edge Functions
 
-### Plan v1.2（GPT → Manus）
+| 関数名 | 説明 | トリガー |
+|--------|------|----------|
+| `line-webhook` | LINE Webhook受信・応答 | LINE Platform |
+| `stripe-webhook` | Stripe決済Webhook | Stripe |
+| `line-daily-brief` | 日次カード配信 | Cron (GitHub Actions) |
+| `line-register` | LIFF友だち登録 | LIFF |
+| `discord-bot` | Discord連携 | Discord API |
+| `relay` | GitHub Actions連携 | repository_dispatch |
+| `health-check` | ヘルスチェック | 監視システム |
 
-```json
-{
-  "title": "友だち登録時のウェルカムメッセージ送信",
-  "risk": {
-    "level": "low",
-    "reasons": ["定型メッセージのみ"],
-    "approval": "not_required"
-  },
-  "steps": [
-    {
-      "id": "s1",
-      "action": "supabase.upsert",
-      "connector": "supabase",
-      "payload": {
-        "table": "line_members",
-        "data": {"line_user_id": "...", "display_name": "..."}
-      },
-      "idempotency_key": "hash(eventId+userId+step)",
-      "on_error": "abort"
-    },
-    {
-      "id": "s2",
-      "action": "line.reply",
-      "connector": "line_bot",
-      "payload": {
-        "to": "...",
-        "messages": [{"type": "text", "text": "ウェルカムメッセージ"}]
-      },
-      "idempotency_key": "hash(eventId+userId+step)",
-      "on_error": "compensate"
-    }
-  ],
-  "rollback": ["s1: Supabaseからレコード削除"],
-  "observability": {
-    "success_metrics": ["line_members.count", "line.reply.success"],
-    "logs": ["step毎のlatency", "retries"]
-  }
-}
+---
+
+## GitHub Actions ワークフロー
+
+### CI/CD
+
+| ワークフロー | トリガー | 説明 |
+|-------------|---------|------|
+| `test-line-webhook.yml` | push/PR | テスト + Auto-Fix |
+| `deploy-supabase.yml` | push to main | Edge Functionsデプロイ |
+| `ci-tests.yml` | PR | 型チェック・Lint |
+
+### 監査・自動化
+
+| ワークフロー | スケジュール | 説明 |
+|-------------|-------------|------|
+| `manus-audit-daily.yml` | 毎日 06:00 JST | 日次監査 |
+| `manus-audit-weekly.yml` | 毎週月曜 | 週次監査 |
+| `manus-audit-monthly.yml` | 毎月1日 | 月次メンテナンス |
+| `manus-progress.yml` | repository_dispatch | Manus進捗処理 |
+
+### Auto-Fix 機能
+
+フォーマットエラーを自動修正し、`🤖 [auto-fix]` コミットを作成：
+
 ```
-
-### ProgressEvent v1.1（Manus → GitHub Actions → GPT）
-
-```json
-{
-  "event_type": "step_succeeded",
-  "task_id": "task-123",
-  "step_id": "s1",
-  "ts": "2025-11-01T12:34:56Z",
-  "idempotency_key": "hash-abc123",
-  "plan_title": "友だち登録時のウェルカムメッセージ送信",
-  "metrics": {
-    "latency_ms": 1234,
-    "retries": 0,
-    "queue_ms": 50
-  },
-  "context": {
-    "trigger": "#参加",
-    "user_ref": "hashed_line_user_id",
-    "risk_level": "low"
-  },
-  "preview": null,
-  "error": null
-}
-```
-
-### PlanDelta v1.1（GPT解析結果 → Manus）
-
-```json
-{
-  "decision": "retry",
-  "reasons": ["Supabase一時的な503エラー"],
-  "actions": [
-    {
-      "type": "retry",
-      "step_id": "s1",
-      "backoff_ms": 5000,
-      "max_retries": 2
-    }
-  ],
-  "amended_plan": {
-    "...": "修正されたPlan v1.2"
-  },
-  "simulated_outcomes": [
-    {
-      "scenario": "retry+backoff",
-      "p_success": 0.78,
-      "risk": "low"
-    }
-  ]
-}
+push → format-check → Auto-Fix Job → 🤖 [auto-fix] commit
 ```
 
 ---
 
-## SLO（Service Level Objectives）
+## 環境変数
 
-| 指標 | 目標値 |
-|-----|-------|
-| delivery latency (p50) | < 2s |
-| delivery latency (p95) | < 10s |
-| error_rate (5分移動窓) | < 1% |
-| heartbeat_miss | < 2/10min |
-| uptime | ≥ 99.9% |
-
----
-
-## 安全装置
-
-1. **MAX_FEEDBACK_HOPS=3**: GPT⇄Manus往復の上限
-2. **COOLDOWN=60s**: 同一idempotency_keyの再指示制限
-3. **承認ゲート**: 大量配信・外部送信は必ず承認
-4. **Kill-Switch**: `FEATURE_BOT_ENABLED=false`で即停止
-5. **署名検証**: LINE・Manusの署名を必ず検証
-6. **冪等性**: idempotency_keyで二重実行を回避
-
----
-
-## セットアップ
-
-### 1. GitHub Secrets設定
+### Supabase Secrets
 
 ```bash
-# GPT解析用
-gh secret set LLM_ENDPOINT --body "https://api.openai.com/v1/chat/completions"
-gh secret set LLM_API_KEY --body "sk-..."
+# 必須
+SUPABASE_URL=https://haaxgwyimoqzzxzdaeep.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...
+LINE_CHANNEL_ACCESS_TOKEN=...
+LINE_CHANNEL_SECRET=...
+STRIPE_API_KEY=...
+STRIPE_WEBHOOK_SECRET=...
+OPENAI_API_KEY=...
 
-# Manus API
-gh secret set MANUS_API_KEY --body "..."
-gh secret set PROGRESS_WEBHOOK_URL --body "https://your-domain.jp/functions/relay"
-
-# Connectors
-gh secret set CONNECTOR_GCAL --body "uuid-..."
-gh secret set CONNECTOR_GMAIL --body "uuid-..."
-gh secret set CONNECTOR_NOTION --body "uuid-..."
-gh secret set CONNECTOR_SUPABASE --body "uuid-..."
-gh secret set CONNECTOR_LINEBOT --body "uuid-..."
-
-# Supabase
-gh secret set SUPABASE_ACCESS_TOKEN --body "..."
+# オプション
+DISCORD_BOT_TOKEN=...
+DISCORD_GUILD_ID=...
+MANUS_API_KEY=...
 ```
 
-### 2. GitHub Variables設定
+### GitHub Secrets
 
 ```bash
-gh variable set MANUS_BASE_URL --body "https://api.manus.im"
-gh variable set VERIFIED_DOMAIN --body "https://your-verified-domain.jp"
-```
-
-### 3. Front Door（Supabase Edge Function）デプロイ
-
-```bash
-cd functions/relay
-supabase functions deploy relay --project-ref <your-project-ref>
-```
-
-### 4. LINE Developers ConsoleでWebhook URL設定
-
-```
-https://<your-project-ref>.supabase.co/functions/v1/relay
-```
-
----
-
-## 運用
-
-### 進捗確認
-
-```bash
-# 最新の進捗ログを確認
-cat logs/progress/*.json | jq -s 'sort_by(.ts) | .[-5:]'
-
-# Plan差分を確認
-cat orchestration/plan/plan_delta.json | jq
-```
-
-### 手動でManusを実行
-
-```bash
-# current_plan.jsonを編集
-vim orchestration/plan/current_plan.json
-
-# GitHub Actionsを手動トリガー
-gh workflow run manus-progress.yml
-```
-
-### Kill-Switch（緊急停止）
-
-```bash
-# Front Doorの環境変数を設定
-supabase secrets set FEATURE_BOT_ENABLED=false --project-ref <your-project-ref>
+SUPABASE_ACCESS_TOKEN=...
+SUPABASE_PROJECT_ID=haaxgwyimoqzzxzdaeep
+DISCORD_ADMIN_WEBHOOK_URL=...
 ```
 
 ---
 
 ## テスト
 
-### 正常系
-
 ```bash
-# #参加イベントをシミュレート
-curl -X POST https://<your-project-ref>.supabase.co/functions/v1/relay \
-  -H "Content-Type: application/json" \
-  -d '{"event_type":"task_created","task_id":"test-123","plan_title":"友だち登録"}'
+# 全テスト実行
+deno test supabase/functions/line-webhook/test/ --allow-env --allow-net
+
+# 特定テスト実行
+deno test supabase/functions/line-webhook/test/risk-checker.test.ts --allow-env --allow-net
+
+# カバレッジ
+deno test --coverage=coverage/ supabase/functions/line-webhook/test/
+deno coverage coverage/
 ```
 
-### エラー系
+### テスト構成
+
+- `risk-checker.test.ts`: Risk Checker機能
+- `prompt-polisher.test.ts`: Prompt Polisher機能
+- `diagnosis-flow.test.ts`: 診断フロー
+- `note-recommendations.test.ts`: 記事推薦
+
+---
+
+## 運用コマンド
 
 ```bash
-# Supabase 503エラーをシミュレート
-# → GPTがretry/backoffを提案
+# ヘルスチェック
+curl https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/health-check
+
+# ログ確認
+supabase functions logs line-webhook --project-ref haaxgwyimoqzzxzdaeep
+
+# 手動監査
+gh workflow run manus-audit-daily.yml
+
+# Edge Function再デプロイ
+supabase functions deploy line-webhook --project-ref haaxgwyimoqzzxzdaeep
 ```
 
-### 承認系
+---
+
+## トラブルシューティング
+
+### LINE Bot応答なし
 
 ```bash
-# 大量配信（>50件）をシミュレート
-# → Manusがstatus="ask"で承認待ち
+# 1. ログ確認
+supabase functions logs line-webhook --project-ref haaxgwyimoqzzxzdaeep
+
+# 2. 再デプロイ
+supabase functions deploy line-webhook --project-ref haaxgwyimoqzzxzdaeep
+```
+
+### Stripe Webhook失敗
+
+```bash
+# 署名検証確認
+supabase secrets list --project-ref haaxgwyimoqzzxzdaeep | grep STRIPE
+```
+
+### テスト失敗
+
+```bash
+# ローカルでテスト実行
+deno test supabase/functions/line-webhook/test/ --allow-env --allow-net
+
+# 型チェック
+deno check supabase/functions/line-webhook/index.ts
 ```
 
 ---
@@ -284,3 +296,4 @@ MIT License
 
 - GitHub: [@mo666-med](https://github.com/mo666-med)
 - LINE Official Account: @529ybhfo
+- Discord: [Cursorvers Community](https://discord.gg/TkmmX5Z4vx)
