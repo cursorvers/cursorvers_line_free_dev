@@ -380,7 +380,9 @@ async function handleVerificationCode(
     // 認証コードで会員を検索
     const { data: member, error: fetchError } = await supabase
       .from("members")
-      .select("id, email, tier, verification_code, verification_expires_at, line_user_id")
+      .select(
+        "id, email, tier, verification_code, verification_expires_at, line_user_id",
+      )
       .eq("verification_code", code)
       .maybeSingle();
 
@@ -421,7 +423,10 @@ async function handleVerificationCode(
     }
 
     // 有効期限チェック
-    if (member.verification_expires_at && isCodeExpired(member.verification_expires_at)) {
+    if (
+      member.verification_expires_at &&
+      isCodeExpired(member.verification_expires_at)
+    ) {
       log.info("Verification code expired", {
         code: code.slice(0, 2) + "****",
         email: member.email?.slice(0, 5) + "***",
@@ -776,7 +781,8 @@ async function handleEvent(event: LineEvent): Promise<void> {
 
       // 有料会員で認証コード保留中の場合は、コード入力を促すメッセージ
       // 注: 厳密には誰の決済かは特定できないが、UXとして案内
-      const hasPendingPaidMembers = pendingPaidMember && pendingPaidMember.length > 0;
+      const hasPendingPaidMembers = pendingPaidMember &&
+        pendingPaidMember.length > 0;
 
       if (replyToken) {
         if (hasPendingPaidMembers) {

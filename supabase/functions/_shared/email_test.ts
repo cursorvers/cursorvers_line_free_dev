@@ -87,18 +87,25 @@ Deno.test("email - template generation", async (t) => {
     `;
 
     for (const element of requiredElements) {
-      assertEquals(templateSample.includes(element), true, `Missing: ${element}`);
+      assertEquals(
+        templateSample.includes(element),
+        true,
+        `Missing: ${element}`,
+      );
     }
   });
 
-  await t.step("reminder email contains urgency note for late reminders", () => {
-    const daysSincePurchase = 12;
-    const urgencyNote = daysSincePurchase >= 10
-      ? "※ あと数日で有効期限が切れます。お早めにご登録ください。"
-      : "";
+  await t.step(
+    "reminder email contains urgency note for late reminders",
+    () => {
+      const daysSincePurchase = 12;
+      const urgencyNote = daysSincePurchase >= 10
+        ? "※ あと数日で有効期限が切れます。お早めにご登録ください。"
+        : "";
 
-    assertEquals(urgencyNote.length > 0, true);
-  });
+      assertEquals(urgencyNote.length > 0, true);
+    },
+  );
 
   await t.step("direct invite email contains Discord join command", () => {
     const email = "test@example.com";

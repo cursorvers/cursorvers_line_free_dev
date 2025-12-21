@@ -78,6 +78,8 @@ export function normalizeCode(input: string): string {
  * コードが有効期限内かどうかを判定
  */
 export function isCodeExpired(expiresAt: Date | string): boolean {
-  const expiry = typeof expiresAt === "string" ? new Date(expiresAt) : expiresAt;
+  const expiry = typeof expiresAt === "string"
+    ? new Date(expiresAt)
+    : expiresAt;
   return new Date() > expiry;
 }

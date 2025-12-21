@@ -73,7 +73,9 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
 
           if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Resend API error: ${response.status} - ${errorText}`);
+            throw new Error(
+              `Resend API error: ${response.status} - ${errorText}`,
+            );
           }
 
           const result = await response.json();
@@ -234,7 +236,8 @@ export async function sendReminderEmail(
   verificationCode: string,
   daysSincePurchase: number,
 ): Promise<EmailResult> {
-  const subject = "【Cursorvers】LINE登録のリマインド - Discord招待をお待ちしています";
+  const subject =
+    "【Cursorvers】LINE登録のリマインド - Discord招待をお待ちしています";
 
   const urgencyNote = daysSincePurchase >= 10
     ? "※ あと数日で有効期限が切れます。お早めにご登録ください。"

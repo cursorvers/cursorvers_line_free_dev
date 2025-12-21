@@ -423,15 +423,19 @@ Deno.serve(async (req) => {
             .eq("email", customerEmail)
             .maybeSingle();
 
-          const alreadySentDiscordInvite = currentMember?.discord_invite_sent === true;
+          const alreadySentDiscordInvite =
+            currentMember?.discord_invite_sent === true;
 
           // LINE紐付け状況に応じて処理を分岐
           if (lineUserId && !alreadySentDiscordInvite) {
             // 既にLINE紐付け済み かつ Discord招待未送信 → 即座にDiscord招待を送信
-            log.info("LINE already linked, sending Discord invite immediately", {
-              email: customerEmail.slice(0, 5) + "***",
-              lineUserId: lineUserId.slice(-4),
-            });
+            log.info(
+              "LINE already linked, sending Discord invite immediately",
+              {
+                email: customerEmail.slice(0, 5) + "***",
+                lineUserId: lineUserId.slice(-4),
+              },
+            );
             await sendDiscordInviteViaLine(
               customerEmail,
               customerName,
@@ -477,7 +481,9 @@ Deno.serve(async (req) => {
               });
               await notifyDiscord({
                 title: "MANUS ALERT: Welcome email failed",
-                message: `Failed to send welcome email to ${customerEmail.slice(0, 5)}***`,
+                message: `Failed to send welcome email to ${
+                  customerEmail.slice(0, 5)
+                }***`,
                 context: { tier: membershipTier, error: emailResult.error },
               });
             }

@@ -108,12 +108,15 @@ Deno.test("verification-code - isVerificationCodeFormat", async (t) => {
     assertEquals(isVerificationCodeFormat("logout"), false);
   });
 
-  await t.step("accepts valid codes that look similar to reserved words", () => {
-    // These are valid 6-char codes that are NOT reserved words
-    assertEquals(isVerificationCodeFormat("CANCE1"), true); // Not "CANCEL"
-    assertEquals(isVerificationCodeFormat("P0LISH"), true); // Not "POLISH"
-    assertEquals(isVerificationCodeFormat("STAT1S"), true); // Not "STATUS"
-  });
+  await t.step(
+    "accepts valid codes that look similar to reserved words",
+    () => {
+      // These are valid 6-char codes that are NOT reserved words
+      assertEquals(isVerificationCodeFormat("CANCE1"), true); // Not "CANCEL"
+      assertEquals(isVerificationCodeFormat("P0LISH"), true); // Not "POLISH"
+      assertEquals(isVerificationCodeFormat("STAT1S"), true); // Not "STATUS"
+    },
+  );
 });
 
 Deno.test("verification-code - normalizeCode", async (t) => {
