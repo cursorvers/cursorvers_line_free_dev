@@ -100,7 +100,10 @@ Deno.test("register-utils - isValidLineUserId", async (t) => {
 
   await t.step("returns false for wrong length", () => {
     assertEquals(isValidLineUserId("U123"), false);
-    assertEquals(isValidLineUserId("U1234567890abcdef1234567890abcdef0"), false);
+    assertEquals(
+      isValidLineUserId("U1234567890abcdef1234567890abcdef0"),
+      false,
+    );
   });
 
   await t.step("returns false for invalid characters", () => {
