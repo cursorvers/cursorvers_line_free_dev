@@ -98,7 +98,9 @@ Deno.serve(async (req) => {
   if (!CRON_SECRET) {
     log.error("CRON_SECRET not configured - refusing to run without auth");
     return new Response(
-      JSON.stringify({ error: "Server configuration error: CRON_SECRET required" }),
+      JSON.stringify({
+        error: "Server configuration error: CRON_SECRET required",
+      }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
