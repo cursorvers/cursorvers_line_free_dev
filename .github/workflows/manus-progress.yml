@@ -4,19 +4,28 @@ on:
   repository_dispatch:
     types: [manus_progress]
   workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Run in test mode with sample data'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
-  # 外部API接続に必要な権限を明示的に設定
-  contents: write      # ファイル作成・更新のため
-  actions: write      # 他のワークフローをトリガーするため
-  issues: write       # Issue作成のため
-  pull-requests: write # PR作成のため
+  contents: write
+  actions: write
+  issues: write
+  pull-requests: write
+
+env:
+  PLAN_DELTA_PATH: orchestration/plan/plan_delta.json
+  LOGS_PATH: logs/progress
 
 jobs:
   handle-progress:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,46 +37,305 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup directories
+        run: |
+          mkdir -p tmp
+          mkdir -p ${{ env.LOGS_PATH }}
+          mkdir -p orchestration/plan
+
       - name: Parse Progress Event
         id: parse
         run: |
-          EVENT='${{ github.event.client_payload }}'
-          echo "event_type=$(echo $EVENT | jq -r '.event_type')" >> $GITHUB_OUTPUT
-          echo "task_id=$(echo $EVENT | jq -r '.task_id')" >> $GITHUB_OUTPUT
-          echo "step_id=$(echo $EVENT | jq -r '.step_id // empty')" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.test_mode }}" = "true" ]; then
+            # Test mode - use sample data
+            cat > tmp/progress.json << 'EOF'
+          {
+            "event_type": "step_completed",
+            "task_id": "test-task-123",
+            "step_id": "s1",
+            "status": "success",
+            "output": "Test step completed successfully",
+            "timestamp": "2024-01-01T00:00:00Z"
+          }
+          EOF
+            echo "event_type=step_completed" >> $GITHUB_OUTPUT
+            echo "task_id=test-task-123" >> $GITHUB_OUTPUT
+            echo "step_id=s1" >> $GITHUB_OUTPUT
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            # Real event from repository_dispatch
+            echo '${{ toJson(github.event.client_payload) }}' > tmp/progress.json
+            EVENT_TYPE=$(jq -r '.event_type // "unknown"' tmp/progress.json)
+            TASK_ID=$(jq -r '.task_id // "unknown"' tmp/progress.json)
+            STEP_ID=$(jq -r '.step_id // ""' tmp/progress.json)
+            STATUS=$(jq -r '.status // "unknown"' tmp/progress.json)
+            echo "event_type=$EVENT_TYPE" >> $GITHUB_OUTPUT
+            echo "task_id=$TASK_ID" >> $GITHUB_OUTPUT
+            echo "step_id=$STEP_ID" >> $GITHUB_OUTPUT
+            echo "status=$STATUS" >> $GITHUB_OUTPUT
+          fi
 
       - name: Log Progress Event
         run: |
-          mkdir -p logs/progress
           TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
-          echo '${{ github.event.client_payload }}' | jq . > "logs/progress/${TIMESTAMP}_${{ steps.parse.outputs.task_id }}.json"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add logs/progress/*.json
-          git commit -m "chore: log progress event ${{ steps.parse.outputs.task_id }}" || exit 0
-          git push
+          TASK_ID="${{ steps.parse.outputs.task_id }}"
+          jq '.' tmp/progress.json > "${{ env.LOGS_PATH }}/${TIMESTAMP}_${TASK_ID}.json"
 
-      - name: Call GPT for Analysis
+      - name: Analyze with GPT (Optional)
+        id: gpt
+        if: vars.LLM_ENABLED == 'true'
         env:
           LLM_ENDPOINT: ${{ secrets.LLM_ENDPOINT }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
         run: |
-          # GPT解析ロジック（実装が必要）
-          echo "Analyzing progress event..."
+          # GPT Analysis for complex progress events
+          EVENT_TYPE="${{ steps.parse.outputs.event_type }}"
+          STATUS="${{ steps.parse.outputs.status }}"
+
+          # Only analyze failures or complex events
+          if [ "$STATUS" = "failed" ] || [ "$EVENT_TYPE" = "error" ]; then
+            PROGRESS_CONTENT=$(cat tmp/progress.json | jq -c '.')
+
+            # Call GPT for analysis
+            RESPONSE=$(curl -s -X POST "$LLM_ENDPOINT" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $LLM_API_KEY" \
+              -d "{
+                \"model\": \"gpt-4o\",
+                \"messages\": [
+                  {
+                    \"role\": \"system\",
+                    \"content\": \"You are a DevOps assistant analyzing Manus task progress. Provide brief analysis and recommendations.\"
+                  },
+                  {
+                    \"role\": \"user\",
+                    \"content\": \"Analyze this progress event and suggest next steps:\\n$PROGRESS_CONTENT\"
+                  }
+                ],
+                \"max_tokens\": 500
+              }")
+
+            ANALYSIS=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // "Analysis unavailable"')
+            echo "analysis<<EOF" >> $GITHUB_OUTPUT
+            echo "$ANALYSIS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "analysis=No analysis needed for successful events" >> $GITHUB_OUTPUT
+          fi
 
       - name: Update Plan Delta
-        if: success()
+        id: delta
         run: |
-          # PlanDelta更新ロジック（実装が必要）
-          echo "Updating plan delta..."
+          TASK_ID="${{ steps.parse.outputs.task_id }}"
+          STEP_ID="${{ steps.parse.outputs.step_id }}"
+          STATUS="${{ steps.parse.outputs.status }}"
+          EVENT_TYPE="${{ steps.parse.outputs.event_type }}"
 
-      - name: Dispatch to Manus
-        if: success()
+          # Load or create plan delta
+          if [ -f "${{ env.PLAN_DELTA_PATH }}" ]; then
+            DELTA=$(cat "${{ env.PLAN_DELTA_PATH }}")
+          else
+            DELTA='{
+              "task_id": "",
+              "steps_completed": [],
+              "steps_failed": [],
+              "current_step": null,
+              "last_updated": "",
+              "status": "pending"
+            }'
+          fi
+
+          # Update delta based on event type
+          case "$EVENT_TYPE" in
+            "step_completed")
+              DELTA=$(echo "$DELTA" | jq --arg task "$TASK_ID" --arg step "$STEP_ID" '
+                .task_id = $task |
+                .steps_completed += [$step] |
+                .steps_completed |= unique |
+                .current_step = null |
+                .last_updated = now | todate |
+                .status = "in_progress"
+              ')
+              ;;
+            "step_started")
+              DELTA=$(echo "$DELTA" | jq --arg task "$TASK_ID" --arg step "$STEP_ID" '
+                .task_id = $task |
+                .current_step = $step |
+                .last_updated = now | todate |
+                .status = "in_progress"
+              ')
+              ;;
+            "step_failed")
+              DELTA=$(echo "$DELTA" | jq --arg task "$TASK_ID" --arg step "$STEP_ID" '
+                .task_id = $task |
+                .steps_failed += [$step] |
+                .steps_failed |= unique |
+                .current_step = null |
+                .last_updated = now | todate |
+                .status = "failed"
+              ')
+              ;;
+            "task_completed")
+              DELTA=$(echo "$DELTA" | jq --arg task "$TASK_ID" '
+                .task_id = $task |
+                .current_step = null |
+                .last_updated = now | todate |
+                .status = "completed"
+              ')
+              ;;
+            "task_failed")
+              DELTA=$(echo "$DELTA" | jq --arg task "$TASK_ID" '
+                .task_id = $task |
+                .current_step = null |
+                .last_updated = now | todate |
+                .status = "failed"
+              ')
+              ;;
+          esac
+
+          echo "$DELTA" | jq '.' > "${{ env.PLAN_DELTA_PATH }}"
+          echo "Updated plan delta"
+          cat "${{ env.PLAN_DELTA_PATH }}"
+
+          # Set outputs
+          FINAL_STATUS=$(echo "$DELTA" | jq -r '.status')
+          echo "delta_status=$FINAL_STATUS" >> $GITHUB_OUTPUT
+
+      - name: Dispatch to Manus (on failure)
+        if: steps.parse.outputs.status == 'failed' && vars.MANUS_ENABLED == 'true'
         env:
           MANUS_API_KEY: ${{ secrets.MANUS_API_KEY }}
           MANUS_BASE_URL: ${{ vars.MANUS_BASE_URL }}
         run: |
-          # Manus API呼び出し（実装が必要）
-          echo "Dispatching to Manus..."
+          if [ -z "$MANUS_API_KEY" ]; then
+            echo "MANUS_API_KEY not set, skipping Manus dispatch"
+            exit 0
+          fi
 
+          TASK_ID="${{ steps.parse.outputs.task_id }}"
+          STEP_ID="${{ steps.parse.outputs.step_id }}"
+          PROGRESS_CONTENT=$(cat tmp/progress.json | jq -c '.')
 
+          # Create recovery task prompt
+          PROMPT="# Recovery Task for Failed Step
+
+          ## Original Task
+          - Task ID: $TASK_ID
+          - Failed Step: $STEP_ID
+
+          ## Progress Event
+          \`\`\`json
+          $PROGRESS_CONTENT
+          \`\`\`
+
+          ## Instructions
+          1. Analyze the failure reason
+          2. Attempt to fix or workaround the issue
+          3. Report the recovery status
+
+          ## Environment
+          - Repository: ${{ github.repository }}
+          - Workflow Run: ${{ github.run_id }}
+          "
+
+          # Call Manus API
+          RESPONSE=$(curl -s -X POST "$MANUS_BASE_URL/v1/tasks" \
+            -H "Content-Type: application/json" \
+            -H "API_KEY: $MANUS_API_KEY" \
+            -d "{
+              \"prompt\": $(echo "$PROMPT" | jq -Rs .),
+              \"agentProfile\": \"manus-1.6\",
+              \"taskMode\": \"agent\",
+              \"locale\": \"ja\"
+            }")
+
+          echo "Manus recovery task created:"
+          echo "$RESPONSE" | jq '.'
+
+      - name: Create Issue (on failure)
+        if: steps.parse.outputs.status == 'failed'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TASK_ID="${{ steps.parse.outputs.task_id }}"
+          STEP_ID="${{ steps.parse.outputs.step_id }}"
+          PROGRESS_CONTENT=$(cat tmp/progress.json | jq '.')
+
+          gh issue create \
+            --title "🚨 Manus Task Failed: $TASK_ID (Step: $STEP_ID)" \
+            --body "## Task Failure Report
+
+          **Task ID**: \`$TASK_ID\`
+          **Failed Step**: \`$STEP_ID\`
+          **Workflow Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          ### Progress Event
+          \`\`\`json
+          $PROGRESS_CONTENT
+          \`\`\`
+
+          ### GPT Analysis
+          ${{ steps.gpt.outputs.analysis || 'N/A' }}
+
+          ### Next Steps
+          - [ ] Review the error details
+          - [ ] Fix the underlying issue
+          - [ ] Re-run the task if needed
+          " \
+            --label "bug,manus,auto-generated" || echo "Issue creation skipped or failed"
+
+      - name: Commit logs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${{ env.LOGS_PATH }}/*.json" "${{ env.PLAN_DELTA_PATH }}" || true
+          git commit -m "chore: log progress event ${{ steps.parse.outputs.task_id }}" || exit 0
+          git push || echo "Push failed, continuing..."
+
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Discord webhook not configured, skipping notification"
+            exit 0
+          fi
+
+          STATUS="${{ steps.parse.outputs.status }}"
+          EVENT_TYPE="${{ steps.parse.outputs.event_type }}"
+          TASK_ID="${{ steps.parse.outputs.task_id }}"
+
+          case "$STATUS" in
+            "success"|"completed")
+              EMOJI="✅"
+              COLOR="good"
+              ;;
+            "failed"|"error")
+              EMOJI="❌"
+              COLOR="danger"
+              ;;
+            *)
+              EMOJI="ℹ️"
+              COLOR="warning"
+              ;;
+          esac
+
+          curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"$EMOJI **Manus Progress**: $EVENT_TYPE\\nTask: \`$TASK_ID\`\\nStatus: \`$STATUS\`\"
+            }" || echo "Discord notification failed"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Manus Progress Handler" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Event Type | \`${{ steps.parse.outputs.event_type }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Task ID | \`${{ steps.parse.outputs.task_id }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Step ID | \`${{ steps.parse.outputs.step_id }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | \`${{ steps.parse.outputs.status }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Delta Status | \`${{ steps.delta.outputs.delta_status }}\` |" >> $GITHUB_STEP_SUMMARY
