@@ -129,7 +129,6 @@ manus-audit-line-daily-brief (Edge Function)
 | Issue | Impact | Estimate |
 |-------|--------|----------|
 | Test coverage 30-40% | Production risk | 20-30h |
-| Discord signature verification missing | Security | 3h |
 
 ### MEDIUM Priority
 
@@ -156,7 +155,7 @@ manus-audit-line-daily-brief (Edge Function)
 | CSRF | PASS | Webhook signature verification |
 | LINE signature | PASS | verifyLineSignature() |
 | Stripe signature | PASS | Stripe SDK verification |
-| Discord signature | FAIL | Not implemented |
+| Discord signature | PASS | nacl.sign.detached.verify |
 | Rate limiting | PASS | MAX_POLISH_PER_HOUR |
 | Secrets in logs | PASS | anonymizeUserId() |
 | .env in git | PASS | In .gitignore |

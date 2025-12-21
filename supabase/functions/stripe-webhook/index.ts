@@ -8,6 +8,7 @@ import { notifyDiscord } from "../_shared/alert.ts";
 import { createSheetsClientFromEnv } from "../_shared/google-sheets.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { pushLineMessage } from "../_shared/line-messaging.ts";
+import { determineMembershipTier, determineStatus } from "./tier-utils.ts";
 
 const log = createLogger("stripe-webhook");
 
@@ -198,7 +199,6 @@ Deno.serve(async (req) => {
         const subscriptionId = session.subscription as string | null;
         let subscriptionStatus = "active";
         let nextBillingAt: string | null = null;
-        let membershipTier = "library"; // デフォルトはLibrary Member
         let stripeSubscriptionId: string | null = null;
         const optInEmail =
           (session.metadata?.opt_in_email ?? "").toString().toLowerCase() ===
@@ -230,19 +230,14 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Payment Linkのメタデータからサービス種別を判定
-        // Master Classは¥380,000（税抜）= 380000円（最小通貨単位）
-        if (session.amount_total && session.amount_total >= 380000) {
-          membershipTier = "master";
-        }
-
-        // Payment Link IDからも判定（URLの末尾部分）
-        const paymentLinkId = session.payment_link;
-        if (paymentLinkId && typeof paymentLinkId === "string") {
-          if (paymentLinkId.includes("5kQaEXavbc9T63SfB34F201")) {
-            membershipTier = "master";
-          }
-        }
+        // tier判定（金額とPayment Link IDから判定）
+        const paymentLinkId = typeof session.payment_link === "string"
+          ? session.payment_link
+          : null;
+        const membershipTier = determineMembershipTier(
+          session.amount_total,
+          paymentLinkId,
+        );
 
         const { error } = await supabase
           .from("members")
@@ -345,7 +340,7 @@ Deno.serve(async (req) => {
           .from("members")
           .update({
             stripe_subscription_status: subscription.status,
-            status: subscription.status === "canceled" ? "inactive" : "active",
+            status: determineStatus(subscription.status),
             period_end: subscription.current_period_end
               ? new Date(subscription.current_period_end * 1000).toISOString()
               : null,
