@@ -11,10 +11,11 @@
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { notifyDiscord } from "../_shared/alert.ts";
+import { removeDiscordRole } from "../_shared/discord.ts";
 import { sendPaidMemberWelcomeEmail } from "../_shared/email.ts";
 import { createSheetsClientFromEnv } from "../_shared/google-sheets.ts";
-import { createLogger } from "../_shared/logger.ts";
 import { pushLineMessage } from "../_shared/line-messaging.ts";
+import { createLogger } from "../_shared/logger.ts";
 import {
   generateVerificationCode,
   getCodeExpiryDate,
@@ -615,6 +616,14 @@ Deno.serve(async (req) => {
       }
 
       if (customerEmail) {
+        // 会員情報を取得（LINE ID, Discord ID）
+        const { data: memberData } = await supabase
+          .from("members")
+          .select("id, line_user_id, discord_user_id, tier")
+          .eq("email", customerEmail)
+          .maybeSingle();
+
+        // DB更新
         const { error } = await supabase
           .from("members")
           .update({
@@ -626,9 +635,73 @@ Deno.serve(async (req) => {
 
         if (error) {
           log.error("DB Update Error", { errorMessage: error.message });
-        } else {log.info("Subscription canceled", {
+        } else {
+          log.info("Subscription canceled", {
             subscriptionId: subscription.id,
-          });}
+            email: customerEmail.slice(0, 5) + "***",
+          });
+
+          // Discord Role削除
+          if (memberData?.discord_user_id) {
+            const roleResult = await removeDiscordRole(
+              memberData.discord_user_id,
+            );
+            if (roleResult.success) {
+              log.info("Discord role removed on cancellation", {
+                email: customerEmail.slice(0, 5) + "***",
+              });
+            } else {
+              log.warn("Failed to remove Discord role", {
+                error: roleResult.error,
+              });
+            }
+          }
+
+          // LINE通知（離脱完了）
+          if (memberData?.line_user_id) {
+            const tierName = memberData.tier === "master"
+              ? "Master Class"
+              : "Library Member";
+
+            const cancelMessage = [
+              "📢 メンバーシップ終了のお知らせ",
+              "",
+              `${tierName}のメンバーシップが終了しました。`,
+              "",
+              "━━━━━━━━━━━━━━━",
+              "ご利用ありがとうございました。",
+              "",
+              "再度ご入会いただく場合は、",
+              "改めて決済手続きをお願いいたします。",
+              "━━━━━━━━━━━━━━━",
+            ].join("\n");
+
+            const sent = await pushLineMessage(
+              memberData.line_user_id,
+              cancelMessage,
+            );
+            if (sent) {
+              log.info("Cancellation notification sent via LINE", {
+                email: customerEmail.slice(0, 5) + "***",
+              });
+            } else {
+              log.warn("Failed to send cancellation notification via LINE");
+            }
+          }
+
+          // 管理者通知
+          await notifyDiscord({
+            title: "Member Subscription Canceled",
+            message: `**Email**: ${customerEmail}\n**Tier**: ${
+              memberData?.tier ?? "unknown"
+            }\n**LINE**: ${
+              memberData?.line_user_id ? "通知済" : "未登録"
+            }\n**Discord**: ${
+              memberData?.discord_user_id ? "Role削除済" : "未登録"
+            }`,
+            severity: "warning",
+          });
+        }
       }
       break;
     }
