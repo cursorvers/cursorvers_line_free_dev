@@ -18,6 +18,7 @@ export const COURSE_KEYWORDS = [
   "臨床知アセット診断",
   "教育AI導入診断",
   "次世代AI実装診断",
+  "クイック診断",
 ] as const;
 
 export type DiagnosisKeyword = (typeof COURSE_KEYWORDS)[number];

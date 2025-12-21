@@ -16,7 +16,7 @@ export function buildCourseEntryMessage(keyword: DiagnosisKeyword): string {
   
   // キーワードごとの説明文
   const descriptions: Record<DiagnosisKeyword, string> = {
-    "病院AIリスク診断": 
+    "病院AIリスク診断":
       "病院・診療所におけるAI導入のリスクと機会についての情報です。",
     "SaMDスタートアップ診断":
       "医療AI/SaMD開発における規制対応と市場参入戦略についての情報です。",
@@ -28,6 +28,8 @@ export function buildCourseEntryMessage(keyword: DiagnosisKeyword): string {
       "医学教育・学校教育におけるAI活用についての情報です。",
     "次世代AI実装診断":
       "生成動画AI・フィジカルAI・環境KPIなど、次世代技術についての情報です。",
+    "クイック診断":
+      "簡易診断で、あなたに最適なAI活用の方向性をお伝えします。",
   };
 
   const description = descriptions[keyword] ?? "";

@@ -30,6 +30,48 @@ interface DiagnosisFlow {
 }
 
 // =======================
+// クイック診断（3問）— 無課金向け簡易フロー
+// =======================
+const QUICK_FLOW: DiagnosisFlow = {
+  totalQuestions: 3,
+
+  // レイヤー1: 関心領域の大枠
+  layer1: {
+    text: "関心の領域を選んでください",
+    options: ["現場運営・効率化", "規制・リスク・データ", "プロダクト/研究開発"],
+  },
+
+  // レイヤー2: 診断テーマ（結論を決定）
+  layer2: {
+    text: "特に知りたいテーマは？",
+    options: ["コスト・投資対効果", "規制・コンプライアンス", "業務効率化・省力化"],
+  },
+
+  // レイヤー3: 優先度・関心度（提示はするが結論は layer2 ベースで決定）
+  layer3: {
+    "コスト・投資対効果": {
+      text: "知りたいポイントは？",
+      options: ["初期費用/ROI", "補助金・助成金", "全体像を知りたい"],
+    },
+    "規制・コンプライアンス": {
+      text: "気になる分野は？",
+      options: ["SaMD/薬事", "個人情報・ガバナンス", "全体像を知りたい"],
+    },
+    "業務効率化・省力化": {
+      text: "改善したい領域は？",
+      options: ["文書・事務", "診療/ケアの効率化", "全体像を知りたい"],
+    },
+  } as Record<string, DiagnosisQuestion>,
+
+  // layer2 の回答で記事IDを決定（3本）
+  conclusionsByInterest: {
+    "コスト・投資対効果": ["clinic_roi_2025", "ai_economics", "why_ai_fails"],
+    "規制・コンプライアンス": ["ehr_3sho2", "state_of_ai_2025", "japan_reboot_2040"],
+    "業務効率化・省力化": ["automation_n8n", "outreach", "regional_ai"],
+  },
+};
+
+// =======================
 // 病院AIリスク診断フロー（3問）
 // =======================
 
@@ -415,6 +457,7 @@ const NEXTGEN_FLOW: DiagnosisFlow = {
 
 // 全フローのマッピング
 const FLOW_MAP: Record<DiagnosisKeyword, DiagnosisFlow> = {
+  "クイック診断": QUICK_FLOW,
   "病院AIリスク診断": HOSPITAL_FLOW,
   "SaMDスタートアップ診断": SAMD_FLOW,
   "医療データガバナンス診断": DATA_GOV_FLOW,
@@ -581,7 +624,7 @@ export function buildQuestionMessage(
  */
 export function buildConclusionMessage(
   state: DiagnosisState,
-  articles: Array<{ title: string; url: string | null }>
+  articles: Array<{ title: string; url?: string }>
 ): string {
   // 回答のサマリーを作成（関心領域を強調）
   const interest = state.answers[1] ?? "AI活用"; // layer2の回答が主軸

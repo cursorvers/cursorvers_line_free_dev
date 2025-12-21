@@ -214,7 +214,8 @@ async function handleEmailRegistration(
 
   try {
     // 既存レコードを確認（emailまたはline_user_idで）
-    let existingRecord: { id: string; email: string | null; line_user_id: string | null; tier: string | null } | null = null;
+    type MemberRecord = { id: string; email: string | null; line_user_id: string | null; tier: string | null };
+    let existingRecord: MemberRecord | null = null;
 
     const { data: emailRecord } = await supabase
       .from("members")
@@ -223,14 +224,14 @@ async function handleEmailRegistration(
       .maybeSingle();
 
     if (emailRecord) {
-      existingRecord = emailRecord as typeof existingRecord;
+      existingRecord = emailRecord as MemberRecord;
     } else {
       const { data: lineRecord } = await supabase
         .from("members")
         .select("id,email,line_user_id,tier")
         .eq("line_user_id", lineUserId)
         .maybeSingle();
-      existingRecord = lineRecord as typeof existingRecord;
+      existingRecord = lineRecord as MemberRecord | null;
     }
 
     const now = new Date().toISOString();
@@ -494,6 +495,7 @@ async function handleEvent(event: LineEvent): Promise<void> {
   if (!text) return;
 
   const trimmed = text.trim();
+  console.log("[line-webhook] received text:", trimmed, "user:", lineUserId);
 
   // ========================================
   // 0) ツールモード中の処理（最優先）
@@ -715,6 +717,32 @@ async function handleEvent(event: LineEvent): Promise<void> {
     if (nextQuestion && replyToken) {
       const { text: questionText, quickReply } = buildQuestionMessage(nextQuestion, newState.layer, totalQ);
       await replyText(replyToken, questionText, quickReply as QuickReply);
+    }
+    return;
+  }
+
+  // ========================================
+  // 1.5) 「診断」→ クイック診断フロー開始（3問）
+  // ========================================
+  if (trimmed === "診断") {
+    console.log("[line-webhook] start quick diagnosis for user:", lineUserId);
+    const flow = getFlowForKeyword("クイック診断");
+    const startMessage = flow ? buildDiagnosisStartMessage("クイック診断") : null;
+    if (flow && startMessage && replyToken) {
+      const initialState: DiagnosisState = {
+        keyword: "クイック診断",
+        layer: 1,
+        answers: [],
+      };
+      try {
+        await updateDiagnosisState(lineUserId, initialState);
+        console.log("[line-webhook] diagnosis state initialized for user:", lineUserId);
+      } catch (err) {
+        console.error("[line-webhook] updateDiagnosisState error (start quick diagnosis)", err);
+      }
+      await replyText(replyToken, startMessage.text, startMessage.quickReply as QuickReply);
+    } else {
+      console.warn("[line-webhook] quick diagnosis flow or startMessage missing");
     }
     return;
   }

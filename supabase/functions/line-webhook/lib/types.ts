@@ -1,7 +1,9 @@
 // supabase/functions/line-webhook/lib/types.ts
 // Pocket Defense Tool 共通型定義
 
-// DiagnosisKeyword は constants.ts から再エクスポート
+import type { DiagnosisKeyword } from "./constants.ts";
+
+// DiagnosisKeyword を再エクスポート
 export type { DiagnosisKeyword } from "./constants.ts";
 
 export type InteractionType = "prompt_polisher" | "risk_checker" | "course_entry";

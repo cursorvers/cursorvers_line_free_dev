@@ -13,7 +13,7 @@
 
 ### ステップ1: コミット・プッシュ
 ```bash
-cd /Users/masayuki/Cursorvers_HTML/cursorvers_line_stripe_discord
+cd /Users/masayuki/Cursorvers_Platform/cursorvers_line_stripe_discord
 git add .github/workflows/line-daily-brief-cron.yml supabase/functions/line-daily-brief/index.ts docs/LINE_DAILY_BRIEF_FIX.md
 git commit -m "fix: Use service role key instead of CRON_SECRET"
 git push origin main
