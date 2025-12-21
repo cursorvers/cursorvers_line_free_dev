@@ -1,0 +1,23 @@
+{
+  "$schema": "./welcome-message.schema.json",
+  "_comment": "LINE Official Account ウェルカムメッセージ設定",
+  "_source": "https://manager.line.biz/account/@529ybhfo/autoresponse/welcome",
+  "_lastUpdated": null,
+  "_updatedBy": null,
+  "enabled": true,
+  "messages": [
+    {
+      "type": "text",
+      "text": "【取得待ち】LINE Manager から設定を取得してください"
+    }
+  ],
+  "notes": {
+    "howToUpdate": [
+      "1. LINE Official Account Manager にログイン",
+      "2. 応答設定 > あいさつメッセージ を開く",
+      "3. メッセージ内容をこのファイルに転記",
+      "4. _lastUpdated と _updatedBy を更新"
+    ],
+    "managerUrl": "https://manager.line.biz/account/@529ybhfo/autoresponse/welcome"
+  }
+}
