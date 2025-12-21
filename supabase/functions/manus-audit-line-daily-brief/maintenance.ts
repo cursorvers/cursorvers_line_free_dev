@@ -12,7 +12,7 @@ const ARCHIVE_CARD_DAYS = 365;
 const ARCHIVE_BATCH_SIZE = 100;
 
 export async function performMaintenance(
-  client: SupabaseClient
+  client: SupabaseClient,
 ): Promise<MaintenanceResult> {
   log.info("Performing monthly maintenance");
 
@@ -23,7 +23,9 @@ export async function performMaintenance(
 }
 
 async function countOldBroadcasts(client: SupabaseClient): Promise<number> {
-  const cutoffDate = new Date(Date.now() - ARCHIVE_BROADCAST_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const cutoffDate = new Date(
+    Date.now() - ARCHIVE_BROADCAST_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
   // Note: We don't actually delete, just count for reference
   // In a real implementation, you might move to an archive table
@@ -42,7 +44,9 @@ async function countOldBroadcasts(client: SupabaseClient): Promise<number> {
 }
 
 async function archiveUnusedCards(client: SupabaseClient): Promise<number> {
-  const cutoffDate = new Date(Date.now() - ARCHIVE_CARD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const cutoffDate = new Date(
+    Date.now() - ARCHIVE_CARD_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
   const { data: unusedCards, error: unusedError } = await client
     .from("line_cards")

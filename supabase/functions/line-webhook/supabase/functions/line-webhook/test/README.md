@@ -208,10 +208,10 @@ name: Test LINE Webhook
 on:
   push:
     paths:
-      - 'supabase/functions/line-webhook/**'
+      - "supabase/functions/line-webhook/**"
   pull_request:
     paths:
-      - 'supabase/functions/line-webhook/**'
+      - "supabase/functions/line-webhook/**"
 
 jobs:
   test:

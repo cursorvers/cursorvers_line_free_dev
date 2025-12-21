@@ -80,7 +80,11 @@ const getEnv = (name: (typeof REQUIRED_ENV_VARS)[number]): string => {
 const MANUS_FIXER_API_KEY = getEnv("MANUS_FIXER_API_KEY");
 const DISCORD_WEBHOOK_URL = Deno.env.get("DISCORD_MANUS_WEBHOOK_URL");
 
-function log(level: "info" | "warn" | "error", message: string, data?: unknown): void {
+function log(
+  level: "info" | "warn" | "error",
+  message: string,
+  data?: unknown,
+): void {
   const logEntry = {
     timestamp: new Date().toISOString(),
     level,
@@ -101,7 +105,10 @@ function verifyAuth(req: Request): boolean {
   return false;
 }
 
-function runDenoFmt(path: string, files: string[]): { success: boolean; output: string } {
+function runDenoFmt(
+  path: string,
+  files: string[],
+): { success: boolean; output: string } {
   log("info", "Running deno fmt", { path, fileCount: files.length });
 
   try {
@@ -111,7 +118,8 @@ function runDenoFmt(path: string, files: string[]): { success: boolean; output: 
     // 3. Capture the output
 
     // For now, return a simulated result
-    const output = `Checked ${files.length} files\nFormatted ${files.length} files`;
+    const output =
+      `Checked ${files.length} files\nFormatted ${files.length} files`;
 
     log("info", "deno fmt completed", { success: true });
     return { success: true, output };
@@ -122,7 +130,10 @@ function runDenoFmt(path: string, files: string[]): { success: boolean; output: 
   }
 }
 
-function runDenoLintFix(path: string, files: string[]): { success: boolean; output: string } {
+function runDenoLintFix(
+  path: string,
+  files: string[],
+): { success: boolean; output: string } {
   log("info", "Running deno lint --fix", { path, fileCount: files.length });
 
   try {
@@ -132,7 +143,8 @@ function runDenoLintFix(path: string, files: string[]): { success: boolean; outp
     // 3. Capture the output
 
     // For now, return a simulated result
-    const output = `Checked ${files.length} files\nFixed lint issues in ${files.length} files`;
+    const output =
+      `Checked ${files.length} files\nFixed lint issues in ${files.length} files`;
 
     log("info", "deno lint --fix completed", { success: true });
     return { success: true, output };
@@ -206,7 +218,10 @@ async function processFixes(request: FixRequest): Promise<FixResult> {
   return result;
 }
 
-async function sendDiscordNotification(request: FixRequest, result: FixResult): Promise<void> {
+async function sendDiscordNotification(
+  request: FixRequest,
+  result: FixResult,
+): Promise<void> {
   if (!DISCORD_WEBHOOK_URL) {
     log("warn", "Discord webhook URL not configured, skipping notification");
     return;
@@ -266,14 +281,14 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response(
       JSON.stringify({ error: "Method not allowed" }),
-      { status: 405, headers: { "Content-Type": "application/json" } }
+      { status: 405, headers: { "Content-Type": "application/json" } },
     );
   }
 
   if (!verifyAuth(req)) {
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
-      { status: 401, headers: { "Content-Type": "application/json" } }
+      { status: 401, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -303,7 +318,7 @@ Deno.serve(async (req) => {
       {
         status: result.ok ? 200 : 207, // 207 Multi-Status for partial success
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error) {
     log("error", "Fix request failed", {
@@ -319,7 +334,7 @@ Deno.serve(async (req) => {
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

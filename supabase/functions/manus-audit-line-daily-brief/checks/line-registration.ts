@@ -19,7 +19,7 @@ interface CheckConfig {
 
 export async function checkLineRegistrationSystem(
   client: SupabaseClient,
-  config: CheckConfig
+  config: CheckConfig,
 ): Promise<LineRegistrationCheckResult> {
   log.info("Checking LINE registration system");
 
@@ -39,7 +39,9 @@ export async function checkLineRegistrationSystem(
     }
   }
   if (apiHealth.responseTime && apiHealth.responseTime > API_TIMEOUT_MS) {
-    warnings.push(`⚠️ LINE登録API: レスポンス時間が遅い (${apiHealth.responseTime}ms)`);
+    warnings.push(
+      `⚠️ LINE登録API: レスポンス時間が遅い (${apiHealth.responseTime}ms)`,
+    );
     allPassed = false;
   }
 
@@ -60,8 +62,13 @@ export async function checkLineRegistrationSystem(
       warnings.push(`🚨 ランディングページ: ${landingPageAccess.error}`);
     }
   }
-  if (landingPageAccess.responseTime && landingPageAccess.responseTime > LANDING_PAGE_TIMEOUT_MS) {
-    warnings.push(`⚠️ ランディングページ: レスポンス時間が遅い (${landingPageAccess.responseTime}ms)`);
+  if (
+    landingPageAccess.responseTime &&
+    landingPageAccess.responseTime > LANDING_PAGE_TIMEOUT_MS
+  ) {
+    warnings.push(
+      `⚠️ ランディングページ: レスポンス時間が遅い (${landingPageAccess.responseTime}ms)`,
+    );
     allPassed = false;
   }
 
@@ -82,7 +89,7 @@ export async function checkLineRegistrationSystem(
 }
 
 async function checkApiHealth(
-  supabaseUrl: string
+  supabaseUrl: string,
 ): Promise<{ passed: boolean; responseTime?: number; error?: string }> {
   try {
     const startTime = Date.now();
@@ -118,13 +125,15 @@ async function checkApiHealth(
   } catch (error) {
     return {
       passed: false,
-      error: `接続失敗 - ${error instanceof Error ? error.message : String(error)}`,
+      error: `接続失敗 - ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     };
   }
 }
 
 async function checkGoogleSheetsSync(
-  client: SupabaseClient
+  client: SupabaseClient,
 ): Promise<{ passed: boolean; lastUpdate?: string; error?: string }> {
   try {
     const { data, error } = await client
@@ -153,7 +162,9 @@ async function checkGoogleSheetsSync(
         };
       }
 
-      log.info("Google Sheets sync is working", { lastUpdate: data.updated_at });
+      log.info("Google Sheets sync is working", {
+        lastUpdate: data.updated_at,
+      });
       return { passed: true, lastUpdate: data.updated_at };
     }
 
@@ -164,13 +175,15 @@ async function checkGoogleSheetsSync(
   } catch (error) {
     return {
       passed: false,
-      error: `チェック失敗 - ${error instanceof Error ? error.message : String(error)}`,
+      error: `チェック失敗 - ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     };
   }
 }
 
 async function checkLandingPageAccess(
-  landingPageUrl: string
+  landingPageUrl: string,
 ): Promise<{ passed: boolean; responseTime?: number; error?: string }> {
   try {
     const startTime = Date.now();
@@ -199,7 +212,9 @@ async function checkLandingPageAccess(
   } catch (error) {
     return {
       passed: false,
-      error: `アクセス失敗 - ${error instanceof Error ? error.message : String(error)}`,
+      error: `アクセス失敗 - ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     };
   }
 }

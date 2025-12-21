@@ -47,7 +47,9 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 /**
  * Google OAuth2 アクセストークンを取得
  */
-async function getAccessToken(serviceAccount: GoogleServiceAccount): Promise<string> {
+async function getAccessToken(
+  serviceAccount: GoogleServiceAccount,
+): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const jwtHeader = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const jwtPayload = btoa(JSON.stringify({
@@ -75,14 +77,17 @@ async function getAccessToken(serviceAccount: GoogleServiceAccount): Promise<str
   );
   const jwtSignature = arrayBufferToBase64(signature);
 
-  const tokenResponse = await fetch("https://www.googleapis.com/oauth2/v4/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: `${jwtHeader}.${jwtPayload}.${jwtSignature}`,
-    }),
-  }).then((res) => res.json());
+  const tokenResponse = await fetch(
+    "https://www.googleapis.com/oauth2/v4/token",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: `${jwtHeader}.${jwtPayload}.${jwtSignature}`,
+      }),
+    },
+  ).then((res) => res.json());
 
   if (!tokenResponse.access_token) {
     throw new Error("Failed to obtain Google access token");
@@ -98,7 +103,7 @@ async function getAccessToken(serviceAccount: GoogleServiceAccount): Promise<str
  */
 export async function buildSheetsClient(
   serviceAccount: GoogleServiceAccount,
-  sheetId: string
+  sheetId: string,
 ): Promise<SheetsClient> {
   const accessToken = await getAccessToken(serviceAccount);
   const authHeaders = {
@@ -108,7 +113,8 @@ export async function buildSheetsClient(
 
   return {
     async append(tabName: string, values: unknown[][]): Promise<void> {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tabName}!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+      const url =
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tabName}!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
       const res = await fetch(url, {
         method: "POST",
         headers: authHeaders,
@@ -117,13 +123,18 @@ export async function buildSheetsClient(
 
       if (!res.ok) {
         const errorBody = await res.text();
-        log.error("Sheets append failed", { tabName, status: res.status, errorBody });
+        log.error("Sheets append failed", {
+          tabName,
+          status: res.status,
+          errorBody,
+        });
         throw new Error(`Sheets append failed: ${res.status}`);
       }
     },
 
     async update(tabName: string, values: unknown[][]): Promise<void> {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tabName}!A2?valueInputOption=USER_ENTERED`;
+      const url =
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tabName}!A2?valueInputOption=USER_ENTERED`;
       const res = await fetch(url, {
         method: "PUT",
         headers: authHeaders,
@@ -132,13 +143,18 @@ export async function buildSheetsClient(
 
       if (!res.ok) {
         const errorBody = await res.text();
-        log.error("Sheets update failed", { tabName, status: res.status, errorBody });
+        log.error("Sheets update failed", {
+          tabName,
+          status: res.status,
+          errorBody,
+        });
         throw new Error(`Sheets update failed: ${res.status}`);
       }
     },
 
     async clearBelowHeader(tabName: string): Promise<void> {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchClear`;
+      const url =
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchClear`;
       const res = await fetch(url, {
         method: "POST",
         headers: authHeaders,
@@ -147,7 +163,11 @@ export async function buildSheetsClient(
 
       if (!res.ok) {
         const errorBody = await res.text();
-        log.error("Sheets clear failed", { tabName, status: res.status, errorBody });
+        log.error("Sheets clear failed", {
+          tabName,
+          status: res.status,
+          errorBody,
+        });
         throw new Error(`Sheets clear failed: ${res.status}`);
       }
     },
@@ -161,7 +181,7 @@ export async function buildSheetsClient(
  */
 export function createSheetsClientFromEnv(
   serviceAccountJson: string,
-  sheetId: string
+  sheetId: string,
 ): Promise<SheetsClient> {
   const serviceAccount = JSON.parse(serviceAccountJson) as GoogleServiceAccount;
   return buildSheetsClient(serviceAccount, sheetId);

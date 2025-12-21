@@ -9,8 +9,8 @@ const log = createLogger("retry");
 
 // デフォルト設定
 const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_INITIAL_DELAY_MS = 1000;  // 1秒
-const DEFAULT_MAX_DELAY_MS = 10000;     // 10秒
+const DEFAULT_INITIAL_DELAY_MS = 1000; // 1秒
+const DEFAULT_MAX_DELAY_MS = 10000; // 10秒
 
 export interface RetryOptions {
   maxRetries?: number;
@@ -25,7 +25,7 @@ export interface RetryOptions {
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  options: RetryOptions = {}
+  options: RetryOptions = {},
 ): Promise<T> {
   const {
     maxRetries = DEFAULT_MAX_RETRIES,
@@ -60,7 +60,7 @@ export async function withRetry<T>(
         });
       }
 
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
@@ -83,14 +83,16 @@ export function isRetryableStatus(status: number): boolean {
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
     // ネットワークエラー
-    if (error.message.includes("fetch") ||
-        error.message.includes("network") ||
-        error.message.includes("timeout") ||
-        error.message.includes("ECONNRESET") ||
-        error.message.includes("ETIMEDOUT") ||
-        error.message.includes("abort")) {
+    if (
+      error.message.includes("fetch") ||
+      error.message.includes("network") ||
+      error.message.includes("timeout") ||
+      error.message.includes("ECONNRESET") ||
+      error.message.includes("ETIMEDOUT") ||
+      error.message.includes("abort")
+    ) {
       return true;
     }
   }
-  return true;  // デフォルトでリトライ
+  return true; // デフォルトでリトライ
 }

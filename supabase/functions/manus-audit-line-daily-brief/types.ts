@@ -2,7 +2,14 @@
  * Manus Audit 型定義
  */
 
-export type CardTheme = "ai_gov" | "tax" | "law" | "biz" | "career" | "asset" | "general";
+export type CardTheme =
+  | "ai_gov"
+  | "tax"
+  | "law"
+  | "biz"
+  | "career"
+  | "asset"
+  | "general";
 export type AuditMode = "daily" | "weekly" | "monthly";
 export type AuditTrigger = AuditMode | "report";
 
@@ -44,7 +51,11 @@ export interface LineRegistrationCheckResult extends CheckResult {
   details: {
     apiHealth: { passed: boolean; responseTime?: number; error?: string };
     googleSheetsSync: { passed: boolean; lastUpdate?: string; error?: string };
-    landingPageAccess: { passed: boolean; responseTime?: number; error?: string };
+    landingPageAccess: {
+      passed: boolean;
+      responseTime?: number;
+      error?: string;
+    };
   };
 }
 

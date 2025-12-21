@@ -5,7 +5,7 @@
  * @see https://open.manus.ai/docs/api-reference/create-task
  */
 import { createLogger } from "./logger.ts";
-import { withRetry, isRetryableStatus, isRetryableError } from "./retry.ts";
+import { isRetryableError, isRetryableStatus, withRetry } from "./retry.ts";
 
 const log = createLogger("manus-api");
 
@@ -35,11 +35,14 @@ function sanitizeForPrompt(input: string): string {
     .slice(0, MAX_WARNING_LENGTH)
     // プロンプトインジェクションで使われそうなパターンを除去
     .replace(/ignore\s+(all\s+)?previous\s+instructions?/gi, "[REMOVED]")
-    .replace(/disregard\s+(all\s+)?prior\s+(instructions?|context)/gi, "[REMOVED]")
+    .replace(
+      /disregard\s+(all\s+)?prior\s+(instructions?|context)/gi,
+      "[REMOVED]",
+    )
     .replace(/forget\s+(everything|all|previous)/gi, "[REMOVED]")
     .replace(/override\s+(instructions?|rules?|constraints?)/gi, "[REMOVED]")
-    .replace(/system\s*:\s*/gi, "system: ")  // "system:" パターンを無害化
-    .replace(/```[\s\S]*?```/g, "[CODE BLOCK REMOVED]")  // コードブロックを除去
+    .replace(/system\s*:\s*/gi, "system: ") // "system:" パターンを無害化
+    .replace(/```[\s\S]*?```/g, "[CODE BLOCK REMOVED]") // コードブロックを除去
     // 制御文字を除去（意図的な使用のためlint除外）
     // deno-lint-ignore no-control-regex
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
@@ -64,9 +67,9 @@ function sanitizeWarnings(warnings: string[]): string[] {
   }
 
   return warnings
-    .slice(0, MAX_TOTAL_WARNINGS)  // 最大数制限
+    .slice(0, MAX_TOTAL_WARNINGS) // 最大数制限
     .map(sanitizeForPrompt)
-    .filter(w => w.length > 0);  // 空文字を除去
+    .filter((w) => w.length > 0); // 空文字を除去
 }
 
 type AgentProfile = "manus-1.6" | "manus-1.6-lite" | "manus-1.6-max";
@@ -96,8 +99,13 @@ interface ManusError {
  * Manus AIでタスクを作成（指数バックオフ付きリトライ対応）
  */
 export async function createManusTask(
-  request: CreateTaskRequest
-): Promise<{ success: true; data: CreateTaskResponse } | { success: false; error: string }> {
+  request: CreateTaskRequest,
+): Promise<
+  { success: true; data: CreateTaskResponse } | {
+    success: false;
+    error: string;
+  }
+> {
   if (!MANUS_API_KEY) {
     log.warn("MANUS_API_KEY not configured, skipping Manus task creation");
     return { success: false, error: "MANUS_API_KEY not configured" };
@@ -134,7 +142,9 @@ export async function createManusTask(
 
           // リトライ可能なステータスコードの場合はエラーをスロー
           if (isRetryableStatus(response.status)) {
-            const retryError = new Error(`Manus API error ${response.status}: ${errorBody}`);
+            const retryError = new Error(
+              `Manus API error ${response.status}: ${errorBody}`,
+            );
             (retryError as Error & { status: number }).status = response.status;
             throw retryError;
           }
@@ -153,7 +163,9 @@ export async function createManusTask(
         maxRetries: MAX_RETRIES,
         shouldRetry: (error) => {
           // NON_RETRYABLE プレフィックスがある場合はリトライしない
-          if (error instanceof Error && error.message.startsWith("NON_RETRYABLE:")) {
+          if (
+            error instanceof Error && error.message.startsWith("NON_RETRYABLE:")
+          ) {
             return false;
           }
           return isRetryableError(error);
@@ -165,7 +177,7 @@ export async function createManusTask(
             nextDelayMs: nextDelay,
           });
         },
-      }
+      },
     );
 
     log.info("Manus task created", {
@@ -203,7 +215,9 @@ export function buildRemediationPrompt(auditResult: {
 
   // カード在庫問題（警告メッセージをサニタイズ）
   if (!auditResult.checks.cardInventory.passed) {
-    const sanitizedWarnings = sanitizeWarnings(auditResult.checks.cardInventory.warnings);
+    const sanitizedWarnings = sanitizeWarnings(
+      auditResult.checks.cardInventory.warnings,
+    );
     if (sanitizedWarnings.length > 0) {
       issues.push(`【カード在庫問題】\n${sanitizedWarnings.join("\n")}`);
     }
@@ -211,17 +225,26 @@ export function buildRemediationPrompt(auditResult: {
 
   // 配信成功率問題（警告メッセージをサニタイズ）
   if (!auditResult.checks.broadcastSuccess.passed) {
-    const sanitizedWarnings = sanitizeWarnings(auditResult.checks.broadcastSuccess.warnings);
+    const sanitizedWarnings = sanitizeWarnings(
+      auditResult.checks.broadcastSuccess.warnings,
+    );
     if (sanitizedWarnings.length > 0) {
       issues.push(`【配信成功率問題】\n${sanitizedWarnings.join("\n")}`);
     }
   }
 
   // DB健全性問題（警告メッセージをサニタイズ）
-  if (auditResult.checks.databaseHealth && !auditResult.checks.databaseHealth.passed) {
-    const sanitizedWarnings = sanitizeWarnings(auditResult.checks.databaseHealth.warnings);
+  if (
+    auditResult.checks.databaseHealth &&
+    !auditResult.checks.databaseHealth.passed
+  ) {
+    const sanitizedWarnings = sanitizeWarnings(
+      auditResult.checks.databaseHealth.warnings,
+    );
     if (sanitizedWarnings.length > 0) {
-      issues.push(`【データベース健全性問題】\n${sanitizedWarnings.join("\n")}`);
+      issues.push(
+        `【データベース健全性問題】\n${sanitizedWarnings.join("\n")}`,
+      );
     }
   }
 
@@ -265,7 +288,9 @@ npx supabase functions deploy line-daily-brief --project-ref haaxgwyimoqzzxzdaee
 \`\`\`bash
 gh issue create --repo mo666-med/cursorvers_line_free_dev \\
   --title "🚨 自動検出: システム監査エラー" \\
-  --body "## 検出された問題\\n${issues.join("\\n")}\\n\\n## 自動修繕結果\\n（ここに結果を記載）"
+  --body "## 検出された問題\\n${
+    issues.join("\\n")
+  }\\n\\n## 自動修繕結果\\n（ここに結果を記載）"
 \`\`\`
 
 ## ✅ 完了後の報告
@@ -291,7 +316,9 @@ curl -X POST "https://discord.com/api/webhooks/..." \\
 /**
  * 監査エラー時にManusで自動修繕タスクを作成
  */
-export async function triggerAutoRemediation(auditResult: Parameters<typeof buildRemediationPrompt>[0]): Promise<{
+export async function triggerAutoRemediation(
+  auditResult: Parameters<typeof buildRemediationPrompt>[0],
+): Promise<{
   success: boolean;
   taskId?: string;
   taskUrl?: string;

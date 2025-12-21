@@ -47,7 +47,10 @@ function hashUserId(userId: string): Promise<string> {
   return hashText(`${ID_HASH_SALT}:${userId}`);
 }
 
-async function verifyLineSignature(req: Request, raw: string): Promise<boolean> {
+async function verifyLineSignature(
+  req: Request,
+  raw: string,
+): Promise<boolean> {
   const signature = req.headers.get("x-line-signature");
   if (!signature) return false;
 
@@ -56,9 +59,13 @@ async function verifyLineSignature(req: Request, raw: string): Promise<boolean> 
     new TextEncoder().encode(LINE_CHANNEL_SECRET),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
-  const hmac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw));
+  const hmac = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(raw),
+  );
   const hashBase64 = btoa(String.fromCharCode(...new Uint8Array(hmac)));
   return hashBase64 === signature;
 }
@@ -77,7 +84,7 @@ async function sanitize(body: LineWebhookBody): Promise<LineWebhookBody> {
         },
         replyToken: e.replyToken, // keep for downstream reply
       };
-    })
+    }),
   );
 
   return {
@@ -135,10 +142,13 @@ Deno.serve(async (req) => {
 
   const eventId = await hashText(rawBody);
   if (idempotencyCache.has(eventId)) {
-    return new Response(JSON.stringify({ status: "duplicate", event_id: eventId }), {
-      status: 202,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ status: "duplicate", event_id: eventId }),
+      {
+        status: 202,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   const sanitized = await sanitize(parsed);
@@ -166,18 +176,21 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
-    }
+    },
   );
 
   if (!dispatchRes.ok) {
     const body = await dispatchRes.text();
-    log.error("Failed to dispatch to GitHub", { status: dispatchRes.status, body });
+    log.error("Failed to dispatch to GitHub", {
+      status: dispatchRes.status,
+      body,
+    });
     return new Response(
       JSON.stringify({
         error: "Failed to dispatch",
         status: dispatchRes.status,
       }),
-      { status: 502, headers: { "Content-Type": "application/json" } }
+      { status: 502, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -189,6 +202,6 @@ Deno.serve(async (req) => {
       event_id: eventId,
       dispatched: true,
     }),
-    { status: 200, headers: { "Content-Type": "application/json" } }
+    { status: 200, headers: { "Content-Type": "application/json" } },
   );
 });

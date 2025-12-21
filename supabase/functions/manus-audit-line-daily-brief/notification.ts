@@ -10,31 +10,29 @@ type NotificationAudience = "admin" | "maintenance" | "manus";
 
 export function buildNotificationMessage(
   result: AuditResult,
-  audience: NotificationAudience
+  audience: NotificationAudience,
 ): string {
-  const isOk =
-    result.summary.allPassed &&
+  const isOk = result.summary.allPassed &&
     result.summary.warningCount === 0 &&
     result.summary.errorCount === 0;
-  const emoji =
-    result.summary.errorCount > 0
-      ? "🚨"
-      : result.summary.warningCount > 0
-      ? "⚠️"
-      : "✅";
-  const statusText =
-    result.summary.errorCount > 0
-      ? "エラー検出"
-      : result.summary.warningCount > 0
-      ? "警告あり"
-      : "正常";
+  const emoji = result.summary.errorCount > 0
+    ? "🚨"
+    : result.summary.warningCount > 0
+    ? "⚠️"
+    : "✅";
+  const statusText = result.summary.errorCount > 0
+    ? "エラー検出"
+    : result.summary.warningCount > 0
+    ? "警告あり"
+    : "正常";
 
   let message = `${emoji} **Manus監査レポート** (${result.mode})\n`;
   message += `時刻: ${new Date(result.timestamp).toLocaleString("ja-JP")}\n`;
   message += `ステータス: **${statusText}**\n\n`;
 
   if (!isOk || audience !== "admin") {
-    message += `**サマリー**: ${result.summary.warningCount}件の警告、${result.summary.errorCount}件のエラー\n\n`;
+    message +=
+      `**サマリー**: ${result.summary.warningCount}件の警告、${result.summary.errorCount}件のエラー\n\n`;
   }
 
   // Card inventory
@@ -42,7 +40,7 @@ export function buildNotificationMessage(
     "📊 カード在庫",
     result.checks.cardInventory,
     audience,
-    isOk
+    isOk,
   );
 
   // Broadcast success
@@ -50,7 +48,7 @@ export function buildNotificationMessage(
     "📈 配信成功率",
     result.checks.broadcastSuccess,
     audience,
-    isOk
+    isOk,
   );
 
   // Database health (monthly only)
@@ -59,7 +57,7 @@ export function buildNotificationMessage(
       "🔍 データベース健全性",
       result.checks.databaseHealth,
       audience,
-      isOk
+      isOk,
     );
   }
 
@@ -69,15 +67,17 @@ export function buildNotificationMessage(
       "🔐 LINE登録システム",
       result.checks.lineRegistrationSystem,
       audience,
-      isOk
+      isOk,
     );
   }
 
   // Maintenance
   if (result.maintenance) {
     message += `**🔧 メンテナンス結果**\n`;
-    message += `- アーカイブ対象の配信履歴: ${result.maintenance.archivedBroadcasts}件\n`;
-    message += `- アーカイブしたカード: ${result.maintenance.archivedCards}件\n`;
+    message +=
+      `- アーカイブ対象の配信履歴: ${result.maintenance.archivedBroadcasts}件\n`;
+    message +=
+      `- アーカイブしたカード: ${result.maintenance.archivedCards}件\n`;
     message += "\n";
   }
 
@@ -100,9 +100,11 @@ function buildSectionMessage(
   title: string,
   check: { passed: boolean; warnings: string[] },
   audience: NotificationAudience,
-  isOk: boolean
+  isOk: boolean,
 ): string {
-  if (check.warnings.length === 0 && check.passed && audience === "admin" && isOk) {
+  if (
+    check.warnings.length === 0 && check.passed && audience === "admin" && isOk
+  ) {
     return "";
   }
 
@@ -123,7 +125,7 @@ export async function sendDiscordNotification(
     force?: boolean;
     webhookUrl?: string;
     audience?: NotificationAudience;
-  }
+  },
 ): Promise<void> {
   const { force = false, webhookUrl, audience = "admin" } = options;
 
@@ -160,7 +162,7 @@ export async function sendDiscordNotification(
 
 export async function sendManusNotification(
   result: AuditResult,
-  options: { force?: boolean; webhookUrl?: string }
+  options: { force?: boolean; webhookUrl?: string },
 ): Promise<void> {
   const { force = false, webhookUrl } = options;
 

@@ -195,7 +195,7 @@ Deno.test("buildRemediationPrompt limits number of warnings", () => {
   // 25個の警告を作成（制限は20）
   const manyWarnings = Array.from(
     { length: 25 },
-    (_, i) => `Warning ${i + 1}`
+    (_, i) => `Warning ${i + 1}`,
   );
 
   const auditResult = {

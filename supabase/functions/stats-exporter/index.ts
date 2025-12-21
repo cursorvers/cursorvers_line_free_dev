@@ -3,7 +3,10 @@
  * LINE イベントデータを Google Sheets にエクスポート
  */
 import { createClient } from "@supabase/supabase-js";
-import { createSheetsClientFromEnv, type SheetsClient } from "../_shared/google-sheets.ts";
+import {
+  createSheetsClientFromEnv,
+  type SheetsClient,
+} from "../_shared/google-sheets.ts";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("stats-exporter");
@@ -75,13 +78,13 @@ interface DailySummary {
   generatedAt: string;
 }
 
-
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const SHEET_ID = Deno.env.get("LINE_LOG_SHEET_ID");
 const RAW_TAB = Deno.env.get("LINE_LOG_RAW_TAB") ?? "raw_events";
 const SUMMARY_TAB = Deno.env.get("LINE_LOG_SUMMARY_TAB") ?? "daily_summary";
-const MEMBERSHIP_TAB = Deno.env.get("LINE_LOG_MEMBERSHIP_TAB") ?? "membership_status";
+const MEMBERSHIP_TAB = Deno.env.get("LINE_LOG_MEMBERSHIP_TAB") ??
+  "membership_status";
 const ALERT_TAB = Deno.env.get("LINE_LOG_ALERT_TAB") ?? "alerts";
 const GOOGLE_SA_JSON = Deno.env.get("GOOGLE_SA_JSON");
 
@@ -108,7 +111,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .order("created_at", { ascending: true });
 
   if (eventsError) {
-    log.error("Failed to fetch line_events", { errorMessage: eventsError.message });
+    log.error("Failed to fetch line_events", {
+      errorMessage: eventsError.message,
+    });
     return new Response("Failed to fetch events", { status: 500 });
   }
 
@@ -155,7 +160,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
 
   if (membersError) {
-    log.error("Failed to fetch library_members", { errorMessage: membersError.message });
+    log.error("Failed to fetch library_members", {
+      errorMessage: membersError.message,
+    });
   }
 
   const membershipRows = ((members ?? []) as LibraryMember[]).map((member) => [
@@ -179,9 +186,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       event.created_at ?? "",
       event.line_user_id ?? "",
       event.contains_phi ? "PHI" : "payment_overdue",
-      event.contains_phi
-        ? "PHIキーワード検知"
-        : "支払い遅延",
+      event.contains_phi ? "PHIキーワード検知" : "支払い遅延",
       event.membership_tier ?? "",
       event.subscription_status ?? "",
       event.contains_phi ?? false,
@@ -191,7 +196,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       "",
     ]);
 
-  const sheetsClient = await createSheetsClientFromEnv(GOOGLE_SA_JSON, SHEET_ID);
+  const sheetsClient = await createSheetsClientFromEnv(
+    GOOGLE_SA_JSON,
+    SHEET_ID,
+  );
   if (rawRows.length > 0) {
     await appendRows(sheetsClient, RAW_TAB, rawRows);
   }
@@ -265,14 +273,21 @@ function buildDailySummary(events: LineEvent[]): DailySummary[] {
   }));
 }
 
-async function appendRows(client: SheetsClient, tabName: string, rows: unknown[][]): Promise<void> {
+async function appendRows(
+  client: SheetsClient,
+  tabName: string,
+  rows: unknown[][],
+): Promise<void> {
   if (rows.length === 0) return;
   await client.append(tabName, rows);
 }
 
-async function overwriteRows(client: SheetsClient, tabName: string, rows: unknown[][]): Promise<void> {
+async function overwriteRows(
+  client: SheetsClient,
+  tabName: string,
+  rows: unknown[][],
+): Promise<void> {
   await client.clearBelowHeader(tabName);
   if (rows.length === 0) return;
   await client.update(tabName, rows);
 }
-

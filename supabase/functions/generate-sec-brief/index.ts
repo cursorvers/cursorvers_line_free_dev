@@ -22,8 +22,8 @@ interface SecBriefTopic {
   id: string;
   category: SecBriefTopicCategory;
   title: string;
-  source_date: string;           // 元の報告日
-  sources: string[];             // 引用元（報告機関、CVE番号、報道元など）
+  source_date: string; // 元の報告日
+  sources: string[]; // 引用元（報告機関、CVE番号、報道元など）
   summary: string;
   impact_on_clinics: string;
   actions: string[];
@@ -219,7 +219,7 @@ async function postToDiscord(bodyMarkdown: string): Promise<boolean> {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ content: chunk }),
-      }
+      },
     );
 
     if (!res.ok) {
@@ -240,7 +240,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, X-API-Key",
       },
     });
   }
@@ -268,7 +269,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     // 直近7日分のhij_rawを取得（TLP:GREEN or null のみ）
@@ -287,16 +288,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (fetchError) {
       log.error("DB Fetch Error", { errorMessage: fetchError.message });
       return new Response(
-        JSON.stringify({ error: "Database Error", details: fetchError.message }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Database Error",
+          details: fetchError.message,
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
 
     if (!rows || rows.length === 0) {
       log.info("No data for this week");
       return new Response(
-        JSON.stringify({ status: "no_data", message: "No hij_raw records for this week" }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          status: "no_data",
+          message: "No hij_raw records for this week",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
 
@@ -313,7 +320,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .maybeSingle();
 
     if (existingBrief) {
-      log.info("Brief already exists for week", { weekStart, existingId: existingBrief.id, existingStatus: existingBrief.status });
+      log.info("Brief already exists for week", {
+        weekStart,
+        existingId: existingBrief.id,
+        existingStatus: existingBrief.status,
+      });
       return new Response(
         JSON.stringify({
           status: "skipped",
@@ -321,13 +332,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
           existing_id: existingBrief.id,
           existing_status: existingBrief.status,
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
 
     // 本文を結合（メール日付も含める）
     const combinedText = rows
-      .map((r) => `【${r.subject || "No Subject"}】(受信日: ${new Date(r.sent_at).toLocaleDateString("ja-JP")})\n${r.raw_text}`)
+      .map((r) =>
+        `【${r.subject || "No Subject"}】(受信日: ${
+          new Date(r.sent_at).toLocaleDateString("ja-JP")
+        })\n${r.raw_text}`
+      )
       .join("\n\n----\n\n");
 
     // OpenAI API呼び出し
@@ -335,8 +350,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!openaiApiKey) {
       log.error("OPENAI_API_KEY not set");
       return new Response(
-        JSON.stringify({ error: "Configuration Error", details: "OPENAI_API_KEY not set" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Configuration Error",
+          details: "OPENAI_API_KEY not set",
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
 
@@ -373,14 +391,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
       log.error("OpenAI API Error", { errorText });
       return new Response(
         JSON.stringify({ error: "LLM Error", details: errorText }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
 
     const openaiJson = await openaiRes.json();
-    const brief: LLMResponse = JSON.parse(openaiJson.choices[0].message.content);
+    const brief: LLMResponse = JSON.parse(
+      openaiJson.choices[0].message.content,
+    );
 
-    log.info("Generated brief", { title: brief.title, topicsCount: brief.topics.length });
+    log.info("Generated brief", {
+      title: brief.title,
+      topicsCount: brief.topics.length,
+    });
 
     // sec_briefテーブルに挿入
     const sourceIds = rows.map((r) => r.id);
@@ -402,8 +425,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (insertError) {
       log.error("DB Insert Error", { errorMessage: insertError.message });
       return new Response(
-        JSON.stringify({ error: "Database Error", details: insertError.message }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Database Error",
+          details: insertError.message,
+        }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
 
@@ -412,7 +438,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // 自動でDiscordに投稿
     let published = false;
     const discordSuccess = await postToDiscord(brief.body_markdown);
-    
+
     if (discordSuccess) {
       // ステータスをpublishedに更新
       const { error: updateError } = await supabase
@@ -441,14 +467,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
         source_count: sourceIds.length,
         published: published,
       }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      { status: 200, headers: { "Content-Type": "application/json" } },
     );
   } catch (err) {
-    log.error("Request processing error", { errorMessage: err instanceof Error ? err.message : String(err) });
+    log.error("Request processing error", {
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal Server Error", details: String(err) }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 });
-

@@ -25,13 +25,18 @@ interface HealthCheckResponse {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const DISCORD_WEBHOOK = Deno.env.get("DISCORD_SYSTEM_WEBHOOK");
-const HEALTH_WINDOW_MINUTES = Number(Deno.env.get("HEALTH_WINDOW_MINUTES") ?? "360"); // default 6h
+const HEALTH_WINDOW_MINUTES = Number(
+  Deno.env.get("HEALTH_WINDOW_MINUTES") ?? "360",
+); // default 6h
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("Missing Supabase configuration");
 }
 
-const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const supabase: SupabaseClient = createClient(
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY,
+);
 
 async function sendDiscordMessage(message: string): Promise<void> {
   if (!DISCORD_WEBHOOK) {
@@ -88,13 +93,20 @@ Deno.serve(async (): Promise<Response> => {
       `🩺 **Health Check OK**\n` +
         `期間: 過去 ${HEALTH_WINDOW_MINUTES} 分\n` +
         `イベント件数: ${totalEvents}\n` +
-        `リスク内訳: ${Object.entries(riskSummary)
-          .map(([key, value]) => `${key}:${value}`)
-          .join(", ") || "なし"}\n` +
+        `リスク内訳: ${
+          Object.entries(riskSummary)
+            .map(([key, value]) => `${key}:${value}`)
+            .join(", ") || "なし"
+        }\n` +
         `PHIアラート: ${phiCount}`,
     );
 
-    const response: HealthCheckResponse = { ok: true, totalEvents, riskSummary, phiCount };
+    const response: HealthCheckResponse = {
+      ok: true,
+      totalEvents,
+      riskSummary,
+      phiCount,
+    };
     return new Response(
       JSON.stringify(response),
       { headers: { "Content-Type": "application/json" } },
@@ -107,7 +119,9 @@ Deno.serve(async (): Promise<Response> => {
 
     const errorMessage = err instanceof Error ? err.message : String(err);
     await sendDiscordMessage(
-      `🚨 **Health Check Failed**\nエラー: ${errorMessage}\n発生時刻: ${new Date().toISOString()}`,
+      `🚨 **Health Check Failed**\nエラー: ${errorMessage}\n発生時刻: ${
+        new Date().toISOString()
+      }`,
     );
 
     const response: HealthCheckResponse = { ok: false, error: errorMessage };
@@ -117,4 +131,3 @@ Deno.serve(async (): Promise<Response> => {
     );
   }
 });
-

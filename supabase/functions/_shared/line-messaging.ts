@@ -6,14 +6,15 @@ import { createLogger } from "./logger.ts";
 
 const log = createLogger("line-messaging");
 
-const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "";
+const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ??
+  "";
 
 /**
  * LINE ユーザーにテキストメッセージをプッシュ送信
  */
 export async function pushLineMessage(
   lineUserId: string,
-  message: string
+  message: string,
 ): Promise<boolean> {
   if (!LINE_CHANNEL_ACCESS_TOKEN) {
     log.warn("LINE_CHANNEL_ACCESS_TOKEN not configured");

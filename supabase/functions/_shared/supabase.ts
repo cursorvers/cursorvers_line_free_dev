@@ -8,7 +8,8 @@ import { createLogger } from "./logger.ts";
 const log = createLogger("supabase");
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+  "";
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   log.warn("Environment variables not fully configured");
@@ -23,8 +24,8 @@ export const supabase: SupabaseClient = createClient(
   SUPABASE_SERVICE_ROLE_KEY,
   {
     auth: { persistSession: false },
-  }
+  },
 );
 
 // 環境変数を再エクスポート（必要な場合のみ）
-export { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY };
+export { SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL };

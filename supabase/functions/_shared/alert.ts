@@ -9,14 +9,14 @@
  */
 
 import { createLogger } from "./logger.ts";
-import { withRetry, isRetryableStatus } from "./retry.ts";
+import { isRetryableStatus, withRetry } from "./retry.ts";
 
 const log = createLogger("alert");
 const WEBHOOK_URL = Deno.env.get("DISCORD_ALERT_WEBHOOK");
 
 // 通知設定
-const NOTIFICATION_TIMEOUT_MS = 5000;  // 5秒
-const MAX_RETRIES = 2;  // 最大2回リトライ（計3回試行）
+const NOTIFICATION_TIMEOUT_MS = 5000; // 5秒
+const MAX_RETRIES = 2; // 最大2回リトライ（計3回試行）
 
 interface AlertPayload {
   title: string;
@@ -41,7 +41,9 @@ interface NotifyResult {
  *
  * @returns 送信結果（成功/失敗、試行回数）
  */
-export async function notifyDiscord(payload: AlertPayload): Promise<NotifyResult> {
+export async function notifyDiscord(
+  payload: AlertPayload,
+): Promise<NotifyResult> {
   const { title, message, context, severity = "info" } = payload;
 
   if (!WEBHOOK_URL) {
@@ -57,7 +59,10 @@ export async function notifyDiscord(payload: AlertPayload): Promise<NotifyResult
         attempts++;
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), NOTIFICATION_TIMEOUT_MS);
+        const timeout = setTimeout(
+          () => controller.abort(),
+          NOTIFICATION_TIMEOUT_MS,
+        );
 
         try {
           // 重要度に応じた絵文字
@@ -70,7 +75,9 @@ export async function notifyDiscord(payload: AlertPayload): Promise<NotifyResult
           const content = [
             `${severityEmoji} **${title}**`,
             message,
-            context ? "```json\n" + JSON.stringify(context, null, 2) + "\n```" : "",
+            context
+              ? "```json\n" + JSON.stringify(context, null, 2) + "\n```"
+              : "",
           ]
             .filter(Boolean)
             .join("\n");
@@ -84,11 +91,15 @@ export async function notifyDiscord(payload: AlertPayload): Promise<NotifyResult
 
           // 配信確認
           if (!response.ok) {
-            const errorText = await response.text().catch(() => "Unknown error");
+            const errorText = await response.text().catch(() =>
+              "Unknown error"
+            );
 
             if (isRetryableStatus(response.status)) {
               // リトライ可能なエラー
-              throw new Error(`Discord webhook failed: ${response.status} - ${errorText}`);
+              throw new Error(
+                `Discord webhook failed: ${response.status} - ${errorText}`,
+              );
             }
 
             // リトライ不可能なエラー（4xx等）
@@ -106,17 +117,18 @@ export async function notifyDiscord(payload: AlertPayload): Promise<NotifyResult
             severity,
             attempts,
           });
-
         } finally {
           clearTimeout(timeout);
         }
       },
       {
         maxRetries: MAX_RETRIES,
-        initialDelay: 500,  // 最初のリトライは500ms後
-        maxDelay: 2000,     // 最大2秒
+        initialDelay: 500, // 最初のリトライは500ms後
+        maxDelay: 2000, // 最大2秒
         shouldRetry: (error) => {
-          if (error instanceof Error && error.message.startsWith("NON_RETRYABLE:")) {
+          if (
+            error instanceof Error && error.message.startsWith("NON_RETRYABLE:")
+          ) {
             return false;
           }
           return true;
@@ -129,11 +141,10 @@ export async function notifyDiscord(payload: AlertPayload): Promise<NotifyResult
             title,
           });
         },
-      }
+      },
     );
 
     return { success: true, attempts };
-
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     const cleanedMessage = errorMessage.replace(/^NON_RETRYABLE:/, "");
@@ -152,20 +163,32 @@ export async function notifyDiscord(payload: AlertPayload): Promise<NotifyResult
 /**
  * 緊急アラートを送信（リトライ付き）
  */
-export function notifyCritical(title: string, message: string, context?: Record<string, unknown>): Promise<NotifyResult> {
+export function notifyCritical(
+  title: string,
+  message: string,
+  context?: Record<string, unknown>,
+): Promise<NotifyResult> {
   return notifyDiscord({ title, message, context, severity: "critical" });
 }
 
 /**
  * 警告アラートを送信（リトライ付き）
  */
-export function notifyWarning(title: string, message: string, context?: Record<string, unknown>): Promise<NotifyResult> {
+export function notifyWarning(
+  title: string,
+  message: string,
+  context?: Record<string, unknown>,
+): Promise<NotifyResult> {
   return notifyDiscord({ title, message, context, severity: "warning" });
 }
 
 /**
  * 情報アラートを送信（リトライ付き）
  */
-export function notifyInfo(title: string, message: string, context?: Record<string, unknown>): Promise<NotifyResult> {
+export function notifyInfo(
+  title: string,
+  message: string,
+  context?: Record<string, unknown>,
+): Promise<NotifyResult> {
   return notifyDiscord({ title, message, context, severity: "info" });
 }

@@ -16,14 +16,14 @@ const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
 const DISCORD_ROLE_ID = Deno.env.get("DISCORD_ROLE_ID") ?? "";
 const SEC_BRIEF_CHANNEL_ID = Deno.env.get("SEC_BRIEF_CHANNEL_ID") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+  "";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
-const supabase =
-  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-    : null;
+const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 // Discord Interaction型定義
 interface DiscordInteraction {
@@ -42,7 +42,9 @@ interface DiscordInteraction {
 
 Deno.serve(async (req) => {
   // 0. 環境変数の検証
-  if (!DISCORD_PUBLIC_KEY || !DISCORD_BOT_TOKEN || !supabase || !DISCORD_ROLE_ID) {
+  if (
+    !DISCORD_PUBLIC_KEY || !DISCORD_BOT_TOKEN || !supabase || !DISCORD_ROLE_ID
+  ) {
     log.error("Missing required environment variables");
     return new Response("Server configuration error", { status: 500 });
   }
@@ -52,7 +54,9 @@ Deno.serve(async (req) => {
   const timestamp = req.headers.get("X-Signature-Timestamp");
   const body = await req.text();
 
-  if (!signature || !timestamp || !verifySignature(signature, timestamp, body)) {
+  if (
+    !signature || !timestamp || !verifySignature(signature, timestamp, body)
+  ) {
     return new Response("Invalid signature", { status: 401 });
   }
 
@@ -89,15 +93,15 @@ Deno.serve(async (req) => {
 // ============================================
 async function handleJoin(
   interaction: DiscordInteraction,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
 ): Promise<Response> {
-  const rawEmail = interaction.data?.options?.find((o) => o.name === "email")?.value;
-  const email =
-    typeof rawEmail === "string"
-      ? rawEmail.trim().toLowerCase()
-      : typeof rawEmail === "number"
-        ? String(rawEmail).trim().toLowerCase()
-        : "";
+  const rawEmail = interaction.data?.options?.find((o) => o.name === "email")
+    ?.value;
+  const email = typeof rawEmail === "string"
+    ? rawEmail.trim().toLowerCase()
+    : typeof rawEmail === "number"
+    ? String(rawEmail).trim().toLowerCase()
+    : "";
   const userId = interaction.member?.user.id;
   const guildId = interaction.guild_id;
 
@@ -105,7 +109,8 @@ async function handleJoin(
     return jsonResponse({
       type: 4,
       data: {
-        content: "⛔ **エラー**: リクエスト情報が不足しています。もう一度お試しください。",
+        content:
+          "⛔ **エラー**: リクエスト情報が不足しています。もう一度お試しください。",
         flags: 64,
       },
     });
@@ -126,7 +131,8 @@ async function handleJoin(
     return jsonResponse({
       type: 4,
       data: {
-        content: `⛔ **エラー**: メールアドレスの形式が正しくありません。\n例: yourname@example.com`,
+        content:
+          `⛔ **エラー**: メールアドレスの形式が正しくありません。\n例: yourname@example.com`,
         flags: 64,
       },
     });
@@ -135,7 +141,9 @@ async function handleJoin(
   // メールアドレスで検索（members テーブル。支払いメール = email）
   const { data: member, error } = await supabase
     .from("members")
-    .select("id,email,discord_user_id,tier,status,stripe_customer_id,stripe_subscription_id")
+    .select(
+      "id,email,discord_user_id,tier,status,stripe_customer_id,stripe_subscription_id",
+    )
     .eq("email", email)
     .in("status", ["active", "trialing"])
     .maybeSingle();
@@ -144,7 +152,8 @@ async function handleJoin(
     return jsonResponse({
       type: 4,
       data: {
-        content: `⛔ **エラー**: そのメールアドレス (${email}) の決済情報が見つかりません。\nStripeで決済したメールアドレスを正確に入力してください。`,
+        content:
+          `⛔ **エラー**: そのメールアドレス (${email}) の決済情報が見つかりません。\nStripeで決済したメールアドレスを正確に入力してください。`,
         flags: 64,
       },
     });
@@ -172,7 +181,7 @@ async function handleJoin(
         method: "PUT",
         headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` },
         signal: controller.signal,
-      }
+      },
     );
 
     if (roleRes.status === 429) {
@@ -180,7 +189,9 @@ async function handleJoin(
       return jsonResponse({
         type: 4,
         data: {
-          content: `⚠️ Discordのレート制限中です。${retryAfter ? `${retryAfter}秒後` : "しばらくして"}再度お試しください。`,
+          content: `⚠️ Discordのレート制限中です。${
+            retryAfter ? `${retryAfter}秒後` : "しばらくして"
+          }再度お試しください。`,
           flags: 64,
         },
       });
@@ -199,7 +210,10 @@ async function handleJoin(
     }
   } catch (err) {
     const isTimeout = err instanceof DOMException && err.name === "AbortError";
-    log.error("Role assignment request failed", { isTimeout, errorMessage: err instanceof Error ? err.message : String(err) });
+    log.error("Role assignment request failed", {
+      isTimeout,
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
     return jsonResponse({
       type: 4,
       data: {
@@ -220,7 +234,9 @@ async function handleJoin(
     .eq("id", member.id);
 
   if (updateError) {
-    log.error("DB update error (discord_user_id)", { errorMessage: updateError.message });
+    log.error("DB update error (discord_user_id)", {
+      errorMessage: updateError.message,
+    });
     return jsonResponse({
       type: 4,
       data: {
@@ -244,7 +260,9 @@ async function handleJoin(
 // /sec-brief-latest コマンドハンドラ
 // 最新のドラフトをephemeralでプレビュー
 // ============================================
-async function handleSecBriefLatest(supabase: SupabaseClient): Promise<Response> {
+async function handleSecBriefLatest(
+  supabase: SupabaseClient,
+): Promise<Response> {
   const { data, error } = await supabase
     .from("sec_brief")
     .select("*")
@@ -254,7 +272,9 @@ async function handleSecBriefLatest(supabase: SupabaseClient): Promise<Response>
     .maybeSingle();
 
   if (error) {
-    log.error("DB Error in handleSecBriefLatest", { errorMessage: error.message });
+    log.error("DB Error in handleSecBriefLatest", {
+      errorMessage: error.message,
+    });
     return jsonResponse({
       type: 4,
       data: {
@@ -295,7 +315,7 @@ async function handleSecBriefLatest(supabase: SupabaseClient): Promise<Response>
 // ============================================
 async function handleSecBriefPublish(
   _interaction: DiscordInteraction,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
 ): Promise<Response> {
   // 最新のドラフトを取得
   const { data, error } = await supabase
@@ -307,7 +327,9 @@ async function handleSecBriefPublish(
     .maybeSingle();
 
   if (error) {
-    log.error("DB Error in handleSecBriefPublish", { errorMessage: error.message });
+    log.error("DB Error in handleSecBriefPublish", {
+      errorMessage: error.message,
+    });
     return jsonResponse({
       type: 4,
       data: {
@@ -356,7 +378,7 @@ async function handleSecBriefPublish(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ content: chunks[i] }),
-      }
+      },
     );
 
     if (!sendRes.ok) {
@@ -382,7 +404,9 @@ async function handleSecBriefPublish(
     .eq("id", data.id);
 
   if (updateError) {
-    log.error("DB Update Error in handleSecBriefPublish", { errorMessage: updateError.message });
+    log.error("DB Update Error in handleSecBriefPublish", {
+      errorMessage: updateError.message,
+    });
     // メッセージは投稿済みなので警告のみ
     return jsonResponse({
       type: 4,
@@ -399,7 +423,8 @@ async function handleSecBriefPublish(
   return jsonResponse({
     type: 4,
     data: {
-      content: `✅ **公開完了！**\n\n「${data.title}」を #sec-brief に投稿しました。`,
+      content:
+        `✅ **公開完了！**\n\n「${data.title}」を #sec-brief に投稿しました。`,
       flags: 64,
     },
   });
@@ -420,13 +445,13 @@ function jsonResponse(body: unknown): Response {
 function verifySignature(
   signature: string,
   timestamp: string,
-  body: string
+  body: string,
 ): boolean {
   try {
     return nacl.sign.detached.verify(
       new TextEncoder().encode(timestamp + body),
       hexToUint8Array(signature),
-      hexToUint8Array(DISCORD_PUBLIC_KEY)
+      hexToUint8Array(DISCORD_PUBLIC_KEY),
     );
   } catch {
     return false;

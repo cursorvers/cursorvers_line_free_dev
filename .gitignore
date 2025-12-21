@@ -8,3 +8,7 @@ node_modules/
 
 # Supabase CLI temp files
 supabase/.temp/
+
+# Coverage reports
+**/coverage/
+

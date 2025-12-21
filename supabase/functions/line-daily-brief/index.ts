@@ -19,7 +19,14 @@ import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("line-daily-brief");
 
-type CardTheme = "ai_gov" | "tax" | "law" | "biz" | "career" | "asset" | "general";
+type CardTheme =
+  | "ai_gov"
+  | "tax"
+  | "law"
+  | "biz"
+  | "career"
+  | "asset"
+  | "general";
 type CardStatus = "ready" | "used" | "archived";
 
 interface LineCard {
@@ -79,7 +86,7 @@ function verifyAuth(req: Request): boolean {
   // Method 1: X-API-Key header (same pattern as generate-sec-brief)
   const apiKeyHeader = req.headers.get("X-API-Key");
   if (LINE_DAILY_BRIEF_API_KEY && apiKeyHeader === LINE_DAILY_BRIEF_API_KEY) {
-    log.info( "Authentication successful via X-API-Key");
+    log.info("Authentication successful via X-API-Key");
     return true;
   }
 
@@ -88,15 +95,16 @@ function verifyAuth(req: Request): boolean {
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
     if (token === SUPABASE_SERVICE_ROLE_KEY) {
-      log.info( "Authentication successful via Bearer token");
+      log.info("Authentication successful via Bearer token");
       return true;
     }
   }
 
-  log.warn( "Authentication failed", {
+  log.warn("Authentication failed", {
     hasApiKey: !!LINE_DAILY_BRIEF_API_KEY,
     hasApiKeyHeader: !!apiKeyHeader,
-    apiKeyMatches: LINE_DAILY_BRIEF_API_KEY && apiKeyHeader === LINE_DAILY_BRIEF_API_KEY,
+    apiKeyMatches: LINE_DAILY_BRIEF_API_KEY &&
+      apiKeyHeader === LINE_DAILY_BRIEF_API_KEY,
     hasAuthHeader: !!authHeader,
   });
   return false;
@@ -118,7 +126,9 @@ async function getThemeStats(client: SupabaseClient): Promise<ThemeStats[]> {
 /**
  * Get the theme of the last delivered card
  */
-async function getLastDeliveredTheme(client: SupabaseClient): Promise<CardTheme | null> {
+async function getLastDeliveredTheme(
+  client: SupabaseClient,
+): Promise<CardTheme | null> {
   const { data, error } = await client
     .from("line_cards")
     .select("theme")
@@ -140,24 +150,26 @@ async function getLastDeliveredTheme(client: SupabaseClient): Promise<CardTheme 
  */
 async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
   const lastTheme = await getLastDeliveredTheme(client);
-  log.info( "Fetched last delivered theme", { lastTheme: lastTheme ?? "none" });
+  log.info("Fetched last delivered theme", { lastTheme: lastTheme ?? "none" });
 
   const themeStats = await getThemeStats(client);
-  let availableThemes = themeStats.filter((t) => t.ready_count > 0 || t.total_times_used > 0);
+  let availableThemes = themeStats.filter((t) =>
+    t.ready_count > 0 || t.total_times_used > 0
+  );
 
   if (lastTheme && availableThemes.length > 1) {
     availableThemes = availableThemes.filter((t) => t.theme !== lastTheme);
-    log.info( "Excluded last theme to avoid repetition", { lastTheme });
+    log.info("Excluded last theme to avoid repetition", { lastTheme });
   }
 
   if (availableThemes.length === 0) {
-    log.warn( "No available themes after filtering");
+    log.warn("No available themes after filtering");
     return null;
   }
 
   availableThemes.sort((a, b) => a.total_times_used - b.total_times_used);
   const selectedTheme = availableThemes[0].theme;
-  log.info( "Selected theme", {
+  log.info("Selected theme", {
     selectedTheme,
     totalTimesUsed: availableThemes[0].total_times_used,
   });
@@ -175,14 +187,17 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
   }
 
   if (!cards || cards.length === 0) {
-    log.warn( "No available cards for selected theme", { selectedTheme });
+    log.warn("No available cards for selected theme", { selectedTheme });
     return null;
   }
 
   const randomIndex = Math.floor(Math.random() * Math.min(cards.length, 5));
   const selectedCard = cards[randomIndex] as LineCard;
 
-  log.info( "Selected card", { cardId: selectedCard.id, timesUsed: selectedCard.times_used });
+  log.info("Selected card", {
+    cardId: selectedCard.id,
+    timesUsed: selectedCard.times_used,
+  });
 
   return selectedCard;
 }
@@ -202,7 +217,8 @@ function formatMessage(card: LineCard): string {
   };
 
   const emoji = themeEmoji[card.theme] || "💡";
-  const footer = "\n\n──────────\nCursorvers.edu\nhttps://cursorvers.github.io/cursorvers-edu/";
+  const footer =
+    "\n\n──────────\nCursorvers.edu\nhttps://cursorvers.github.io/cursorvers-edu/";
 
   let message = `${emoji} 今日のひとこと\n\n${card.body}${footer}`;
 
@@ -223,25 +239,28 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
 
   while (attempt < maxAttempts) {
     attempt += 1;
-    const response = await fetch("https://api.line.me/v2/bot/message/broadcast", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+    const response = await fetch(
+      "https://api.line.me/v2/bot/message/broadcast",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              type: "text",
+              text,
+            },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        messages: [
-          {
-            type: "text",
-            text,
-          },
-        ],
-      }),
-    });
+    );
 
     if (response.ok) {
       const requestId = response.headers.get("X-Line-Request-Id");
-      log.info( "Broadcast succeeded", { attempt, requestId });
+      log.info("Broadcast succeeded", { attempt, requestId });
       return { success: true, requestId };
     }
 
@@ -250,7 +269,12 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
     const retryAfter = response.headers.get("Retry-After");
     const shouldRetry = response.status === 429 || response.status >= 500;
 
-    const logContext = { attempt, status: response.status, errorBody, retryAfter };
+    const logContext = {
+      attempt,
+      status: response.status,
+      errorBody,
+      retryAfter,
+    };
     if (shouldRetry) {
       log.warn("Broadcast failed, will retry", logContext);
     } else {
@@ -261,7 +285,9 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
       break;
     }
 
-    const retryMs = retryAfter ? Number(retryAfter) * 1000 : 500 * Math.pow(2, attempt - 1);
+    const retryMs = retryAfter
+      ? Number(retryAfter) * 1000
+      : 500 * Math.pow(2, attempt - 1);
     await delay(retryMs);
   }
 
@@ -280,7 +306,7 @@ async function recordBroadcastHistory(
     errorMessage?: string;
     lineRequestId: string | null;
     lineResponseStatus: number | null;
-  }
+  },
 ): Promise<void> {
   // Insert with both new and legacy columns for backward compatibility
   const insertData: Record<string, unknown> = {
@@ -289,23 +315,27 @@ async function recordBroadcastHistory(
     success: data.broadcastStatus === "success",
     error_message: data.errorMessage || null,
   };
-  
+
   // Add new columns if they exist
   if (data.theme) insertData.theme = data.theme;
   if (data.broadcastStatus) insertData.broadcast_status = data.broadcastStatus;
   if (data.lineRequestId) insertData.line_request_id = data.lineRequestId;
-  if (data.lineResponseStatus !== null) insertData.line_response_status = data.lineResponseStatus;
-  
-  const { error } = await client.from("line_card_broadcasts").insert(insertData);
+  if (data.lineResponseStatus !== null) {
+    insertData.line_response_status = data.lineResponseStatus;
+  }
+
+  const { error } = await client.from("line_card_broadcasts").insert(
+    insertData,
+  );
 
   if (error) {
-    log.warn( "Failed to record broadcast history", {
+    log.warn("Failed to record broadcast history", {
       cardId: data.cardId,
       error: error.message,
     });
     // Don't throw - this is non-critical
   } else {
-    log.info( "Broadcast history recorded", {
+    log.info("Broadcast history recorded", {
       cardId: data.cardId,
       status: data.broadcastStatus,
     });
@@ -315,15 +345,20 @@ async function recordBroadcastHistory(
 /**
  * Update card after successful delivery (SQL injection safe)
  */
-async function updateCardAfterDelivery(client: SupabaseClient, cardId: string): Promise<void> {
-  const { error } = await client.rpc("increment_times_used", { card_id: cardId });
+async function updateCardAfterDelivery(
+  client: SupabaseClient,
+  cardId: string,
+): Promise<void> {
+  const { error } = await client.rpc("increment_times_used", {
+    card_id: cardId,
+  });
 
   if (!error) {
-    log.info( "Card updated via RPC", { cardId });
+    log.info("Card updated via RPC", { cardId });
     return;
   }
 
-  log.warn( "RPC increment_times_used failed, applying safe fallback", {
+  log.warn("RPC increment_times_used failed, applying safe fallback", {
     cardId,
     error: error.message,
   });
@@ -351,7 +386,7 @@ async function updateCardAfterDelivery(client: SupabaseClient, cardId: string): 
     throw new Error(`Failed to update card: ${updateError.message}`);
   }
 
-  log.info( "Card updated via fallback", { cardId });
+  log.info("Card updated via fallback", { cardId });
 }
 
 /**
@@ -366,7 +401,7 @@ Deno.serve(async (req) => {
   }
 
   if (!verifyAuth(req)) {
-    log.error( "Authentication failed");
+    log.error("Authentication failed");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
@@ -374,11 +409,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    log.info( "Step 1: Selecting card");
+    log.info("Step 1: Selecting card");
     const card = await selectCard(supabaseClient);
 
     if (!card) {
-      log.warn( "No card available to send");
+      log.warn("No card available to send");
       return new Response(
         JSON.stringify({
           success: true,
@@ -388,22 +423,22 @@ Deno.serve(async (req) => {
         {
           status: 200,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
-    log.info( "Step 2: Formatting message", {
+    log.info("Step 2: Formatting message", {
       cardId: card.id,
       messageLength: card.body.length,
     });
     const message = formatMessage(card);
 
-    log.info( "Step 3: Broadcasting via LINE", { cardId: card.id });
+    log.info("Step 3: Broadcasting via LINE", { cardId: card.id });
     const broadcastResult = await broadcastMessage(message);
 
     if (!broadcastResult.success) {
-      log.error( "Broadcast failed", { error: broadcastResult.error });
-      
+      log.error("Broadcast failed", { error: broadcastResult.error });
+
       // Record failed broadcast history
       await recordBroadcastHistory(supabaseClient, {
         cardId: card.id,
@@ -413,7 +448,7 @@ Deno.serve(async (req) => {
         lineRequestId: broadcastResult.requestId || null,
         lineResponseStatus: null,
       }).catch((err) => {
-        log.warn( "Failed to record broadcast history", { error: err.message });
+        log.warn("Failed to record broadcast history", { error: err.message });
       });
 
       return new Response(
@@ -424,15 +459,15 @@ Deno.serve(async (req) => {
         {
           status: 500,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
-    log.info( "Step 4: Updating card record", { cardId: card.id });
+    log.info("Step 4: Updating card record", { cardId: card.id });
     await updateCardAfterDelivery(supabaseClient, card.id);
 
     // Step 5: Record broadcast history
-    log.info( "Step 5: Recording broadcast history", { cardId: card.id });
+    log.info("Step 5: Recording broadcast history", { cardId: card.id });
     await recordBroadcastHistory(supabaseClient, {
       cardId: card.id,
       theme: card.theme,
@@ -454,10 +489,10 @@ Deno.serve(async (req) => {
       {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error) {
-    log.error( "Error in line-daily-brief", {
+    log.error("Error in line-daily-brief", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
     return new Response(
@@ -468,7 +503,7 @@ Deno.serve(async (req) => {
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

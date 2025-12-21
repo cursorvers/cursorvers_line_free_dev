@@ -43,4 +43,3 @@ export function hexToUint8Array(hex: string): Uint8Array {
   }
   return new Uint8Array(matches.map((byte) => parseInt(byte, 16)));
 }
-

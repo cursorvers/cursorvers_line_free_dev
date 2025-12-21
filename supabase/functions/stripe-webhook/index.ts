@@ -30,12 +30,15 @@ async function appendMemberRow(row: unknown[]) {
     return;
   }
   try {
-    const client = await createSheetsClientFromEnv(GOOGLE_SA_JSON, MEMBERS_SHEET_ID);
+    const client = await createSheetsClientFromEnv(
+      GOOGLE_SA_JSON,
+      MEMBERS_SHEET_ID,
+    );
     await client.append(MEMBERS_SHEET_TAB, [row]);
     log.info("Appended member to sheet", { tab: MEMBERS_SHEET_TAB });
   } catch (err) {
     log.warn("Failed to append to sheet", {
-      errorMessage: err instanceof Error ? err.message : String(err)
+      errorMessage: err instanceof Error ? err.message : String(err),
     });
   }
 }
@@ -45,13 +48,15 @@ async function sendDiscordInviteViaLine(
   email: string,
   name: string | null,
   tier: string,
-  lineUserId: string | null
+  lineUserId: string | null,
 ) {
   const discordBotToken = Deno.env.get("DISCORD_BOT_TOKEN");
   const guildId = Deno.env.get("DISCORD_GUILD_ID");
 
   if (!discordBotToken || !guildId) {
-    log.warn("DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set, skipping Discord invite");
+    log.warn(
+      "DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set, skipping Discord invite",
+    );
     return;
   }
 
@@ -70,12 +75,15 @@ async function sendDiscordInviteViaLine(
           max_uses: 1,
           unique: true,
         }),
-      }
+      },
     );
 
     if (!inviteResponse.ok) {
       const errorText = await inviteResponse.text();
-      log.error("Failed to create Discord invite", { status: inviteResponse.status, errorText });
+      log.error("Failed to create Discord invite", {
+        status: inviteResponse.status,
+        errorText,
+      });
       await notifyDiscord({
         title: "MANUS ALERT: Discord invite creation failed",
         message: `Status: ${inviteResponse.status}, Error: ${errorText}`,
@@ -114,13 +122,20 @@ async function sendDiscordInviteViaLine(
         log.warn("Failed to send Discord invite via LINE", { email });
       }
     } else {
-      log.info("No LINE user ID, invite will be sent when user registers LINE", { email });
+      log.info(
+        "No LINE user ID, invite will be sent when user registers LINE",
+        { email },
+      );
     }
 
     // Discordに通知（管理者用）
     await notifyDiscord({
       title: "🎉 New Member Joined!",
-      message: `**Email**: ${email}\n**Name**: ${name || "N/A"}\n**Tier**: ${tier}\n**LINE**: ${lineUserId ? "送信済" : "未登録"}\n**Invite**: ${inviteUrl}`,
+      message: `**Email**: ${email}\n**Name**: ${
+        name || "N/A"
+      }\n**Tier**: ${tier}\n**LINE**: ${
+        lineUserId ? "送信済" : "未登録"
+      }\n**Invite**: ${inviteUrl}`,
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -146,7 +161,7 @@ Deno.serve(async (req) => {
       signature!,
       webhookSecret!,
       undefined,
-      cryptoProvider
+      cryptoProvider,
     );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -160,7 +175,7 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
 
   switch (event.type) {
@@ -170,7 +185,12 @@ Deno.serve(async (req) => {
       const paymentStatus = session.payment_status;
       const mode = session.mode;
 
-      log.info("Checkout session completed", { sessionId: session.id, email: customerEmail, paymentStatus, mode });
+      log.info("Checkout session completed", {
+        sessionId: session.id,
+        email: customerEmail,
+        paymentStatus,
+        mode,
+      });
 
       // Payment Linkからの決済完了のみ処理（payment_statusがpaidの場合）
       if (customerEmail && paymentStatus === "paid") {
@@ -182,7 +202,7 @@ Deno.serve(async (req) => {
         let stripeSubscriptionId: string | null = null;
         const optInEmail =
           (session.metadata?.opt_in_email ?? "").toString().toLowerCase() ===
-          "true";
+            "true";
 
         // 顧客名を取得
         const customerName = session.customer_details?.name || null;
@@ -190,15 +210,23 @@ Deno.serve(async (req) => {
         // サブスクリプション型の場合、詳細情報を取得
         if (subscriptionId && typeof subscriptionId === "string") {
           try {
-            const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+            const subscription = await stripe.subscriptions.retrieve(
+              subscriptionId,
+            );
             subscriptionStatus = subscription.status;
             stripeSubscriptionId = subscription.id;
             nextBillingAt = subscription.current_period_end
               ? new Date(subscription.current_period_end * 1000).toISOString()
               : null;
-            log.info("Subscription details retrieved", { subscriptionId, subscriptionStatus });
+            log.info("Subscription details retrieved", {
+              subscriptionId,
+              subscriptionStatus,
+            });
           } catch (err) {
-            log.error("Failed to retrieve subscription", { subscriptionId, errorMessage: err instanceof Error ? err.message : String(err) });
+            log.error("Failed to retrieve subscription", {
+              subscriptionId,
+              errorMessage: err instanceof Error ? err.message : String(err),
+            });
           }
         }
 
@@ -207,7 +235,7 @@ Deno.serve(async (req) => {
         if (session.amount_total && session.amount_total >= 380000) {
           membershipTier = "master";
         }
-        
+
         // Payment Link IDからも判定（URLの末尾部分）
         const paymentLinkId = session.payment_link;
         if (paymentLinkId && typeof paymentLinkId === "string") {
@@ -231,7 +259,7 @@ Deno.serve(async (req) => {
               opt_in_email: optInEmail,
               updated_at: new Date().toISOString(),
             },
-            { onConflict: "email" }
+            { onConflict: "email" },
           );
 
         if (error) {
@@ -246,7 +274,10 @@ Deno.serve(async (req) => {
             headers: { "Content-Type": "application/json" },
           });
         } else {
-          log.info("Member joined", { email: customerEmail, tier: membershipTier });
+          log.info("Member joined", {
+            email: customerEmail,
+            tier: membershipTier,
+          });
 
           // LINE user ID を取得（既存ユーザーの場合）
           let lineUserId: string | null = null;
@@ -272,10 +303,18 @@ Deno.serve(async (req) => {
           ]);
 
           // Discord招待リンクをLINE経由で送信
-          await sendDiscordInviteViaLine(customerEmail, customerName, membershipTier, lineUserId);
+          await sendDiscordInviteViaLine(
+            customerEmail,
+            customerName,
+            membershipTier,
+            lineUserId,
+          );
         }
       } else {
-        log.info("Payment not completed", { email: customerEmail, paymentStatus });
+        log.info("Payment not completed", {
+          email: customerEmail,
+          paymentStatus,
+        });
       }
       break;
     }
@@ -287,12 +326,17 @@ Deno.serve(async (req) => {
       // Customerオブジェクトからemailを取得
       if (typeof subscription.customer === "string") {
         try {
-          const customer = await stripe.customers.retrieve(subscription.customer);
+          const customer = await stripe.customers.retrieve(
+            subscription.customer,
+          );
           if (customer && !customer.deleted) {
             customerEmail = customer.email || null;
           }
         } catch (err) {
-          log.error("Failed to retrieve customer", { customerId: subscription.customer, errorMessage: err instanceof Error ? err.message : String(err) });
+          log.error("Failed to retrieve customer", {
+            customerId: subscription.customer,
+            errorMessage: err instanceof Error ? err.message : String(err),
+          });
         }
       }
 
@@ -310,8 +354,11 @@ Deno.serve(async (req) => {
           })
           .eq("email", customerEmail);
 
-        if (error) log.error("DB Update Error", { errorMessage: error.message });
-        else log.info("Subscription updated", { subscriptionId: subscription.id });
+        if (error) {
+          log.error("DB Update Error", { errorMessage: error.message });
+        } else {log.info("Subscription updated", {
+            subscriptionId: subscription.id,
+          });}
       }
       break;
     }
@@ -323,12 +370,17 @@ Deno.serve(async (req) => {
       // Customerオブジェクトからemailを取得
       if (typeof subscription.customer === "string") {
         try {
-          const customer = await stripe.customers.retrieve(subscription.customer);
+          const customer = await stripe.customers.retrieve(
+            subscription.customer,
+          );
           if (customer && !customer.deleted) {
             customerEmail = customer.email || null;
           }
         } catch (err) {
-          log.error("Failed to retrieve customer", { customerId: subscription.customer, errorMessage: err instanceof Error ? err.message : String(err) });
+          log.error("Failed to retrieve customer", {
+            customerId: subscription.customer,
+            errorMessage: err instanceof Error ? err.message : String(err),
+          });
         }
       }
 
@@ -342,8 +394,11 @@ Deno.serve(async (req) => {
           })
           .eq("email", customerEmail);
 
-        if (error) log.error("DB Update Error", { errorMessage: error.message });
-        else log.info("Subscription canceled", { subscriptionId: subscription.id });
+        if (error) {
+          log.error("DB Update Error", { errorMessage: error.message });
+        } else {log.info("Subscription canceled", {
+            subscriptionId: subscription.id,
+          });}
       }
       break;
     }

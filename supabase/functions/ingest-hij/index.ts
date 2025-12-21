@@ -33,7 +33,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       headers: {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
+        "Access-Control-Allow-Headers":
+          "Content-Type, Authorization, X-API-Key",
       },
     });
   }
@@ -72,7 +73,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         {
           status: 400,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -82,7 +83,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // Supabaseクライアント初期化
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     // hij_rawテーブルに挿入
@@ -107,7 +108,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           {
             status: 200,
             headers: { "Content-Type": "application/json" },
-          }
+          },
         );
       }
 
@@ -117,11 +118,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
         {
           status: 500,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
-    log.info("Ingested message", { messageId: payload.message_id, tlp: tlp || "none", recordId: data.id });
+    log.info("Ingested message", {
+      messageId: payload.message_id,
+      tlp: tlp || "none",
+      recordId: data.id,
+    });
 
     return new Response(
       JSON.stringify({
@@ -133,17 +138,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (err) {
-    log.error("Request processing error", { errorMessage: err instanceof Error ? err.message : String(err) });
+    log.error("Request processing error", {
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
     return new Response(
       JSON.stringify({ error: "Internal Server Error", details: String(err) }),
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });
-

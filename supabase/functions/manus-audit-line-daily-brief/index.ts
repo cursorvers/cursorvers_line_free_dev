@@ -31,14 +31,17 @@ import { createLogger } from "../_shared/logger.ts";
 import { triggerAutoRemediation } from "../_shared/manus-api.ts";
 import { verifyAuth } from "./auth.ts";
 import {
-  checkCardInventory,
   checkBroadcastSuccess,
+  checkCardInventory,
   checkDatabaseHealth,
   checkLineRegistrationSystem,
 } from "./checks/index.ts";
 import { performMaintenance } from "./maintenance.ts";
-import { sendDiscordNotification, sendManusNotification } from "./notification.ts";
-import { AuditResult, AuditMode, AuditTrigger } from "./types.ts";
+import {
+  sendDiscordNotification,
+  sendManusNotification,
+} from "./notification.ts";
+import { AuditMode, AuditResult, AuditTrigger } from "./types.ts";
 
 const log = createLogger("manus-audit");
 
@@ -50,7 +53,8 @@ const DISCORD_ADMIN_WEBHOOK_URL = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
 const DISCORD_MAINT_WEBHOOK_URL = Deno.env.get("DISCORD_MAINT_WEBHOOK_URL");
 const MANUS_WEBHOOK_URL = Deno.env.get("MANUS_WEBHOOK_URL");
 
-const LANDING_PAGE_URL = "https://mo666-med.github.io/cursorvers_line_free_dev/register.html";
+const LANDING_PAGE_URL =
+  "https://mo666-med.github.io/cursorvers_line_free_dev/register.html";
 
 // Validate required environment variables
 function validateEnv(): { valid: boolean; error?: string } {
@@ -71,19 +75,22 @@ Deno.serve(async (req) => {
     if (!envCheck.valid) {
       return new Response(
         JSON.stringify({ status: "unhealthy", error: envCheck.error }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
     return new Response(
-      JSON.stringify({ status: "healthy", timestamp: new Date().toISOString() }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
     );
   }
 
   if (req.method !== "POST") {
     return new Response(
       JSON.stringify({ error: "Method not allowed" }),
-      { status: 405, headers: { "Content-Type": "application/json" } }
+      { status: 405, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -92,15 +99,20 @@ Deno.serve(async (req) => {
   if (!envCheck.valid) {
     return new Response(
       JSON.stringify({ error: envCheck.error }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 
   // Authenticate
-  if (!verifyAuth(req, { apiKey: MANUS_AUDIT_API_KEY, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY! })) {
+  if (
+    !verifyAuth(req, {
+      apiKey: MANUS_AUDIT_API_KEY,
+      serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY!,
+    })
+  ) {
     return new Response(
       JSON.stringify({ error: "Unauthorized" }),
-      { status: 401, headers: { "Content-Type": "application/json" } }
+      { status: 401, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -111,9 +123,17 @@ Deno.serve(async (req) => {
     const effectiveMode: AuditMode = isReportMode ? "daily" : mode;
     const triggerMode: AuditTrigger = isReportMode ? "report" : effectiveMode;
 
-    log.info("Starting audit", { mode: triggerMode, effectiveMode, report: isReportMode, test: isTestMode });
+    log.info("Starting audit", {
+      mode: triggerMode,
+      effectiveMode,
+      report: isReportMode,
+      test: isTestMode,
+    });
 
-    const supabaseClient = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+    const supabaseClient = createClient(
+      SUPABASE_URL!,
+      SUPABASE_SERVICE_ROLE_KEY!,
+    );
 
     // Run core checks in parallel
     const [cardInventory, broadcastSuccess] = await Promise.all([
@@ -161,7 +181,7 @@ Deno.serve(async (req) => {
     // LINE registration system checks
     result.checks.lineRegistrationSystem = await checkLineRegistrationSystem(
       supabaseClient,
-      { supabaseUrl: SUPABASE_URL!, landingPageUrl: LANDING_PAGE_URL }
+      { supabaseUrl: SUPABASE_URL!, landingPageUrl: LANDING_PAGE_URL },
     );
 
     // Calculate summary
@@ -176,10 +196,12 @@ Deno.serve(async (req) => {
       !result.checks.cardInventory.passed,
       !result.checks.broadcastSuccess.passed,
       result.checks.databaseHealth && !result.checks.databaseHealth.passed,
-      result.checks.lineRegistrationSystem && !result.checks.lineRegistrationSystem.passed,
+      result.checks.lineRegistrationSystem &&
+      !result.checks.lineRegistrationSystem.passed,
     ].filter(Boolean).length;
 
-    result.summary.allPassed = result.summary.warningCount === 0 && result.summary.errorCount === 0;
+    result.summary.allPassed = result.summary.warningCount === 0 &&
+      result.summary.errorCount === 0;
 
     // Trigger auto-remediation if there are issues
     if (!result.summary.allPassed && !isReportMode) {
@@ -209,7 +231,10 @@ Deno.serve(async (req) => {
     // Send notifications
     if (isReportMode) {
       await Promise.all([
-        sendManusNotification(result, { force: true, webhookUrl: MANUS_WEBHOOK_URL }),
+        sendManusNotification(result, {
+          force: true,
+          webhookUrl: MANUS_WEBHOOK_URL,
+        }),
         sendDiscordNotification(result, {
           force: true,
           webhookUrl: DISCORD_MAINT_WEBHOOK_URL,
@@ -246,7 +271,7 @@ Deno.serve(async (req) => {
         error: "Internal server error",
         message: error instanceof Error ? error.message : String(error),
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 });

@@ -3,10 +3,10 @@
  */
 import { assertEquals } from "std-assert";
 import {
-  notifyDiscord,
   notifyCritical,
-  notifyWarning,
+  notifyDiscord,
   notifyInfo,
+  notifyWarning,
 } from "./alert.ts";
 
 // ========================================
@@ -134,7 +134,7 @@ Deno.test("notifyCritical sets severity to critical", async () => {
   const result = await notifyCritical(
     "Critical Alert",
     "Something critical happened",
-    { detail: "test" }
+    { detail: "test" },
   );
 
   assertEquals(typeof result.success, "boolean");
@@ -144,7 +144,7 @@ Deno.test("notifyCritical sets severity to critical", async () => {
 Deno.test("notifyWarning sets severity to warning", async () => {
   const result = await notifyWarning(
     "Warning Alert",
-    "Something needs attention"
+    "Something needs attention",
   );
 
   assertEquals(typeof result.success, "boolean");
@@ -154,7 +154,7 @@ Deno.test("notifyWarning sets severity to warning", async () => {
 Deno.test("notifyInfo sets severity to info", async () => {
   const result = await notifyInfo(
     "Info Alert",
-    "Just for your information"
+    "Just for your information",
   );
 
   assertEquals(typeof result.success, "boolean");

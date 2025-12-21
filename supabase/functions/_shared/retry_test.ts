@@ -3,11 +3,7 @@
  * 指数バックオフ付きリトライロジックのテスト
  */
 import { assertEquals, assertRejects } from "std-assert";
-import {
-  withRetry,
-  isRetryableStatus,
-  isRetryableError,
-} from "./retry.ts";
+import { isRetryableError, isRetryableStatus, withRetry } from "./retry.ts";
 
 // ========================================
 // isRetryableStatus のテスト
@@ -89,7 +85,7 @@ Deno.test("withRetry retries on failure and eventually succeeds", async () => {
       maxRetries: 3,
       initialDelay: 10, // テスト用に短い遅延
       maxDelay: 50,
-    }
+    },
   );
 
   assertEquals(result, "success after retries");
@@ -110,10 +106,10 @@ Deno.test("withRetry throws after max retries exceeded", async () => {
           maxRetries: 2,
           initialDelay: 10,
           maxDelay: 50,
-        }
+        },
       ),
     Error,
-    "persistent failure"
+    "persistent failure",
   );
 
   assertEquals(attempts, 3); // 初回 + 2回リトライ
@@ -133,15 +129,18 @@ Deno.test("withRetry respects shouldRetry option", async () => {
           maxRetries: 3,
           initialDelay: 10,
           shouldRetry: (error) => {
-            if (error instanceof Error && error.message.startsWith("NON_RETRYABLE")) {
+            if (
+              error instanceof Error &&
+              error.message.startsWith("NON_RETRYABLE")
+            ) {
               return false;
             }
             return true;
           },
-        }
+        },
       ),
     Error,
-    "NON_RETRYABLE"
+    "NON_RETRYABLE",
   );
 
   assertEquals(attempts, 1); // リトライなし
@@ -166,7 +165,7 @@ Deno.test("withRetry calls onRetry callback", async () => {
       onRetry: (attempt, _error, nextDelay) => {
         retryLogs.push({ attempt, delay: nextDelay });
       },
-    }
+    },
   );
 
   assertEquals(retryLogs.length, 2);
@@ -195,7 +194,7 @@ Deno.test("withRetry respects maxDelay", async () => {
       onRetry: (_attempt, _error, nextDelay) => {
         retryDelays.push(nextDelay);
       },
-    }
+    },
   );
 
   // 100, 200, 200, 200 (maxDelayでキャップ)

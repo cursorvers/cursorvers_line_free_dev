@@ -3,11 +3,7 @@
  * 構造化ロガーモジュールのテスト
  */
 import { assertEquals } from "std-assert";
-import {
-  createLogger,
-  anonymizeUserId,
-  errorToContext,
-} from "./logger.ts";
+import { anonymizeUserId, createLogger, errorToContext } from "./logger.ts";
 
 // ========================================
 // anonymizeUserId のテスト
@@ -216,7 +212,12 @@ Deno.test("createLogger produces valid JSON output", () => {
     // JSONとしてパースできることを確認
     const parsed = JSON.parse(logs[0]);
     assertEquals(typeof parsed, "object");
-    assertEquals(Object.keys(parsed).sort(), ["context", "level", "message", "timestamp"]);
+    assertEquals(Object.keys(parsed).sort(), [
+      "context",
+      "level",
+      "message",
+      "timestamp",
+    ]);
   } finally {
     console.log = originalLog;
   }

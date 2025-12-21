@@ -3,7 +3,7 @@
  */
 import { SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "../../_shared/logger.ts";
-import { BroadcastStats, BroadcastCheckResult } from "../types.ts";
+import { BroadcastCheckResult, BroadcastStats } from "../types.ts";
 
 const log = createLogger("audit-broadcast-success");
 
@@ -12,11 +12,12 @@ const TARGET_SUCCESS_RATE = 90;
 const CONSECUTIVE_FAILURE_THRESHOLD = 3;
 
 export async function checkBroadcastSuccess(
-  client: SupabaseClient
+  client: SupabaseClient,
 ): Promise<BroadcastCheckResult> {
   log.info("Checking broadcast success rate");
 
-  const cutoffDate = new Date(Date.now() - DAYS_TO_CHECK * 24 * 60 * 60 * 1000).toISOString();
+  const cutoffDate = new Date(Date.now() - DAYS_TO_CHECK * 24 * 60 * 60 * 1000)
+    .toISOString();
 
   const { data, error } = await client
     .from("line_card_broadcasts")
@@ -34,7 +35,10 @@ export async function checkBroadcastSuccess(
   }
 
   // Aggregate by date
-  const dailyStats: Record<string, { total: number; successful: number; failed: number }> = {};
+  const dailyStats: Record<
+    string,
+    { total: number; successful: number; failed: number }
+  > = {};
 
   for (const record of data || []) {
     const date = new Date(record.sent_at).toISOString().split("T")[0];
@@ -55,7 +59,9 @@ export async function checkBroadcastSuccess(
       total: stats.total,
       successful: stats.successful,
       failed: stats.failed,
-      success_rate: stats.total > 0 ? (stats.successful / stats.total) * 100 : 0,
+      success_rate: stats.total > 0
+        ? (stats.successful / stats.total) * 100
+        : 0,
     }))
     .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -65,11 +71,15 @@ export async function checkBroadcastSuccess(
   // Check overall success rate
   const totalSuccessful = details.reduce((sum, d) => sum + d.successful, 0);
   const totalBroadcasts = details.reduce((sum, d) => sum + d.total, 0);
-  const overallSuccessRate = totalBroadcasts > 0 ? (totalSuccessful / totalBroadcasts) * 100 : 100;
+  const overallSuccessRate = totalBroadcasts > 0
+    ? (totalSuccessful / totalBroadcasts) * 100
+    : 100;
 
   if (overallSuccessRate < TARGET_SUCCESS_RATE) {
     warnings.push(
-      `⚠️ 警告: 過去${DAYS_TO_CHECK}日間の配信成功率が${overallSuccessRate.toFixed(1)}%です（目標: ${TARGET_SUCCESS_RATE}%以上）`
+      `⚠️ 警告: 過去${DAYS_TO_CHECK}日間の配信成功率が${
+        overallSuccessRate.toFixed(1)
+      }%です（目標: ${TARGET_SUCCESS_RATE}%以上）`,
     );
     allPassed = false;
   }
@@ -84,7 +94,9 @@ export async function checkBroadcastSuccess(
     }
   }
   if (consecutiveFailures >= CONSECUTIVE_FAILURE_THRESHOLD) {
-    warnings.push(`🚨 緊急: 連続${consecutiveFailures}日間配信失敗しています！`);
+    warnings.push(
+      `🚨 緊急: 連続${consecutiveFailures}日間配信失敗しています！`,
+    );
     allPassed = false;
   }
 

@@ -3,15 +3,27 @@
  */
 import { SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "../../_shared/logger.ts";
-import { CardTheme, CardInventory, CardInventoryCheckResult } from "../types.ts";
+import {
+  CardInventory,
+  CardInventoryCheckResult,
+  CardTheme,
+} from "../types.ts";
 
 const log = createLogger("audit-card-inventory");
 
-const THEMES: CardTheme[] = ["ai_gov", "tax", "law", "biz", "career", "asset", "general"];
+const THEMES: CardTheme[] = [
+  "ai_gov",
+  "tax",
+  "law",
+  "biz",
+  "career",
+  "asset",
+  "general",
+];
 const MIN_READY_CARDS = 50;
 
 export async function checkCardInventory(
-  client: SupabaseClient
+  client: SupabaseClient,
 ): Promise<CardInventoryCheckResult> {
   log.info("Checking card inventory");
 
@@ -30,7 +42,10 @@ export async function checkCardInventory(
   }
 
   // Aggregate by theme
-  const inventory: Record<CardTheme, { ready: number; used: number; archived: number; total: number }> = {
+  const inventory: Record<
+    CardTheme,
+    { ready: number; used: number; archived: number; total: number }
+  > = {
     ai_gov: { ready: 0, used: 0, archived: 0, total: 0 },
     tax: { ready: 0, used: 0, archived: 0, total: 0 },
     law: { ready: 0, used: 0, archived: 0, total: 0 },
@@ -65,7 +80,9 @@ export async function checkCardInventory(
       warnings.push(`🚨 緊急: ${item.theme}テーマのreadyカードが0枚です！`);
       allPassed = false;
     } else if (item.ready_cards < MIN_READY_CARDS) {
-      warnings.push(`⚠️ 警告: ${item.theme}テーマのreadyカードが${item.ready_cards}枚（${MIN_READY_CARDS}枚未満）`);
+      warnings.push(
+        `⚠️ 警告: ${item.theme}テーマのreadyカードが${item.ready_cards}枚（${MIN_READY_CARDS}枚未満）`,
+      );
       allPassed = false;
     }
   }

@@ -11,7 +11,7 @@ const HIGH_USAGE_THRESHOLD = 100;
 const ABNORMAL_USAGE_THRESHOLD = 200;
 
 export async function checkDatabaseHealth(
-  client: SupabaseClient
+  client: SupabaseClient,
 ): Promise<DatabaseHealthCheckResult> {
   log.info("Checking database health");
 
@@ -42,7 +42,8 @@ export async function checkDatabaseHealth(
       const hashCounts: Record<string, number> = {};
       for (const card of cards || []) {
         if (card.content_hash) {
-          hashCounts[card.content_hash] = (hashCounts[card.content_hash] || 0) + 1;
+          hashCounts[card.content_hash] = (hashCounts[card.content_hash] || 0) +
+            1;
         }
       }
       hashData = Object.values(hashCounts).filter((count) => count > 1).length;
@@ -56,7 +57,9 @@ export async function checkDatabaseHealth(
   }
 
   if (duplicates > 0) {
-    warnings.push(`⚠️ 警告: 重複コンテンツハッシュが${duplicates}件検出されました`);
+    warnings.push(
+      `⚠️ 警告: 重複コンテンツハッシュが${duplicates}件検出されました`,
+    );
   }
 
   // Check for cards with abnormally high times_used
@@ -70,8 +73,12 @@ export async function checkDatabaseHealth(
   if (!usageError && highUsage && highUsage.length > 0) {
     const maxUsage = highUsage[0].times_used;
     if (maxUsage > ABNORMAL_USAGE_THRESHOLD) {
-      anomalies.push(`異常に多い使用回数: ${maxUsage}回（カードID: ${highUsage[0].id}）`);
-      warnings.push(`⚠️ 警告: 使用回数が異常に多いカードが検出されました（最大: ${maxUsage}回）`);
+      anomalies.push(
+        `異常に多い使用回数: ${maxUsage}回（カードID: ${highUsage[0].id}）`,
+      );
+      warnings.push(
+        `⚠️ 警告: 使用回数が異常に多いカードが検出されました（最大: ${maxUsage}回）`,
+      );
     }
   }
 
