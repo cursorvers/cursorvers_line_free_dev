@@ -1,7 +1,7 @@
 // supabase/functions/line-webhook/lib/risk-checker.ts
 // Risk Checker: 文章のリスクカテゴリを判定し、修正案を提示
 
-import type { RiskCategory, RiskLevel, RiskCheckResult } from "./types.ts";
+import type { RiskCategory, RiskCheckResult } from "./types.ts";
 import { DISCORD_INVITE_URL } from "./constants.ts";
 import { createLogger } from "../../_shared/logger.ts";
 

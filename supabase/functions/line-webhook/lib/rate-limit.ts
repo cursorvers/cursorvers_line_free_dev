@@ -58,13 +58,13 @@ export async function getHourlyUsageCount(
 /**
  * Prompt Polisher 用
  */
-export async function getHourlyPolishCount(userId: string): Promise<UsageCountResult> {
+export function getHourlyPolishCount(userId: string): Promise<UsageCountResult> {
   return getHourlyUsageCount(userId, "prompt_polisher");
 }
 
 /**
  * Risk Checker 用
  */
-export async function getHourlyRiskCheckCount(userId: string): Promise<UsageCountResult> {
+export function getHourlyRiskCheckCount(userId: string): Promise<UsageCountResult> {
   return getHourlyUsageCount(userId, "risk_checker");
 }

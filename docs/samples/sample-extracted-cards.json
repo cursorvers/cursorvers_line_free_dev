@@ -1,0 +1,82 @@
+{
+  "description": "sample-obsidian-note.md から抽出されるカードの例",
+  "extractedCards": [
+    {
+      "body": "医療AIを導入する前に、必ず「AI導入ガバナンス委員会」を設置すべき。厚労省のガイドラインでも推奨されている",
+      "theme": "ai_gov",
+      "sourcePath": "docs/samples/sample-obsidian-note.md",
+      "sourceLine": 5,
+      "contentHash": "a1b2c3d4e5f6..."
+    },
+    {
+      "body": "AI診断支援ツールの「最終判断は医師が行う」は建前ではなく、法的責任の所在を明確にするために必須",
+      "theme": "law",
+      "sourcePath": "docs/samples/sample-obsidian-note.md",
+      "sourceLine": 7,
+      "contentHash": "b2c3d4e5f6g7..."
+    },
+    {
+      "body": "クリニックにAIを導入する際は、ベンダーとの契約書に「瑕疵担保責任」と「データ取り扱い規程」を必ず明記する",
+      "theme": "law",
+      "sourcePath": "docs/samples/sample-obsidian-note.md",
+      "sourceLine": 9,
+      "contentHash": "c3d4e5f6g7h8..."
+    },
+    {
+      "body": "当直バイトで稼ぐより、AIガバナンス顧問として月1回のZoom相談を受ける方が、時給換算で3倍以上になることがある",
+      "theme": "career",
+      "sourcePath": "docs/samples/sample-obsidian-note.md",
+      "sourceLine": 13,
+      "contentHash": "d4e5f6g7h8i9..."
+    },
+    {
+      "body": "コンサルティング収入は、開業届を出せば「事業所得」として申告できる。書籍代やセミナー費が経費になる",
+      "theme": "tax",
+      "sourcePath": "docs/samples/sample-obsidian-note.md",
+      "sourceLine": 15,
+      "contentHash": "e5f6g7h8i9j0..."
+    },
+    {
+      "body": "「AIに詳しい医師」というポジションは、今後5年で最も価値が上がるキャリアの一つ",
+      "theme": "general",
+      "sourcePath": "docs/samples/sample-obsidian-note.md",
+      "sourceLine": 19,
+      "contentHash": "f6g7h8i9j0k1..."
+    }
+  ],
+  "databaseRecords": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "body": "医療AIを導入する前に、必ず「AI導入ガバナンス委員会」を設置すべき。厚労省のガイドラインでも推奨されている",
+      "theme": "ai_gov",
+      "source_path": "docs/samples/sample-obsidian-note.md",
+      "source_line": 5,
+      "content_hash": "a1b2c3d4e5f6...",
+      "status": "ready",
+      "times_used": 0,
+      "last_used_at": null,
+      "created_from_vault_at": "2025-01-15T10:30:00Z",
+      "created_at": "2025-01-15T10:30:00Z",
+      "updated_at": "2025-01-15T10:30:00Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "body": "当直バイトで稼ぐより、AIガバナンス顧問として月1回のZoom相談を受ける方が、時給換算で3倍以上になることがある",
+      "theme": "career",
+      "source_path": "docs/samples/sample-obsidian-note.md",
+      "source_line": 13,
+      "content_hash": "d4e5f6g7h8i9...",
+      "status": "used",
+      "times_used": 3,
+      "last_used_at": "2025-01-18T11:00:00Z",
+      "created_from_vault_at": "2025-01-15T10:30:00Z",
+      "created_at": "2025-01-15T10:30:00Z",
+      "updated_at": "2025-01-18T11:00:00Z"
+    }
+  ],
+  "lineMessageExample": {
+    "description": "LINE配信時のメッセージ例",
+    "message": "👨‍⚕️ 今日のひとこと\n\n当直バイトで稼ぐより、AIガバナンス顧問として月1回のZoom相談を受ける方が、時給換算で3倍以上になることがある\n\n──────────\nCursorvers｜医療AIガバナンス"
+  }
+}
+

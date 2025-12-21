@@ -1,0 +1,49 @@
+{
+  "title": "LINE event handling (production)",
+  "version": "1.0.0",
+  "risk": {
+    "level": "low",
+    "reasons": ["idempotent dispatch", "guardrail footer required"]
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "action": "supabase.upsert_event",
+      "payload": {
+        "event_ref": "line_event",
+        "status": "received"
+      },
+      "idempotency_key": "hash(event_id + s1)",
+      "on_error": "abort"
+    },
+    {
+      "id": "s2",
+      "action": "sheets.upsert_contact",
+      "payload": {
+        "user_ref": "hashed_line_user_id",
+        "status": "subscribed"
+      },
+      "idempotency_key": "hash(event_id + s2)",
+      "on_error": "continue"
+    },
+    {
+      "id": "s3",
+      "action": "line.reply",
+      "payload": {
+        "messages": [
+          {
+            "type": "text",
+            "text": "Welcome to Cursorvers LINE channel."
+          }
+        ],
+        "requires_safety_footer": true
+      },
+      "idempotency_key": "hash(event_id + s3)",
+      "on_error": "compensate"
+    }
+  ],
+  "observability": {
+    "success_metrics": ["line.reply.success", "sheets.upsert.success"],
+    "logs": ["latency_ms", "retries"]
+  }
+}

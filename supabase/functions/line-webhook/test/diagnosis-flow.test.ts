@@ -18,7 +18,6 @@ import {
   buildDiagnosisStartMessage,
   type DiagnosisState,
 } from "../lib/diagnosis-flow.ts";
-import type { DiagnosisKeyword } from "../lib/constants.ts";
 
 // =======================
 // Test: getFlowForKeyword

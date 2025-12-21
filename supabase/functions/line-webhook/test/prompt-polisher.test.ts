@@ -6,7 +6,7 @@ import {
   assertExists,
   assert,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { stub, restore } from "https://deno.land/std@0.208.0/testing/mock.ts";
+import { stub } from "https://deno.land/std@0.208.0/testing/mock.ts";
 import { runPromptPolisher } from "../lib/prompt-polisher.ts";
 
 // =======================
@@ -254,12 +254,12 @@ Deno.test("prompt-polisher: runPromptPolisher sends correct API request", async 
     return undefined;
   });
 
-  let capturedRequest: any = null;
+  let capturedRequest: { url: string; method?: string; headers?: HeadersInit; body?: unknown } | null = null;
 
   const fetchStub = stub(
     globalThis,
     "fetch",
-    async (url: string | URL | Request, init?: RequestInit) => {
+    (url: string | URL | Request, init?: RequestInit) => {
       // Capture the request for inspection
       if (init) {
         capturedRequest = {
@@ -270,12 +270,12 @@ Deno.test("prompt-polisher: runPromptPolisher sends correct API request", async 
         };
       }
 
-      return new Response(
+      return Promise.resolve(new Response(
         JSON.stringify({
           choices: [{ message: { content: "テスト応答" } }],
         }),
         { status: 200 }
-      );
+      ));
     }
   );
 

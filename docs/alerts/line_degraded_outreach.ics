@@ -1,0 +1,12 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cursorvers//LINE Degraded Outreach//EN
+BEGIN:VEVENT
+UID:degraded-line-outreach@example.com
+DTSTAMP:20231204T000000Z
+DTSTART:20231204T000000Z
+DTEND:20231204T010000Z
+SUMMARY:LINE Outreach (Degraded Mode)
+DESCRIPTION:Placeholder calendar entry used when Manus is unavailable. Replace with real schedule.
+END:VEVENT
+END:VCALENDAR
