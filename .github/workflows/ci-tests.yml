@@ -80,7 +80,7 @@ jobs:
       - name: Check Format
         run: |
           cd supabase/functions
-          deno fmt --check --ext=ts
+          find . -name "*.ts" -type f | xargs deno fmt --check
 
       - name: Format Summary
         if: always()

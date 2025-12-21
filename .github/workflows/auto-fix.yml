@@ -42,13 +42,13 @@ jobs:
         continue-on-error: true
         run: |
           cd supabase/functions
-          deno fmt --check --ext=ts
+          find . -name "*.ts" -type f | xargs deno fmt --check
 
       - name: Run Formatter
         if: steps.format-check.outcome == 'failure'
         run: |
           cd supabase/functions
-          deno fmt --ext=ts
+          find . -name "*.ts" -type f | xargs deno fmt
 
       - name: Check for Changes
         id: check-changes
