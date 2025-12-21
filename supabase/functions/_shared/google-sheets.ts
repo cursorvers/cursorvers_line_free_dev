@@ -159,7 +159,7 @@ export async function buildSheetsClient(
  * @param serviceAccountJson - GOOGLE_SA_JSON環境変数の値
  * @param sheetId - スプレッドシートID
  */
-export async function createSheetsClientFromEnv(
+export function createSheetsClientFromEnv(
   serviceAccountJson: string,
   sheetId: string
 ): Promise<SheetsClient> {

@@ -2,7 +2,7 @@
  * 共有 Supabase クライアント
  * 全 Edge Functions で単一インスタンスを使用
  */
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "./logger.ts";
 
 const log = createLogger("supabase");

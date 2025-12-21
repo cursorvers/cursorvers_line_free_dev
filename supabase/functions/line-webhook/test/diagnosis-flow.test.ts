@@ -1,11 +1,7 @@
 // supabase/functions/line-webhook/test/diagnosis-flow.test.ts
 // Tests for diagnosis-flow.ts - Pure function tests (Phase 1)
 
-import {
-  assert,
-  assertEquals,
-  assertExists,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertExists } from "std-assert";
 import {
   buildConclusionMessage,
   buildDiagnosisStartMessage,
@@ -337,7 +333,7 @@ Deno.test("diagnosis-flow: Complete QUICK_FLOW walkthrough", () => {
   assertExists(startMsg);
 
   // Layer 1
-  let state: DiagnosisState = {
+  const state: DiagnosisState = {
     keyword: "クイック診断",
     layer: 1,
     answers: [],

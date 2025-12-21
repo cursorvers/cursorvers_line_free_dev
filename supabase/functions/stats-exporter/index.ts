@@ -2,7 +2,7 @@
  * Stats Exporter Edge Function
  * LINE イベントデータを Google Sheets にエクスポート
  */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createClient } from "@supabase/supabase-js";
 import { createSheetsClientFromEnv, type SheetsClient } from "../_shared/google-sheets.ts";
 import { createLogger } from "../_shared/logger.ts";
 

@@ -2,7 +2,7 @@
 // Health-ISAC Japan メール取り込み Edge Function
 // Google Apps Script or 手動転送からのJSON POSTを受け取り、hij_rawテーブルに保存
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createClient } from "@supabase/supabase-js";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("ingest-hij");

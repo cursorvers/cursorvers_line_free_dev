@@ -4,8 +4,8 @@
 // - /sec-brief-latest: 最新ドラフトのプレビュー
 // - /sec-brief-publish: ドラフトを#sec-briefに公開
 
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
-import nacl from "https://esm.sh/tweetnacl@1.0.3?target=deno";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import nacl from "tweetnacl";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("discord-bot");
@@ -294,7 +294,7 @@ async function handleSecBriefLatest(supabase: SupabaseClient): Promise<Response>
 // ドラフトを#sec-briefに公開してstatusをpublishedに変更
 // ============================================
 async function handleSecBriefPublish(
-  interaction: DiscordInteraction,
+  _interaction: DiscordInteraction,
   supabase: SupabaseClient
 ): Promise<Response> {
   // 最新のドラフトを取得

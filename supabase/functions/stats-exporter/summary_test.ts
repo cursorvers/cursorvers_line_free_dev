@@ -1,7 +1,7 @@
 /**
  * stats-exporter サマリー関数のテスト
  */
-import { assertEquals } from "https://deno.land/std@0.210.0/assert/mod.ts";
+import { assertEquals } from "std-assert";
 
 /** LINE イベントレコード (テスト用) */
 interface LineEvent {

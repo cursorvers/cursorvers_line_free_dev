@@ -14,7 +14,7 @@
  *   - OR Authorization: Bearer <service_role_key>
  */
 
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("line-daily-brief");

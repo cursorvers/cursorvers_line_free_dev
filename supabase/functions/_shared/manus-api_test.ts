@@ -2,7 +2,7 @@
  * manus-api.ts のユニットテスト
  * 主にプロンプトインジェクション対策のサニタイズ機能をテスト
  */
-import { assertEquals } from "https://deno.land/std@0.210.0/assert/mod.ts";
+import { assertEquals } from "std-assert";
 import { buildRemediationPrompt } from "./manus-api.ts";
 
 // ========================================

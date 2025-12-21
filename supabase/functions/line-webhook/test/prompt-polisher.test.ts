@@ -1,12 +1,8 @@
 // supabase/functions/line-webhook/test/prompt-polisher.test.ts
 // Tests for prompt-polisher.ts - Mock tests with external dependencies (Phase 2)
 
-import {
-  assert,
-  assertEquals,
-  assertExists,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { stub } from "https://deno.land/std@0.208.0/testing/mock.ts";
+import { assert, assertEquals, assertExists } from "std-assert";
+import { stub } from "std-mock";
 import { runPromptPolisher } from "../lib/prompt-polisher.ts";
 
 // =======================

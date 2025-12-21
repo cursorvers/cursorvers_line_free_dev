@@ -1,4 +1,4 @@
-import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import Stripe from "stripe";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("create-checkout-session");

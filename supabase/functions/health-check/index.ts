@@ -2,7 +2,7 @@
  * Health Check Edge Function
  * LINE イベントの統計情報を取得し、Discord に通知
  */
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { createLogger, errorToContext } from "../_shared/logger.ts";
 
 const log = createLogger("health-check");

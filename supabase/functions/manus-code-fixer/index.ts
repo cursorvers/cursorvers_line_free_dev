@@ -101,7 +101,7 @@ function verifyAuth(req: Request): boolean {
   return false;
 }
 
-async function runDenoFmt(path: string, files: string[]): Promise<{ success: boolean; output: string }> {
+function runDenoFmt(path: string, files: string[]): { success: boolean; output: string } {
   log("info", "Running deno fmt", { path, fileCount: files.length });
 
   try {
@@ -122,7 +122,7 @@ async function runDenoFmt(path: string, files: string[]): Promise<{ success: boo
   }
 }
 
-async function runDenoLintFix(path: string, files: string[]): Promise<{ success: boolean; output: string }> {
+function runDenoLintFix(path: string, files: string[]): { success: boolean; output: string } {
   log("info", "Running deno lint --fix", { path, fileCount: files.length });
 
   try {

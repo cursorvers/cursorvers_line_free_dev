@@ -7,7 +7,7 @@
  * - opt_in_email: デフォルト true（明示的に false 指定可）
  * セキュリティ: line_user_idがある場合はLINEのプロフィール取得で検証
  */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createClient } from "@supabase/supabase-js";
 import { createSheetsClientFromEnv } from "../_shared/google-sheets.ts";
 import { createLogger } from "../_shared/logger.ts";
 

@@ -1,12 +1,8 @@
 // supabase/functions/line-webhook/test/risk-checker.test.ts
 // Tests for risk-checker.ts - Mock tests with external dependencies (Phase 2)
 
-import {
-  assert,
-  assertEquals,
-  assertExists,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { stub } from "https://deno.land/std@0.208.0/testing/mock.ts";
+import { assert, assertEquals, assertExists } from "std-assert";
+import { stub } from "std-mock";
 import { runRiskChecker } from "../lib/risk-checker.ts";
 
 // =======================
@@ -470,6 +466,7 @@ Deno.test("risk-checker: runRiskChecker sends correct API request with JSON mode
   const fetchStub = stub(
     globalThis,
     "fetch",
+    // deno-lint-ignore require-await
     async (url: string | URL | Request, init?: RequestInit) => {
       if (init) {
         capturedRequest = {

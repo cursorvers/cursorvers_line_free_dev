@@ -2,7 +2,7 @@
  * logger.ts のユニットテスト
  * 構造化ロガーモジュールのテスト
  */
-import { assertEquals } from "https://deno.land/std@0.210.0/assert/mod.ts";
+import { assertEquals } from "std-assert";
 import {
   createLogger,
   anonymizeUserId,
@@ -100,7 +100,7 @@ Deno.test("createLogger returns logger with all methods", () => {
   assertEquals(typeof logger.error, "function");
 });
 
-Deno.test("createLogger logs include function name", async () => {
+Deno.test("createLogger logs include function name", () => {
   const logs: string[] = [];
   const originalLog = console.log;
 
@@ -124,7 +124,7 @@ Deno.test("createLogger logs include function name", async () => {
   }
 });
 
-Deno.test("createLogger logs include additional context", async () => {
+Deno.test("createLogger logs include additional context", () => {
   const logs: string[] = [];
   const originalLog = console.log;
 
@@ -147,7 +147,7 @@ Deno.test("createLogger logs include additional context", async () => {
   }
 });
 
-Deno.test("createLogger debug uses console.debug", async () => {
+Deno.test("createLogger debug uses console.debug", () => {
   let debugCalled = false;
   const originalDebug = console.debug;
 
@@ -165,7 +165,7 @@ Deno.test("createLogger debug uses console.debug", async () => {
   }
 });
 
-Deno.test("createLogger warn uses console.warn", async () => {
+Deno.test("createLogger warn uses console.warn", () => {
   let warnCalled = false;
   const originalWarn = console.warn;
 
@@ -183,7 +183,7 @@ Deno.test("createLogger warn uses console.warn", async () => {
   }
 });
 
-Deno.test("createLogger error uses console.error", async () => {
+Deno.test("createLogger error uses console.error", () => {
   let errorCalled = false;
   const originalError = console.error;
 
@@ -201,7 +201,7 @@ Deno.test("createLogger error uses console.error", async () => {
   }
 });
 
-Deno.test("createLogger produces valid JSON output", async () => {
+Deno.test("createLogger produces valid JSON output", () => {
   const logs: string[] = [];
   const originalLog = console.log;
 

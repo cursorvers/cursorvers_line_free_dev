@@ -40,7 +40,8 @@ function sanitizeForPrompt(input: string): string {
     .replace(/override\s+(instructions?|rules?|constraints?)/gi, "[REMOVED]")
     .replace(/system\s*:\s*/gi, "system: ")  // "system:" パターンを無害化
     .replace(/```[\s\S]*?```/g, "[CODE BLOCK REMOVED]")  // コードブロックを除去
-    // 制御文字を除去
+    // 制御文字を除去（意図的な使用のためlint除外）
+    // deno-lint-ignore no-control-regex
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
     // 連続する空白を正規化
     .replace(/\s+/g, " ")

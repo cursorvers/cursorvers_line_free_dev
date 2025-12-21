@@ -2,7 +2,7 @@
 // 週次セキュリティ・ブリーフ生成 Edge Function
 // 直近7日分のhij_rawからLLMで要約を生成し、sec_briefテーブルに保存
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createClient } from "@supabase/supabase-js";
 import { createLogger } from "../_shared/logger.ts";
 
 const log = createLogger("generate-sec-brief");

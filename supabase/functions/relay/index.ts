@@ -43,7 +43,7 @@ async function hashText(value: string): Promise<string> {
   return toHex(digest);
 }
 
-async function hashUserId(userId: string): Promise<string> {
+function hashUserId(userId: string): Promise<string> {
   return hashText(`${ID_HASH_SALT}:${userId}`);
 }
 

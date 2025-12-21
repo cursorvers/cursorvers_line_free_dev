@@ -1,7 +1,7 @@
 /**
  * カード在庫チェック
  */
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "../../_shared/logger.ts";
 import { CardTheme, CardInventory, CardInventoryCheckResult } from "../types.ts";
 

@@ -26,7 +26,7 @@
  *   - test=true: Test mode (inject simulated errors)
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno";
+import { createClient } from "@supabase/supabase-js";
 import { createLogger } from "../_shared/logger.ts";
 import { triggerAutoRemediation } from "../_shared/manus-api.ts";
 import { verifyAuth } from "./auth.ts";

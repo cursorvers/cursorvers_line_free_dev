@@ -1,11 +1,7 @@
 // supabase/functions/line-webhook/test/note-recommendations.test.ts
 // Tests for note-recommendations.ts - Pure function tests (Phase 1)
 
-import {
-  assert,
-  assertEquals,
-  assertExists,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertExists } from "std-assert";
 import {
   COURSE_RECOMMENDATIONS,
   getAllArticles,

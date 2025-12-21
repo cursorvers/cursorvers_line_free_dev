@@ -152,20 +152,20 @@ export async function notifyDiscord(payload: AlertPayload): Promise<NotifyResult
 /**
  * 緊急アラートを送信（リトライ付き）
  */
-export async function notifyCritical(title: string, message: string, context?: Record<string, unknown>): Promise<NotifyResult> {
+export function notifyCritical(title: string, message: string, context?: Record<string, unknown>): Promise<NotifyResult> {
   return notifyDiscord({ title, message, context, severity: "critical" });
 }
 
 /**
  * 警告アラートを送信（リトライ付き）
  */
-export async function notifyWarning(title: string, message: string, context?: Record<string, unknown>): Promise<NotifyResult> {
+export function notifyWarning(title: string, message: string, context?: Record<string, unknown>): Promise<NotifyResult> {
   return notifyDiscord({ title, message, context, severity: "warning" });
 }
 
 /**
  * 情報アラートを送信（リトライ付き）
  */
-export async function notifyInfo(title: string, message: string, context?: Record<string, unknown>): Promise<NotifyResult> {
+export function notifyInfo(title: string, message: string, context?: Record<string, unknown>): Promise<NotifyResult> {
   return notifyDiscord({ title, message, context, severity: "info" });
 }

@@ -66,14 +66,6 @@
     "https://deno.land/std@0.210.0/assert/unimplemented.ts": "4e3e504792c87c485dbc5f4020489d8806ef697741403af2008dfa7b5a4711e8",
     "https://deno.land/std@0.210.0/assert/unreachable.ts": "1af8c99421cc5fb7332454b2b9eca074a4e394895a180bc837750dedcca75338",
     "https://deno.land/std@0.210.0/fmt/colors.ts": "2685c524bef9b16b3059a417daf6860c754eb755e19e812762ef5dff62f24481",
-    "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno": "8c1c3233f80bde3359192f205329957393c1847341c318ee8e907d15793fa615"
-  },
-  "workspace": {
-    "packageJson": {
-      "dependencies": [
-        "npm:@types/node@^20.11.0",
-        "npm:tsx@^4.7.0"
-      ]
-    }
+    "https://deno.land/std@0.210.0/testing/mock.ts": "350211037129efa675592a3d7cdccbca3825000168ebebb3862a70b5af3b2f20"
   }
 }
