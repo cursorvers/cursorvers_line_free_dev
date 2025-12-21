@@ -1,10 +1,7 @@
 /**
  * stripe-webhook tier-utils テスト
  */
-import {
-  assertEquals,
-  assertStrictEquals,
-} from "https://deno.land/std@0.210.0/assert/mod.ts";
+import { assertEquals, assertStrictEquals } from "std-assert";
 import {
   determineMembershipTier,
   determineStatus,
