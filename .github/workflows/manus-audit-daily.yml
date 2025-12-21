@@ -5,8 +5,8 @@ name: Manus Audit (Daily)
 
 on:
   schedule:
-    # 毎日 06:00 JST (21:00 UTC前日)
-    - cron: '0 21 * * *'
+    # 毎日 06:30 JST (21:30 UTC前日) - sync-line-cards完了後
+    - cron: '30 21 * * *'
   workflow_dispatch:
     # 手動実行も可能
     inputs:
@@ -124,22 +124,35 @@ jobs:
       # 3. ログファイルをコミット・プッシュ
       # ========================================
       - name: Commit and push logs
+        id: push-logs
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           git add docs/logs/
-          
+
           # ログファイルの変更がある場合のみコミット
           if ! git diff --staged --quiet; then
             git commit -m "docs: Add daily audit and system check log ($(date -u +%Y-%m-%d))"
-            
+
             # プッシュ前にリモートの変更を取得（競合解決）
-            git pull --rebase origin main || true
-            
+            if ! git pull --rebase origin main; then
+              echo "⚠️ git pull --rebase 失敗"
+              echo "LOG_PUSH_STATUS=rebase_failed" >> $GITHUB_ENV
+              exit 0
+            fi
+
             # 再度プッシュを試みる
-            git push || echo "⚠️ ログのプッシュに失敗（続行）"
+            if git push; then
+              echo "✅ ログをプッシュしました"
+              echo "LOG_PUSH_STATUS=success" >> $GITHUB_ENV
+            else
+              echo "⚠️ ログのプッシュに失敗"
+              echo "LOG_PUSH_STATUS=push_failed" >> $GITHUB_ENV
+            fi
+          else
+            echo "ℹ️ ログファイルに変更なし"
+            echo "LOG_PUSH_STATUS=no_changes" >> $GITHUB_ENV
           fi
-        continue-on-error: true
 
       # ========================================
       # 4. 成功時のDiscord通知

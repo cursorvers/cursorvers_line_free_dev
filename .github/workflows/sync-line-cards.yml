@@ -1,13 +1,13 @@
 # .github/workflows/sync-line-cards.yml
 # Obsidian VaultからLINEカードを同期するワークフロー
-# 毎日 06:00 JST (21:00 UTC) に実行（配信の1時間前）
+# 毎日 05:00 JST (20:00 UTC) に実行（配信の2時間前、監査の1時間前）
 
 name: Sync Line Cards from Obsidian
 
 on:
   schedule:
-    # 毎日 JST 06:00 (UTC 21:00 前日) に同期
-    - cron: '0 21 * * *'
+    # 毎日 JST 05:00 (UTC 20:00 前日) に同期
+    - cron: '0 20 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
