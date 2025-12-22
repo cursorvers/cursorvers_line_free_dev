@@ -1,68 +1,34 @@
 # .github/workflows/manus-audit-daily.yml
-# 日次監査: カード在庫・配信成功率 + システム全体の点検
+# 日次監査: カード在庫・配信成功率をチェック
 
 name: Manus Audit (Daily)
 
 on:
   schedule:
-    # 毎日 06:30 JST (21:30 UTC前日) - sync-line-cards完了後
-    - cron: '30 21 * * *'
+    # 毎日 06:00 JST (21:00 UTC 前日)
+    - cron: '0 21 * * *'
   workflow_dispatch:
     # 手動実行も可能
-    inputs:
-      test_mode:
-        description: 'テストモード（擬似エラーで自動修繕をテスト）'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
-
-permissions:
-  contents: write
 
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # ========================================
-      # 0. ログディレクトリ準備
-      # ========================================
-      - name: Setup log directory
-        run: |
-          mkdir -p workflow-logs
-          echo "WORKFLOW_LOG_DIR=workflow-logs" >> $GITHUB_ENV
-          echo "RUN_TIMESTAMP=$(TZ=Asia/Tokyo date '+%Y%m%d_%H%M%S')" >> $GITHUB_ENV
-
-      # ========================================
-      # 1. Supabase Edge Function監査
-      # ========================================
-      - name: Run Supabase audit
+      - name: Run daily audit
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           MANUS_AUDIT_API_KEY: ${{ secrets.MANUS_AUDIT_API_KEY }}
-          TEST_MODE: ${{ github.event.inputs.test_mode || 'false' }}
         run: |
-          exec > >(tee -a "$WORKFLOW_LOG_DIR/supabase-audit.log") 2>&1
-          echo "🔍 Supabase監査を実行中..."
-
-          # テストモードの場合はパラメータを追加
-          TEST_PARAM=""
-          if [ "$TEST_MODE" = "true" ]; then
-            echo "🧪 テストモード: 擬似エラーを注入"
-            TEST_PARAM="&test=true"
-          fi
-
+          echo "🔍 日次監査を実行中..."
+          
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief?mode=daily${TEST_PARAM}" \
+            "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief?mode=daily" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${MANUS_AUDIT_API_KEY}")
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "X-API-Key: ${MANUS_AUDIT_API_KEY}")
           
           HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
           BODY=$(echo "$RESPONSE" | sed '$d')
@@ -71,146 +37,32 @@ jobs:
           echo "HTTP Code: $HTTP_CODE"
           
           if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "❌ Supabase監査が失敗しました (HTTP $HTTP_CODE)"
-            echo "SUPABASE_AUDIT_FAILED=true" >> $GITHUB_ENV
-          else
-            # Check if there are warnings or errors
-            ALL_PASSED=$(echo "$BODY" | jq -r '.summary.allPassed // false')
-            WARNING_COUNT=$(echo "$BODY" | jq -r '.summary.warningCount // 0')
-            ERROR_COUNT=$(echo "$BODY" | jq -r '.summary.errorCount // 0')
-            
-            if [ "$ALL_PASSED" = "true" ]; then
-              echo "✅ Supabase監査完了: 全て正常"
-              echo "SUPABASE_AUDIT_STATUS=success" >> $GITHUB_ENV
-            else
-              echo "⚠️ Supabase監査完了: ${WARNING_COUNT}件の警告、${ERROR_COUNT}件のエラー"
-              echo "SUPABASE_AUDIT_STATUS=warning" >> $GITHUB_ENV
-              echo "SUPABASE_WARNING_COUNT=${WARNING_COUNT}" >> $GITHUB_ENV
-              echo "SUPABASE_ERROR_COUNT=${ERROR_COUNT}" >> $GITHUB_ENV
-              
-              if [ "$ERROR_COUNT" -gt 0 ]; then
-                echo "SUPABASE_AUDIT_FAILED=true" >> $GITHUB_ENV
-              fi
-            fi
-          fi
-
-      # ========================================
-      # 2. システム全体の点検（daily-check.sh）
-      # ========================================
-      - name: Run system check
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          MANUS_AUDIT_API_KEY: ${{ secrets.MANUS_AUDIT_API_KEY }}
-          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
-          N8N_INSTANCE_URL: ${{ secrets.N8N_INSTANCE_URL }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
-          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: |
-          exec > >(tee -a "$WORKFLOW_LOG_DIR/system-check.log") 2>&1
-          echo "🔍 システム全体の点検を実行中..."
-          chmod +x ./scripts/daily-check.sh
-          
-          if ./scripts/daily-check.sh; then
-            echo "✅ システム点検完了: 全て正常"
-            echo "SYSTEM_CHECK_STATUS=success" >> $GITHUB_ENV
-          else
-            echo "❌ システム点検で問題が検出されました"
-            echo "SYSTEM_CHECK_STATUS=failed" >> $GITHUB_ENV
-            echo "SYSTEM_CHECK_FAILED=true" >> $GITHUB_ENV
-          fi
-
-      # ========================================
-      # 3. ログファイルをコミット・プッシュ
-      # ========================================
-      - name: Commit and push logs
-        id: push-logs
-        run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "actions@github.com"
-          git add docs/logs/
-
-          # ログファイルの変更がある場合のみコミット
-          if ! git diff --staged --quiet; then
-            git commit -m "docs: Add daily audit and system check log ($(date -u +%Y-%m-%d))"
-
-            # プッシュ前にリモートの変更を取得（競合解決）
-            if ! git pull --rebase origin main; then
-              echo "⚠️ git pull --rebase 失敗"
-              echo "LOG_PUSH_STATUS=rebase_failed" >> $GITHUB_ENV
-              exit 0
-            fi
-
-            # 再度プッシュを試みる
-            if git push; then
-              echo "✅ ログをプッシュしました"
-              echo "LOG_PUSH_STATUS=success" >> $GITHUB_ENV
-            else
-              echo "⚠️ ログのプッシュに失敗"
-              echo "LOG_PUSH_STATUS=push_failed" >> $GITHUB_ENV
-            fi
-          else
-            echo "ℹ️ ログファイルに変更なし"
-            echo "LOG_PUSH_STATUS=no_changes" >> $GITHUB_ENV
-          fi
-
-      # ========================================
-      # 4. 成功時のDiscord通知
-      # ========================================
-      - name: Notify on success
-        if: success() && env.SUPABASE_AUDIT_FAILED != 'true' && env.SYSTEM_CHECK_FAILED != 'true'
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
-        run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            TIMESTAMP=$(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M:%S JST')
-            curl -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d "{\"embeds\": [{\"title\": \"✅ 日次監査・システム点検 成功\", \"description\": \"全てのシステムが正常に稼働しています。\", \"color\": 5763719, \"fields\": [{\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"Supabase監査\", \"value\": \"✅ 正常\", \"inline\": true}, {\"name\": \"システム点検\", \"value\": \"✅ 正常\", \"inline\": true}], \"footer\": {\"text\": \"Cursorvers System\"}, \"url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
-          fi
-
-      # ========================================
-      # 5. 失敗時のDiscord通知
-      # ========================================
-      - name: Notify on failure
-        if: failure() || env.SUPABASE_AUDIT_FAILED == 'true' || env.SYSTEM_CHECK_FAILED == 'true'
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
-        run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            TIMESTAMP=$(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M:%S JST')
-            
-            SUPABASE_STATUS="✅ 正常"
-            if [ "$SUPABASE_AUDIT_FAILED" = "true" ]; then
-              SUPABASE_STATUS="❌ エラー"
-            elif [ "$SUPABASE_AUDIT_STATUS" = "warning" ]; then
-              SUPABASE_STATUS="⚠️ 警告"
-            fi
-            
-            SYSTEM_STATUS="✅ 正常"
-            if [ "$SYSTEM_CHECK_FAILED" = "true" ]; then
-              SYSTEM_STATUS="❌ エラー"
-            fi
-            
-            curl -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d "{\"embeds\": [{\"title\": \"🚨 日次監査・システム点検 問題検出\", \"description\": \"システムに問題が発生しました。\", \"color\": 15158332, \"fields\": [{\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"Supabase監査\", \"value\": \"${SUPABASE_STATUS}\", \"inline\": true}, {\"name\": \"システム点検\", \"value\": \"${SYSTEM_STATUS}\", \"inline\": true}], \"footer\": {\"text\": \"Cursorvers System\"}, \"url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"
-          fi
-          
-          # Fail the workflow if there are critical errors
-          if [ "$SUPABASE_AUDIT_FAILED" = "true" ] || [ "$SYSTEM_CHECK_FAILED" = "true" ]; then
+            echo "❌ 監査が失敗しました (HTTP $HTTP_CODE)"
             exit 1
           fi
+          
+          # Check if there are warnings or errors
+          ALL_PASSED=$(echo "$BODY" | jq -r '.summary.allPassed // false')
+          WARNING_COUNT=$(echo "$BODY" | jq -r '.summary.warningCount // 0')
+          ERROR_COUNT=$(echo "$BODY" | jq -r '.summary.errorCount // 0')
+          
+          if [ "$ALL_PASSED" = "true" ]; then
+            echo "✅ 監査完了: 全て正常"
+          else
+            echo "⚠️ 監査完了: ${WARNING_COUNT}件の警告、${ERROR_COUNT}件のエラー"
+            # Don't fail the workflow for warnings, only for errors
+            if [ "$ERROR_COUNT" -gt 0 ]; then
+              exit 1
+            fi
+          fi
 
-      # ========================================
-      # 6. ログをArtifactとして保存（常に実行）
-      # ========================================
-      - name: Upload workflow logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: audit-logs-${{ github.run_number }}-${{ github.run_attempt }}
-          path: |
-            workflow-logs/
-            docs/logs/
-          retention-days: 90
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d '{"content": "🚨 **Manus日次監査が失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          fi
