@@ -69,7 +69,7 @@ jobs:
           echo "Running: deno run main.ts $OPTS"
           deno run --allow-env --allow-net --no-lock main.ts $OPTS
 
-      - name: Notify Discord
+      - name: Notify Discord on success
         if: success() && inputs.dry_run != 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
@@ -78,5 +78,17 @@ jobs:
             TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
             curl -s -X POST "$DISCORD_WEBHOOK_URL" \
               -H "Content-Type: application/json" \
-              -d "{\"embeds\": [{\"title\": \"AI カード自動補充完了\", \"color\": 5763719, \"fields\": [{\"name\": \"テーマ\", \"value\": \"${{ inputs.themes || 'tax,career,general' }}\", \"inline\": true}, {\"name\": \"生成数/テーマ\", \"value\": \"${{ inputs.count || '20' }}\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}], \"footer\": {\"text\": \"AI Card Generator\"}}]}"
+              -d "{\"embeds\": [{\"title\": \"✅ AI カード自動補充完了\", \"color\": 5763719, \"fields\": [{\"name\": \"テーマ\", \"value\": \"${{ inputs.themes || 'tax,career,general' }}\", \"inline\": true}, {\"name\": \"生成数/テーマ\", \"value\": \"${{ inputs.count || '20' }}\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}], \"footer\": {\"text\": \"AI Card Generator\"}}]}"
+          fi
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
+            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"embeds\": [{\"title\": \"❌ AI カード自動補充失敗\", \"color\": 15158332, \"description\": \"カード生成でエラーが発生しました。\", \"fields\": [{\"name\": \"テーマ\", \"value\": \"${{ inputs.themes || 'tax,career,general' }}\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"ログ\", \"value\": \"[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}], \"footer\": {\"text\": \"AI Card Generator\"}}]}"
           fi
