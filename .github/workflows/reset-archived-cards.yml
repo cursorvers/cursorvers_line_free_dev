@@ -1,0 +1,58 @@
+name: Reset Archived Cards
+
+on:
+  workflow_dispatch:
+    inputs:
+      themes:
+        description: 'Themes to reset (comma-separated)'
+        required: true
+        default: 'tax,career,general'
+
+jobs:
+  reset-cards:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reset archived cards via Supabase RPC
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          THEMES="${{ github.event.inputs.themes }}"
+          echo "Resetting archived cards for themes: $THEMES"
+
+          # Convert comma-separated to SQL IN clause
+          SQL_THEMES=$(echo "$THEMES" | sed "s/,/','/g")
+
+          # Use PostgREST PATCH to update cards
+          for THEME in $(echo "$THEMES" | tr ',' ' '); do
+            echo "Processing theme: $THEME"
+
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PATCH \
+              "${SUPABASE_URL}/rest/v1/line_cards?status=eq.archived&theme=eq.${THEME}" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" \
+              -H "Prefer: return=representation" \
+              -d '{"status": "ready"}')
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              COUNT=$(echo "$BODY" | jq '. | length')
+              echo "✅ $THEME: Reset $COUNT cards to ready"
+            else
+              echo "⚠️ $THEME: HTTP $HTTP_CODE - $BODY"
+            fi
+          done
+
+          echo "Done!"
+
+      - name: Verify inventory
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          MANUS_AUDIT_API_KEY: ${{ secrets.MANUS_AUDIT_API_KEY }}
+        run: |
+          echo "Verifying card inventory..."
+          curl -s -X POST "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief?mode=daily" \
+            -H "X-API-Key: ${MANUS_AUDIT_API_KEY}" | jq '.checks.cardInventory.details'
