@@ -1,0 +1,82 @@
+# .github/workflows/replenish-cards.yml
+# カード在庫不足時にAIで自動補充
+
+name: Replenish Cards (AI)
+
+on:
+  workflow_dispatch:
+    inputs:
+      themes:
+        description: '補充するテーマ（カンマ区切り）'
+        required: false
+        default: 'tax,career,general'
+        type: string
+      count:
+        description: 'テーマごとの生成数'
+        required: false
+        default: '20'
+        type: string
+      dry_run:
+        description: 'ドライラン'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+  # 他のワークフローから呼び出し可能
+  workflow_call:
+    inputs:
+      themes:
+        required: true
+        type: string
+      count:
+        required: false
+        type: string
+        default: '20'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Generate and insert cards
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd scripts/generate-cards
+
+          THEMES="${{ inputs.themes || 'tax,career,general' }}"
+          COUNT="${{ inputs.count || '20' }}"
+          DRY_RUN="${{ inputs.dry_run || 'false' }}"
+
+          OPTS="--themes=${THEMES} --count=${COUNT}"
+          if [ "$DRY_RUN" = "true" ]; then
+            OPTS="$OPTS --dry-run"
+          fi
+
+          echo "Running: deno run main.ts $OPTS"
+          deno run --allow-env --allow-net main.ts $OPTS
+
+      - name: Notify Discord
+        if: success() && inputs.dry_run != 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
+            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"embeds\": [{\"title\": \"AI カード自動補充完了\", \"color\": 5763719, \"fields\": [{\"name\": \"テーマ\", \"value\": \"${{ inputs.themes || 'tax,career,general' }}\", \"inline\": true}, {\"name\": \"生成数/テーマ\", \"value\": \"${{ inputs.count || '20' }}\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}], \"footer\": {\"text\": \"AI Card Generator\"}}]}"
+          fi

@@ -1,5 +1,5 @@
 # .github/workflows/manus-audit-daily.yml
-# 日次監査: カード在庫・配信成功率をチェック
+# 日次監査: カード在庫・配信成功率をチェック + AI自動補充
 
 name: Manus Audit (Daily)
 
@@ -8,14 +8,29 @@ on:
     # 毎日 06:00 JST (21:00 UTC 前日)
     - cron: '0 21 * * *'
   workflow_dispatch:
-    # 手動実行も可能
+    inputs:
+      test_mode:
+        description: 'テストモード（擬似エラーで自動修繕をテスト）'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: write
+  actions: write
 
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Run daily audit
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -23,41 +38,64 @@ jobs:
           MANUS_AUDIT_API_KEY: ${{ secrets.MANUS_AUDIT_API_KEY }}
         run: |
           echo "🔍 日次監査を実行中..."
-          
+
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief?mode=daily" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "X-API-Key: ${MANUS_AUDIT_API_KEY}")
-          
+
           HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
           BODY=$(echo "$RESPONSE" | sed '$d')
-          
+
           echo "Response: $BODY"
           echo "HTTP Code: $HTTP_CODE"
-          
+
           if [ "$HTTP_CODE" -ne 200 ]; then
             echo "❌ 監査が失敗しました (HTTP $HTTP_CODE)"
-            exit 1
-          fi
-          
-          # Check if there are warnings or errors
-          ALL_PASSED=$(echo "$BODY" | jq -r '.summary.allPassed // false')
-          WARNING_COUNT=$(echo "$BODY" | jq -r '.summary.warningCount // 0')
-          ERROR_COUNT=$(echo "$BODY" | jq -r '.summary.errorCount // 0')
-          
-          if [ "$ALL_PASSED" = "true" ]; then
-            echo "✅ 監査完了: 全て正常"
+            echo "AUDIT_FAILED=true" >> $GITHUB_ENV
           else
-            echo "⚠️ 監査完了: ${WARNING_COUNT}件の警告、${ERROR_COUNT}件のエラー"
-            # Don't fail the workflow for warnings, only for errors
-            if [ "$ERROR_COUNT" -gt 0 ]; then
-              exit 1
+            # Check if there are warnings or errors
+            ALL_PASSED=$(echo "$BODY" | jq -r '.summary.allPassed // false')
+            WARNING_COUNT=$(echo "$BODY" | jq -r '.summary.warningCount // 0')
+            ERROR_COUNT=$(echo "$BODY" | jq -r '.summary.errorCount // 0')
+
+            # Extract themes with low inventory for auto-replenish
+            LOW_THEMES=$(echo "$BODY" | jq -r '.checks.cardInventory.warnings[]? // empty' | \
+              sed -n 's/.*警告: \([a-z_]*\)テーマ.*/\1/p' | tr '\n' ',' | sed 's/,$//')
+
+            if [ -n "$LOW_THEMES" ]; then
+              echo "LOW_INVENTORY_THEMES=${LOW_THEMES}" >> $GITHUB_ENV
+              echo "🔔 カード在庫不足テーマ: ${LOW_THEMES}"
+            fi
+
+            if [ "$ALL_PASSED" = "true" ]; then
+              echo "✅ 監査完了: 全て正常"
+            else
+              echo "⚠️ 監査完了: ${WARNING_COUNT}件の警告、${ERROR_COUNT}件のエラー"
+              if [ "$ERROR_COUNT" -gt 0 ]; then
+                echo "AUDIT_FAILED=true" >> $GITHUB_ENV
+              fi
             fi
           fi
 
+      # カード在庫不足時の自動補充
+      - name: Auto-replenish cards if low
+        if: env.LOW_INVENTORY_THEMES != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "🤖 カード在庫不足を検出 - AI自動補充を開始..."
+          echo "対象テーマ: $LOW_INVENTORY_THEMES"
+
+          gh workflow run replenish-cards.yml \
+            -f themes="$LOW_INVENTORY_THEMES" \
+            -f count="20"
+
+          echo "✅ AI自動補充ワークフローをトリガーしました"
+
       - name: Notify on failure
-        if: failure()
+        if: failure() || env.AUDIT_FAILED == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
         run: |
@@ -65,4 +103,8 @@ jobs:
             curl -X POST "$DISCORD_WEBHOOK_URL" \
               -H "Content-Type: application/json" \
               -d '{"content": "🚨 **Manus日次監査が失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          fi
+
+          if [ "$AUDIT_FAILED" = "true" ]; then
+            exit 1
           fi

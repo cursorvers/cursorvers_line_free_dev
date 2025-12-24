@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "generate": "deno run --allow-env --allow-net main.ts",
+    "generate:dry": "deno run --allow-env --allow-net main.ts --dry-run"
+  },
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.0"
+  }
+}
