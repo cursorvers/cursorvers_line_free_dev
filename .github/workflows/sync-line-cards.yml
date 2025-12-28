@@ -35,7 +35,7 @@ jobs:
 
       - name: Validate secrets
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           OBSIDIAN_VAULT_TOKEN: ${{ secrets.OBSIDIAN_VAULT_TOKEN }}
         run: |
@@ -65,7 +65,7 @@ jobs:
       - name: Sync cards from Obsidian Vault
         id: sync
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VAULT_PATH: ${{ github.workspace }}/vault
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}

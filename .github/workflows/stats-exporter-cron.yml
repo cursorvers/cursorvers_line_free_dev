@@ -24,7 +24,7 @@ jobs:
           
           # stats-exporter Supabase Functionを呼び出し
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "${{ secrets.SUPABASE_URL }}/functions/v1/stats-exporter?mode=full" \
+            "${{ vars.SUPABASE_URL }}/functions/v1/stats-exporter?mode=full" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json")
           

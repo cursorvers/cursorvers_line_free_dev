@@ -78,7 +78,7 @@ jobs:
       - name: Check LINE Daily Brief Function
         id: line_brief
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           echo "Checking LINE Daily Brief function health..."
@@ -109,7 +109,7 @@ jobs:
       - name: Check Card Inventory
         id: inventory
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "Checking card inventory levels..."

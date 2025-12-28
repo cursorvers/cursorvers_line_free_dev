@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: Trigger generate-sec-brief Edge Function
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           GENERATE_SEC_BRIEF_API_KEY: ${{ secrets.GENERATE_SEC_BRIEF_API_KEY }}
         run: |
           echo "Triggering generate-sec-brief Edge Function..."

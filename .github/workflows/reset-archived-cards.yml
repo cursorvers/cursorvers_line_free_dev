@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Reset archived cards via Supabase RPC
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           THEMES="${{ github.event.inputs.themes }}"
@@ -50,7 +50,7 @@ jobs:
 
       - name: Verify inventory
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           MANUS_AUDIT_API_KEY: ${{ secrets.MANUS_AUDIT_API_KEY }}
         run: |
           echo "Verifying card inventory..."

@@ -12,8 +12,12 @@ jobs:
     steps:
       - name: Run report
         env:
+<<<<<<< HEAD
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+=======
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+>>>>>>> 7129d69 (refactor: SUPABASE_URL を secrets から vars に統一)
           MANUS_AUDIT_API_KEY: ${{ secrets.MANUS_AUDIT_API_KEY }}
         run: |
           echo "🔐 Checking required secrets..."
