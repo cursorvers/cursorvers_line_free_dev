@@ -11,16 +11,26 @@
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { notifyDiscord } from "../_shared/alert.ts";
-import { removeDiscordRole } from "../_shared/discord.ts";
+import { createDiscordInvite, removeDiscordRole } from "../_shared/discord.ts";
 import { sendPaidMemberWelcomeEmail } from "../_shared/email.ts";
 import { createSheetsClientFromEnv } from "../_shared/google-sheets.ts";
 import { pushLineMessage } from "../_shared/line-messaging.ts";
+import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { createLogger } from "../_shared/logger.ts";
+import {
+  maskEmail,
+  maskLineUserId,
+  maskVerificationCode,
+} from "../_shared/masking-utils.ts";
 import {
   generateVerificationCode,
   getCodeExpiryDate,
 } from "../_shared/verification-code.ts";
 import { determineMembershipTier, determineStatus } from "./tier-utils.ts";
+import {
+  savePaymentFromCheckout,
+  savePaymentFromCharge,
+} from "./payment-history.ts";
 
 const log = createLogger("stripe-webhook");
 
@@ -79,8 +89,8 @@ async function mergeOrphanLineRecord(
         await supabase.from("members").delete().eq("id", orphan.id);
         log.info("Deleted orphan record (same line_user_id)", {
           orphanId: orphan.id,
-          orphanEmail: orphan.email?.slice(0, 5) + "***",
-          lineUserId: orphan.line_user_id?.slice(-4),
+          orphanEmail: maskEmail(orphan.email),
+          lineUserId: maskLineUserId(orphan.line_user_id),
         });
       }
       return { merged: true, orphanLineUserId: paidMemberData.line_user_id };
@@ -114,9 +124,9 @@ async function mergeOrphanLineRecord(
       await supabase.from("members").delete().eq("id", orphan.id);
 
       log.info("Merged orphan LINE record into paid member", {
-        paidEmail: paidEmail.slice(0, 5) + "***",
+        paidEmail: maskEmail(paidEmail),
         orphanId: orphan.id,
-        lineUserId: orphan.line_user_id.slice(-4),
+        lineUserId: maskLineUserId(orphan.line_user_id),
       });
 
       return { merged: true, orphanLineUserId: orphan.line_user_id };
@@ -141,7 +151,7 @@ async function appendMemberRow(row: unknown[]) {
     log.info("Appended member to sheet", { tab: MEMBERS_SHEET_TAB });
   } catch (err) {
     log.warn("Failed to append to sheet", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
   }
 }
@@ -152,55 +162,28 @@ async function sendDiscordInviteViaLine(
   name: string | null,
   tier: string,
   lineUserId: string | null,
-) {
-  const discordBotToken = Deno.env.get("DISCORD_BOT_TOKEN");
-  const guildId = Deno.env.get("DISCORD_GUILD_ID");
-
-  if (!discordBotToken || !guildId) {
-    log.warn(
-      "DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set, skipping Discord invite",
-    );
-    return;
-  }
-
+): Promise<boolean> {
   try {
     // Discord招待リンクを生成（有効期限2週間、使用回数1回）
-    const inviteResponse = await fetch(
-      `https://discord.com/api/v10/guilds/${guildId}/invites`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bot ${discordBotToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          max_age: 1209600, // 2週間
-          max_uses: 1,
-          unique: true,
-        }),
-      },
-    );
+    const inviteResult = await createDiscordInvite();
 
-    if (!inviteResponse.ok) {
-      const errorText = await inviteResponse.text();
+    if (!inviteResult.success || !inviteResult.inviteUrl) {
       log.error("Failed to create Discord invite", {
-        status: inviteResponse.status,
-        errorText,
+        error: inviteResult.error,
       });
       await notifyDiscord({
         title: "MANUS ALERT: Discord invite creation failed",
-        message: `Status: ${inviteResponse.status}, Error: ${errorText}`,
+        message: inviteResult.error || "Unknown error",
         context: { email, tier },
       });
-      return;
+      return false;
     }
 
-    const invite = await inviteResponse.json();
-    const inviteUrl = `https://discord.gg/${invite.code}`;
-
+    const inviteUrl = inviteResult.inviteUrl;
     log.info("Discord invite created", { email, inviteUrl });
 
     // LINE経由で招待リンクを送信
+    let lineSendSuccess = false;
     if (lineUserId) {
       const message = [
         "🎉 ご購入ありがとうございます！",
@@ -221,8 +204,14 @@ async function sendDiscordInviteViaLine(
       const sent = await pushLineMessage(lineUserId, message);
       if (sent) {
         log.info("Discord invite sent via LINE", { email });
+        lineSendSuccess = true;
       } else {
         log.warn("Failed to send Discord invite via LINE", { email });
+        await notifyDiscord({
+          title: "MANUS ALERT: LINE message send failed",
+          message: `Discord invite created but LINE send failed`,
+          context: { email, tier, inviteUrl },
+        });
       }
     } else {
       log.info(
@@ -237,17 +226,20 @@ async function sendDiscordInviteViaLine(
       message: `**Email**: ${email}\n**Name**: ${
         name || "N/A"
       }\n**Tier**: ${tier}\n**LINE**: ${
-        lineUserId ? "送信済" : "未登録"
+        lineSendSuccess ? "送信済" : lineUserId ? "送信失敗" : "未登録"
       }\n**Invite**: ${inviteUrl}`,
     });
+
+    return lineSendSuccess;
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     log.error("Failed to send Discord invite", { email, errorMessage });
     await notifyDiscord({
       title: "MANUS ALERT: Discord invite error",
       message: errorMessage,
       context: { email, tier },
     });
+    return false;
   }
 }
 
@@ -267,7 +259,7 @@ Deno.serve(async (req) => {
       cryptoProvider,
     );
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     log.error("Webhook signature verification failed", { errorMessage });
     await notifyDiscord({
       title: "MANUS ALERT: Stripe webhook signature failed",
@@ -358,7 +350,7 @@ Deno.serve(async (req) => {
           existingMember?.discord_invite_sent === true
         ) {
           log.info("Idempotency check: Already processed this session", {
-            email: customerEmail.slice(0, 5) + "***",
+            email: maskEmail(customerEmail),
             sessionId: session.id,
           });
           return new Response(
@@ -398,7 +390,7 @@ Deno.serve(async (req) => {
           } catch (err) {
             log.error("Failed to retrieve subscription", {
               subscriptionId,
-              errorMessage: err instanceof Error ? err.message : String(err),
+              errorMessage: extractErrorMessage(err),
             });
           }
         }
@@ -412,56 +404,89 @@ Deno.serve(async (req) => {
           paymentLinkId,
         );
 
-        // 認証コード生成（既存の有効なコードがある場合は再利用）
+        // 認証コード生成ロジック
+        // LINE紐付け済み or Discord招待済みの場合はコード不要
         let verificationCode: string | null = null;
         let verificationExpiresAt: string | null = null;
+        const alreadyLinked = existingMember?.line_user_id != null;
+        const alreadyInvited = existingMember?.discord_invite_sent === true;
 
-        if (
-          existingMember?.verification_code &&
-          existingMember?.verification_expires_at
-        ) {
-          // 既存コードの有効期限を確認
-          const expiresAt = new Date(existingMember.verification_expires_at);
-          if (expiresAt > new Date()) {
-            // 有効なコードが存在 → 再利用
-            verificationCode = existingMember.verification_code;
-            verificationExpiresAt = existingMember.verification_expires_at;
-            log.info("Reusing existing verification code", {
-              email: customerEmail.slice(0, 5) + "***",
-              expiresAt: verificationExpiresAt,
+        if (!alreadyLinked && !alreadyInvited) {
+          // LINE未紐付け かつ Discord未招待 → コードが必要
+          if (
+            existingMember?.verification_code &&
+            existingMember?.verification_expires_at
+          ) {
+            // 既存コードの有効期限を確認
+            const expiresAt = new Date(existingMember.verification_expires_at);
+            if (expiresAt > new Date()) {
+              // 有効なコードが存在 → 再利用
+              verificationCode = existingMember.verification_code;
+              verificationExpiresAt = existingMember.verification_expires_at;
+              log.info("Reusing existing verification code", {
+                email: maskEmail(customerEmail),
+                expiresAt: verificationExpiresAt,
+              });
+            }
+          }
+
+          // 既存の有効なコードがない場合のみ新規生成
+          if (!verificationCode) {
+            verificationCode = generateVerificationCode();
+            verificationExpiresAt = getCodeExpiryDate().toISOString();
+            log.info("Generated new verification code", {
+              email: maskEmail(customerEmail),
             });
           }
-        }
-
-        // 既存の有効なコードがない場合のみ新規生成
-        if (!verificationCode) {
-          verificationCode = generateVerificationCode();
-          verificationExpiresAt = getCodeExpiryDate().toISOString();
-          log.info("Generated new verification code", {
-            email: customerEmail.slice(0, 5) + "***",
+        } else {
+          log.info("Skipping verification code (already linked or invited)", {
+            email: maskEmail(customerEmail),
+            alreadyLinked,
+            alreadyInvited,
           });
         }
 
-        const { error } = await supabase
-          .from("members")
-          .upsert(
-            {
-              email: customerEmail,
-              name: customerName,
-              stripe_customer_id: session.customer as string | null,
-              stripe_subscription_id: stripeSubscriptionId,
-              status: "active",
-              stripe_subscription_status: subscriptionStatus,
-              tier: membershipTier,
-              period_end: nextBillingAt,
-              opt_in_email: optInEmail,
+        // 既存メンバーの場合は discord_invite_sent をリセットしない
+        const basePayload = {
+          email: customerEmail,
+          name: customerName,
+          stripe_customer_id: session.customer as string | null,
+          stripe_subscription_id: stripeSubscriptionId,
+          status: "active",
+          stripe_subscription_status: subscriptionStatus,
+          tier: membershipTier,
+          period_end: nextBillingAt,
+          opt_in_email: optInEmail,
+          updated_at: new Date().toISOString(),
+        };
+
+        let error;
+        if (existingMember) {
+          // 既存メンバー → 必要なフィールドのみ更新
+          const updatePayload: Record<string, unknown> = { ...basePayload };
+          if (verificationCode) {
+            updatePayload.verification_code = verificationCode;
+            updatePayload.verification_expires_at = verificationExpiresAt;
+          }
+          // discord_invite_sent は更新しない（既存の値を維持）
+
+          const { error: updateError } = await supabase
+            .from("members")
+            .update(updatePayload)
+            .eq("email", customerEmail);
+          error = updateError;
+        } else {
+          // 新規メンバー → 全フィールドを設定
+          const { error: insertError } = await supabase
+            .from("members")
+            .insert({
+              ...basePayload,
               verification_code: verificationCode,
               verification_expires_at: verificationExpiresAt,
               discord_invite_sent: false,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "email" },
-          );
+            });
+          error = insertError;
+        }
 
         if (error) {
           log.error("DB Insert Error", { errorMessage: error.message });
@@ -479,6 +504,9 @@ Deno.serve(async (req) => {
             email: customerEmail,
             tier: membershipTier,
           });
+
+          // 支払い履歴を保存
+          await savePaymentFromCheckout(supabase, session, membershipTier);
 
           // upsert後のレコードを取得
           const { data: memberData } = await supabase
@@ -499,8 +527,8 @@ Deno.serve(async (req) => {
             if (mergeResult.merged && mergeResult.orphanLineUserId) {
               lineUserId = mergeResult.orphanLineUserId;
               log.info("Orphan LINE record merged", {
-                email: customerEmail.slice(0, 5) + "***",
-                lineUserId: lineUserId?.slice(-4),
+                email: maskEmail(customerEmail),
+                lineUserId: maskLineUserId(lineUserId),
               });
             }
           }
@@ -533,30 +561,38 @@ Deno.serve(async (req) => {
             log.info(
               "LINE already linked, sending Discord invite immediately",
               {
-                email: customerEmail.slice(0, 5) + "***",
-                lineUserId: lineUserId.slice(-4),
+                email: maskEmail(customerEmail),
+                lineUserId: maskLineUserId(lineUserId),
               },
             );
-            await sendDiscordInviteViaLine(
+            const discordInviteSent = await sendDiscordInviteViaLine(
               customerEmail,
               customerName,
               membershipTier,
               lineUserId,
             );
 
-            // 認証コードをクリア（不要になったため）
-            await supabase
-              .from("members")
-              .update({
-                verification_code: null,
-                verification_expires_at: null,
-                discord_invite_sent: true,
-              })
-              .eq("email", customerEmail);
+            // LINE送信成功時のみフラグを更新
+            if (discordInviteSent) {
+              // 認証コードをクリア（不要になったため）
+              await supabase
+                .from("members")
+                .update({
+                  verification_code: null,
+                  verification_expires_at: null,
+                  discord_invite_sent: true,
+                })
+                .eq("email", customerEmail);
+            } else {
+              log.warn(
+                "Discord invite not sent, keeping verification code for retry",
+                { email: maskEmail(customerEmail) },
+              );
+            }
           } else if (lineUserId && alreadySentDiscordInvite) {
             // LINE紐付け済み かつ Discord招待送信済み → スキップ
             log.info("Discord invite already sent, skipping", {
-              email: customerEmail.slice(0, 5) + "***",
+              email: maskEmail(customerEmail),
             });
           } else {
             // LINE未登録 → 認証コード付きウェルカムメールを送信
@@ -565,8 +601,8 @@ Deno.serve(async (req) => {
               : "Library Member";
 
             log.info("LINE not linked, sending welcome email with code", {
-              email: customerEmail.slice(0, 5) + "***",
-              code: verificationCode.slice(0, 2) + "****",
+              email: maskEmail(customerEmail),
+              code: maskVerificationCode(verificationCode),
             });
 
             const emailResult = await sendPaidMemberWelcomeEmail(
@@ -577,7 +613,7 @@ Deno.serve(async (req) => {
 
             if (!emailResult.success) {
               log.error("Failed to send welcome email", {
-                email: customerEmail.slice(0, 5) + "***",
+                email: maskEmail(customerEmail),
                 error: emailResult.error,
               });
               await notifyDiscord({
@@ -615,7 +651,7 @@ Deno.serve(async (req) => {
         } catch (err) {
           log.error("Failed to retrieve customer", {
             customerId: subscription.customer,
-            errorMessage: err instanceof Error ? err.message : String(err),
+            errorMessage: extractErrorMessage(err),
           });
         }
       }
@@ -659,7 +695,7 @@ Deno.serve(async (req) => {
         } catch (err) {
           log.error("Failed to retrieve customer", {
             customerId: subscription.customer,
-            errorMessage: err instanceof Error ? err.message : String(err),
+            errorMessage: extractErrorMessage(err),
           });
         }
       }
@@ -687,7 +723,7 @@ Deno.serve(async (req) => {
         } else {
           log.info("Subscription canceled", {
             subscriptionId: subscription.id,
-            email: customerEmail.slice(0, 5) + "***",
+            email: maskEmail(customerEmail),
           });
 
           // Discord Role削除
@@ -697,7 +733,7 @@ Deno.serve(async (req) => {
             );
             if (roleResult.success) {
               log.info("Discord role removed on cancellation", {
-                email: customerEmail.slice(0, 5) + "***",
+                email: maskEmail(customerEmail),
               });
             } else {
               log.warn("Failed to remove Discord role", {
@@ -731,7 +767,7 @@ Deno.serve(async (req) => {
             );
             if (sent) {
               log.info("Cancellation notification sent via LINE", {
-                email: customerEmail.slice(0, 5) + "***",
+                email: maskEmail(customerEmail),
               });
             } else {
               log.warn("Failed to send cancellation notification via LINE");
@@ -751,6 +787,29 @@ Deno.serve(async (req) => {
             severity: "warning",
           });
         }
+      }
+      break;
+    }
+
+    // 課金イベント: 支払い履歴を記録
+    case "charge.succeeded":
+    case "charge.failed":
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge;
+      log.info("Charge event received", {
+        chargeId: charge.id,
+        type: event.type,
+        amount: charge.amount,
+        status: charge.status,
+      });
+
+      // 支払い履歴を保存
+      const result = await savePaymentFromCharge(supabase, charge);
+      if (!result.success) {
+        log.warn("Failed to save charge to payment history", {
+          chargeId: charge.id,
+          error: result.error,
+        });
       }
       break;
     }

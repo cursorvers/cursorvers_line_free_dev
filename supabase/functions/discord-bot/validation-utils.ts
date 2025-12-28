@@ -2,20 +2,9 @@
  * Discord Bot バリデーションユーティリティ
  */
 
-/**
- * メールアドレスの正規表現パターン
- */
-export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
-
-/**
- * メールアドレスを検証
- */
-export function isValidEmail(email: string): boolean {
-  if (!email || typeof email !== "string") {
-    return false;
-  }
-  return EMAIL_REGEX.test(email.trim());
-}
+// Email validation is now centralized in _shared/validation-utils.ts
+// Re-export for backwards compatibility
+export { EMAIL_REGEX, isValidEmail } from "../_shared/validation-utils.ts";
 
 /**
  * メールアドレスを正規化（トリム＋小文字化）

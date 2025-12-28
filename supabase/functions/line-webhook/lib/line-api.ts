@@ -1,8 +1,9 @@
 /**
  * LINE Messaging API ヘルパー
  */
-import { withSafetyFooter } from "../../_shared/safety.ts";
+import { extractErrorMessage } from "../../_shared/error-utils.ts";
 import { anonymizeUserId, createLogger } from "../../_shared/logger.ts";
+import { withSafetyFooter } from "../../_shared/safety.ts";
 
 const log = createLogger("line-api");
 
@@ -61,10 +62,10 @@ export async function replyText(
   replyToken: string,
   text: string,
   quickReply?: QuickReply,
-): Promise<void> {
+): Promise<boolean> {
   if (!replyToken) {
     log.warn("replyText: No replyToken provided");
-    return;
+    return false;
   }
   const message: Record<string, unknown> = {
     type: "text",
@@ -87,7 +88,9 @@ export async function replyText(
   if (!res.ok) {
     const errorBody = await res.text();
     log.error("replyText failed", { status: res.status, errorBody });
+    return false;
   }
+  return true;
 }
 
 /**
@@ -96,7 +99,7 @@ export async function replyText(
 export async function pushText(
   lineUserId: string,
   text: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const res = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
@@ -117,12 +120,15 @@ export async function pushText(
         status: res.status,
         errorBody,
       });
+      return false;
     }
+    return true;
   } catch (err) {
     log.error("pushText exception", {
       userId: anonymizeUserId(lineUserId),
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
+    return false;
   }
 }
 

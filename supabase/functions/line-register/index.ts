@@ -8,8 +8,14 @@
  * セキュリティ: line_user_idがある場合はLINEのプロフィール取得で検証
  */
 import { createClient } from "@supabase/supabase-js";
+import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { createSheetsClientFromEnv } from "../_shared/google-sheets.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { maskEmail, maskLineUserId } from "../_shared/masking-utils.ts";
+import {
+  createCorsHeaders,
+  createCorsPreflightResponse,
+} from "../_shared/http-utils.ts";
 
 const log = createLogger("line-register");
 
@@ -38,17 +44,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
-const headers = {
-  "Content-Type": "application/json",
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type, x-api-key",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+// リクエストごとのCORSヘッダーを保持
+let currentCorsHeaders: Record<string, string> = {};
 
 function badRequest(message: string, status = 400) {
   return new Response(JSON.stringify({ error: message }), {
     status,
-    headers,
+    headers: { ...currentCorsHeaders, "Content-Type": "application/json" },
   });
 }
 
@@ -72,12 +74,16 @@ async function appendMemberRow(row: unknown[]) {
     log.info("Appended member to sheet", { tab: MEMBERS_SHEET_TAB });
   } catch (err) {
     log.warn("Failed to append to sheet", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
   }
 }
 
 Deno.serve(async (req) => {
+  // リクエストごとにCORSヘッダーを設定
+  currentCorsHeaders = createCorsHeaders(req);
+  const headers = { ...currentCorsHeaders, "Content-Type": "application/json" };
+
   try {
     // 環境変数チェック
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -91,7 +97,7 @@ Deno.serve(async (req) => {
     log.info("Request received", { method: req.method });
 
     if (req.method === "OPTIONS") {
-      return new Response("ok", { headers });
+      return createCorsPreflightResponse(req);
     }
 
     if (req.method !== "POST") {
@@ -110,11 +116,11 @@ Deno.serve(async (req) => {
       log.info("Request body parsed", {
         hasEmail: !!body.email,
         hasLineUserId: !!body.line_user_id,
-        emailPrefix: body.email ? body.email.slice(0, 5) + "***" : null,
+        emailPrefix: maskEmail(body.email),
       });
     } catch (err) {
       log.error("Failed to parse JSON", {
-        errorMessage: err instanceof Error ? err.message : String(err),
+        errorMessage: extractErrorMessage(err),
       });
       return badRequest("Invalid JSON");
     }
@@ -145,7 +151,7 @@ Deno.serve(async (req) => {
         );
         if (!res.ok) {
           log.warn("LINE profile fetch failed (user may not be a friend)", {
-            lineUserId: lineUserId?.slice(-4) ?? "null",
+            lineUserId: maskLineUserId(lineUserId) ?? "null",
             status: res.status,
           });
           // 401または404エラーの場合は友だちでない可能性があるため、検証をスキップ
@@ -154,13 +160,13 @@ Deno.serve(async (req) => {
           }
         } else {
           log.info("LINE profile verified", {
-            lineUserId: lineUserId?.slice(-4) ?? "null",
+            lineUserId: maskLineUserId(lineUserId) ?? "null",
           });
         }
       } catch (err) {
         log.error("LINE profile verification error", {
-          lineUserId: lineUserId?.slice(-4) ?? "null",
-          errorMessage: err instanceof Error ? err.message : String(err),
+          lineUserId: maskLineUserId(lineUserId) ?? "null",
+          errorMessage: extractErrorMessage(err),
         });
         // エラーが発生しても処理を継続
       }
@@ -240,7 +246,7 @@ Deno.serve(async (req) => {
                 await supabase.from("members").delete().eq("id", orphan.id);
                 log.info("Deleted orphan record after LINE linking", {
                   orphanId: orphan.id,
-                  lineUserId: lineUserId?.slice(-4),
+                  lineUserId: maskLineUserId(lineUserId),
                 });
               }
             }
@@ -284,8 +290,8 @@ Deno.serve(async (req) => {
 
     if (error) {
       log.error("Database upsert error", {
-        email: email ? email.slice(0, 5) + "***" : null,
-        lineUserId: lineUserId ? lineUserId.slice(-4) : null,
+        email: maskEmail(email),
+        lineUserId: maskLineUserId(lineUserId),
         errorMessage: error.message,
         isUpdate: !!existingRecord,
       });
@@ -308,8 +314,8 @@ Deno.serve(async (req) => {
           hasLineUserId: !!lineUserId,
           optInEmail: optInEmail,
           isUpdate: !!existingRecord,
-          emailPrefix: email ? email.slice(0, 5) + "***" : null,
-          lineUserIdSuffix: lineUserId ? lineUserId.slice(-4) : null,
+          emailPrefix: maskEmail(email),
+          lineUserIdSuffix: maskLineUserId(lineUserId),
         },
       };
 
@@ -344,8 +350,8 @@ Deno.serve(async (req) => {
     ]);
 
     log.info("Registration completed", {
-      email: email ? email.slice(0, 5) + "***" : null,
-      lineUserId: lineUserId ? lineUserId.slice(-4) : null,
+      email: maskEmail(email),
+      lineUserId: maskLineUserId(lineUserId),
       optInEmail: optInEmail,
       isUpdate: !!existingRecord,
     });
@@ -361,13 +367,13 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     log.error("Unhandled error in serve", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
     return new Response(
       JSON.stringify({
         error: "Internal server error",
-        message: err instanceof Error ? err.message : String(err),
+        message: extractErrorMessage(err),
       }),
       { status: 500, headers },
     );

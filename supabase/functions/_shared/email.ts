@@ -8,6 +8,7 @@
  */
 import { createLogger } from "./logger.ts";
 import { withRetry } from "./retry.ts";
+import { extractErrorMessage } from "./error-utils.ts";
 
 const log = createLogger("email");
 
@@ -82,7 +83,7 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
           messageId = result.id;
 
           log.info("Email sent", {
-            to: maskEmail(to),
+            to: maskEmailWithDomain(to),
             subject,
             messageId,
           });
@@ -97,8 +98,8 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
         onRetry: (attempt, error) => {
           log.warn("Email send failed, retrying", {
             attempt,
-            to: maskEmail(to),
-            error: error instanceof Error ? error.message : String(error),
+            to: maskEmailWithDomain(to),
+            error: extractErrorMessage(error),
           });
         },
       },
@@ -106,9 +107,9 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
 
     return { success: true, messageId };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     log.error("Email send failed", {
-      to: maskEmail(to),
+      to: maskEmailWithDomain(to),
       error: errorMessage,
     });
     return { success: false, error: errorMessage };
@@ -133,10 +134,13 @@ function stripHtml(html: string): string {
 }
 
 /**
- * メールアドレスをマスク（ログ用）
+ * メールアドレスをマスク（ログ用 - ドメイン表示版）
+ * 例: "user@example.com" → "us***@example.com"
  */
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
+function maskEmailWithDomain(email: string): string {
+  const parts = email.split("@");
+  const local = parts[0] ?? "";
+  const domain = parts[1];
   if (!domain) return "***";
   const maskedLocal = local.slice(0, 2) + "***";
   return `${maskedLocal}@${domain}`;
@@ -146,8 +150,16 @@ function maskEmail(email: string): string {
 // 有料会員向けテンプレートメール
 // ============================================
 
-const LINE_FRIEND_URL = Deno.env.get("LINE_FRIEND_URL") ??
-  "https://lin.ee/xxxxx";
+const LINE_FRIEND_URL = Deno.env.get("LINE_FRIEND_URL") ?? "";
+
+// LINE_FRIEND_URL が未設定の場合のチェック関数
+function getLineFriendUrl(): string {
+  if (!LINE_FRIEND_URL) {
+    log.error("LINE_FRIEND_URL is not configured");
+    throw new Error("LINE_FRIEND_URL environment variable is required");
+  }
+  return LINE_FRIEND_URL;
+}
 
 /**
  * 有料会員登録完了メール（LINE登録案内）
@@ -209,7 +221,7 @@ export async function sendPaidMemberWelcomeEmail(
     </div>
 
     <p style="text-align: center;">
-      <a href="${LINE_FRIEND_URL}" class="button">LINE 友だち追加</a>
+      <a href="${getLineFriendUrl()}" class="button">LINE 友だち追加</a>
     </p>
 
     <p style="color: #666; font-size: 14px;">
@@ -269,7 +281,7 @@ export async function sendReminderEmail(
     </div>
 
     <p style="text-align: center;">
-      <a href="${LINE_FRIEND_URL}" class="button">LINE 友だち追加</a>
+      <a href="${getLineFriendUrl()}" class="button">LINE 友だち追加</a>
     </p>
 
     <p style="font-size: 14px; color: #666;">
@@ -322,7 +334,7 @@ export async function sendDirectDiscordInviteEmail(
     <div class="note">
       <strong>LINE 登録もお待ちしています！</strong><br>
       日次の AI ニュース配信や通知は LINE 経由でお届けします。<br>
-      <a href="${LINE_FRIEND_URL}">LINE 友だち追加はこちら</a>
+      <a href="${getLineFriendUrl()}">LINE 友だち追加はこちら</a>
     </div>
   </div>
 </body>

@@ -1,8 +1,9 @@
 /**
  * ユーザー状態管理モジュール
  */
-import { supabase } from "../../_shared/supabase.ts";
+import { extractErrorMessage } from "../../_shared/error-utils.ts";
 import { anonymizeUserId, createLogger } from "../../_shared/logger.ts";
+import { supabase } from "../../_shared/supabase.ts";
 import type { DiagnosisState } from "./diagnosis-flow.ts";
 
 const log = createLogger("user-state");
@@ -134,7 +135,7 @@ export async function setPendingEmail(
   } catch (err) {
     log.error("setPendingEmail failed", {
       userId: anonymizeUserId(lineUserId),
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     throw err;
   }

@@ -77,31 +77,21 @@ const getEnv = (name: (typeof REQUIRED_ENV_VARS)[number]): string => {
   return value;
 };
 
+import { createLogger } from "../_shared/logger.ts";
+
 const MANUS_FIXER_API_KEY = getEnv("MANUS_FIXER_API_KEY");
 const DISCORD_WEBHOOK_URL = Deno.env.get("DISCORD_MANUS_WEBHOOK_URL");
 
-function log(
-  level: "info" | "warn" | "error",
-  message: string,
-  data?: unknown,
-): void {
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    level,
-    message,
-    ...(data && { data }),
-  };
-  console.log(JSON.stringify(logEntry));
-}
+const log = createLogger("manus-code-fixer");
 
 function verifyAuth(req: Request): boolean {
   const apiKeyHeader = req.headers.get("X-API-Key");
   if (apiKeyHeader === MANUS_FIXER_API_KEY) {
-    log("info", "Authentication successful");
+    log.info("Authentication successful");
     return true;
   }
 
-  log("warn", "Authentication failed");
+  log.warn("Authentication failed");
   return false;
 }
 
@@ -109,7 +99,7 @@ function runDenoFmt(
   path: string,
   files: string[],
 ): { success: boolean; output: string } {
-  log("info", "Running deno fmt", { path, fileCount: files.length });
+  log.info("Running deno fmt", { path, fileCount: files.length });
 
   try {
     // In a real implementation, this would:
@@ -121,11 +111,11 @@ function runDenoFmt(
     const output =
       `Checked ${files.length} files\nFormatted ${files.length} files`;
 
-    log("info", "deno fmt completed", { success: true });
+    log.info("deno fmt completed", { success: true });
     return { success: true, output };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    log("error", "deno fmt failed", { error: errorMessage });
+    log.error("deno fmt failed", { errorMessage });
     return { success: false, output: errorMessage };
   }
 }
@@ -134,7 +124,7 @@ function runDenoLintFix(
   path: string,
   files: string[],
 ): { success: boolean; output: string } {
-  log("info", "Running deno lint --fix", { path, fileCount: files.length });
+  log.info("Running deno lint --fix", { path, fileCount: files.length });
 
   try {
     // In a real implementation, this would:
@@ -146,11 +136,11 @@ function runDenoLintFix(
     const output =
       `Checked ${files.length} files\nFixed lint issues in ${files.length} files`;
 
-    log("info", "deno lint --fix completed", { success: true });
+    log.info("deno lint --fix completed", { success: true });
     return { success: true, output };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    log("error", "deno lint --fix failed", { error: errorMessage });
+    log.error("deno lint --fix failed", { errorMessage });
     return { success: false, output: errorMessage };
   }
 }
@@ -223,7 +213,7 @@ async function sendDiscordNotification(
   result: FixResult,
 ): Promise<void> {
   if (!DISCORD_WEBHOOK_URL) {
-    log("warn", "Discord webhook URL not configured, skipping notification");
+    log.warn("Discord webhook URL not configured, skipping notification");
     return;
   }
 
@@ -269,10 +259,10 @@ async function sendDiscordNotification(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: message.trim() }),
     });
-    log("info", "Discord notification sent");
+    log.info("Discord notification sent");
   } catch (error) {
-    log("error", "Failed to send Discord notification", {
-      error: error instanceof Error ? error.message : String(error),
+    log.error("Failed to send Discord notification", {
+      errorMessage: error instanceof Error ? error.message : String(error),
     });
   }
 }
@@ -295,7 +285,7 @@ Deno.serve(async (req) => {
   try {
     const request = await req.json() as FixRequest;
 
-    log("info", "Processing fix request", {
+    log.info("Processing fix request", {
       repository: request.repository,
       branch: request.branch,
       failureCount: request.failures.length,
@@ -306,7 +296,7 @@ Deno.serve(async (req) => {
     // Send Discord notification
     await sendDiscordNotification(request, result);
 
-    log("info", "Fix request completed", {
+    log.info("Fix request completed", {
       ok: result.ok,
       fixedCount: result.summary.fixedCount,
       skippedCount: result.summary.skippedCount,
@@ -321,8 +311,8 @@ Deno.serve(async (req) => {
       },
     );
   } catch (error) {
-    log("error", "Fix request failed", {
-      error: error instanceof Error ? error.message : String(error),
+    log.error("Fix request failed", {
+      errorMessage: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
 

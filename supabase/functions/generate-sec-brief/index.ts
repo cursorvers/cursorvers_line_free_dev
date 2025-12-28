@@ -3,7 +3,12 @@
 // 直近7日分のhij_rawからLLMで要約を生成し、sec_briefテーブルに保存
 
 import { createClient } from "@supabase/supabase-js";
+import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { createLogger } from "../_shared/logger.ts";
+import {
+  createCorsPreflightResponse,
+  getCorsOrigin,
+} from "../_shared/http-utils.ts";
 
 const log = createLogger("generate-sec-brief");
 
@@ -235,22 +240,23 @@ async function postToDiscord(bodyMarkdown: string): Promise<boolean> {
 Deno.serve(async (req: Request): Promise<Response> => {
   // CORSプリフライト対応
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers":
-          "Content-Type, Authorization, X-API-Key",
-      },
-    });
+    return createCorsPreflightResponse(req);
   }
+
+  // リクエストごとにCORSオリジンを取得
+  const corsOrigin = getCorsOrigin(req.headers.get("Origin"));
+
+  // レスポンス用のヘッダー
+  const responseHeaders = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": corsOrigin,
+  };
 
   // POSTのみ許可
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
       status: 405,
-      headers: { "Content-Type": "application/json" },
+      headers: responseHeaders,
     });
   }
 
@@ -261,7 +267,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       log.warn("Invalid API key attempt");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { "Content-Type": "application/json" },
+        headers: responseHeaders,
       });
     }
   }
@@ -292,7 +298,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           error: "Database Error",
           details: fetchError.message,
         }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
+        { status: 500, headers: responseHeaders },
       );
     }
 
@@ -303,7 +309,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           status: "no_data",
           message: "No hij_raw records for this week",
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: responseHeaders },
       );
     }
 
@@ -332,7 +338,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           existing_id: existingBrief.id,
           existing_status: existingBrief.status,
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: responseHeaders },
       );
     }
 
@@ -354,7 +360,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           error: "Configuration Error",
           details: "OPENAI_API_KEY not set",
         }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
+        { status: 500, headers: responseHeaders },
       );
     }
 
@@ -391,7 +397,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       log.error("OpenAI API Error", { errorText });
       return new Response(
         JSON.stringify({ error: "LLM Error", details: errorText }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
+        { status: 500, headers: responseHeaders },
       );
     }
 
@@ -429,7 +435,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           error: "Database Error",
           details: insertError.message,
         }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
+        { status: 500, headers: responseHeaders },
       );
     }
 
@@ -467,15 +473,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
         source_count: sourceIds.length,
         published: published,
       }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
+      { status: 200, headers: responseHeaders },
     );
   } catch (err) {
     log.error("Request processing error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     return new Response(
       JSON.stringify({ error: "Internal Server Error", details: String(err) }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": corsOrigin,
+        },
+      },
     );
   }
 });

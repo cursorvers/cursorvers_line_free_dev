@@ -2,14 +2,11 @@
  * create-checkout-session ユーティリティ関数
  */
 
-export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Note: Email validation is now centralized in _shared/validation-utils.ts
+import { EMAIL_REGEX, isValidEmail } from "../_shared/validation-utils.ts";
 
-/**
- * メールアドレスのバリデーション
- */
-export function isValidEmail(email: string): boolean {
-  return EMAIL_REGEX.test(email);
-}
+// Re-export for backwards compatibility
+export { EMAIL_REGEX, isValidEmail };
 
 /**
  * Checkoutリクエストのバリデーション結果
@@ -30,7 +27,7 @@ export function validateCheckoutRequest(
     return { valid: false, error: "Email is required" };
   }
 
-  if (!EMAIL_REGEX.test(email)) {
+  if (!isValidEmail(email)) {
     return { valid: false, error: "Invalid email format" };
   }
 
@@ -41,43 +38,8 @@ export function validateCheckoutRequest(
   return { valid: true };
 }
 
-/**
- * CORS headers
- */
-export const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+// Note: CORS headers are now managed centrally via ../\_shared/http-utils.ts
+// Use createCorsHeaders(req) for dynamic origin validation
 
-/**
- * エラーレスポンスの作成
- */
-export function createErrorResponse(
-  message: string,
-  status: number = 400,
-): Response {
-  return new Response(
-    JSON.stringify({ error: message }),
-    {
-      status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    },
-  );
-}
-
-/**
- * 成功レスポンスの作成
- */
-export function createSuccessResponse(
-  data: unknown,
-  status: number = 200,
-): Response {
-  return new Response(
-    JSON.stringify(data),
-    {
-      status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    },
-  );
-}
+// Note: Response helpers moved to use centralized CORS via http-utils.ts
+// For response creation, use the corsHeaders from createCorsHeaders(req) in index.ts

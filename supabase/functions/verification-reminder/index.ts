@@ -10,19 +10,20 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { notifyDiscord } from "../_shared/alert.ts";
+import { createDiscordInvite } from "../_shared/discord.ts";
 import {
   sendDirectDiscordInviteEmail,
   sendReminderEmail,
 } from "../_shared/email.ts";
+import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { maskEmail } from "../_shared/masking-utils.ts";
 
 const log = createLogger("verification-reminder");
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
   "";
-const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
-const DISCORD_GUILD_ID = Deno.env.get("DISCORD_GUILD_ID") ?? "";
 
 // リマインドスケジュール（日数）
 const REMINDER_DAYS = {
@@ -38,47 +39,6 @@ interface UnverifiedMember {
   verification_code: string;
   created_at: string;
   reminder_sent_count: number | null;
-}
-
-/**
- * Discord招待URLを生成
- */
-async function createDiscordInvite(): Promise<string | null> {
-  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID) {
-    log.warn("Discord credentials not configured");
-    return null;
-  }
-
-  try {
-    const response = await fetch(
-      `https://discord.com/api/v10/guilds/${DISCORD_GUILD_ID}/invites`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          max_age: 1209600, // 2週間
-          max_uses: 1,
-          unique: true,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      log.error("Failed to create Discord invite", { status: response.status });
-      return null;
-    }
-
-    const invite = await response.json();
-    return `https://discord.gg/${invite.code}`;
-  } catch (err) {
-    log.error("Discord invite creation error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
-    });
-    return null;
-  }
 }
 
 /**
@@ -173,15 +133,16 @@ Deno.serve(async (req) => {
           if (lockError || !lockResult || lockResult.length === 0) {
             // 既に他のプロセスが処理中、またはDBエラー
             log.info("Skipping member (already being processed or locked)", {
-              email: member.email.slice(0, 5) + "***",
+              email: maskEmail(member.email),
             });
             continue;
           }
 
-          const discordInvite = await createDiscordInvite();
-          if (!discordInvite) {
+          const inviteResult = await createDiscordInvite();
+          if (!inviteResult.success || !inviteResult.inviteUrl) {
             log.error("Could not create Discord invite for final fallback", {
-              email: member.email.slice(0, 5) + "***",
+              email: maskEmail(member.email),
+              error: inviteResult.error,
             });
             // 招待生成失敗 - discord_invite_sentはtrueのまま（再処理防止）
             // 管理者がマニュアル対応する必要あり
@@ -195,7 +156,7 @@ Deno.serve(async (req) => {
 
           const result = await sendDirectDiscordInviteEmail(
             member.email,
-            discordInvite,
+            inviteResult.inviteUrl,
             tierName,
           );
 
@@ -211,13 +172,13 @@ Deno.serve(async (req) => {
               .eq("id", member.id);
 
             log.info("Sent final Discord invite via email", {
-              email: member.email.slice(0, 5) + "***",
+              email: maskEmail(member.email),
               daysSincePurchase,
             });
             stats.finalInvite++;
           } else {
             log.error("Failed to send final invite email", {
-              email: member.email.slice(0, 5) + "***",
+              email: maskEmail(member.email),
               error: result.error,
             });
             stats.errors++;
@@ -245,7 +206,7 @@ Deno.serve(async (req) => {
               .eq("id", member.id);
 
             log.info("Sent second reminder", {
-              email: member.email.slice(0, 5) + "***",
+              email: maskEmail(member.email),
               daysSincePurchase,
             });
             stats.secondReminder++;
@@ -275,7 +236,7 @@ Deno.serve(async (req) => {
               .eq("id", member.id);
 
             log.info("Sent first reminder", {
-              email: member.email.slice(0, 5) + "***",
+              email: maskEmail(member.email),
               daysSincePurchase,
             });
             stats.firstReminder++;
@@ -285,8 +246,8 @@ Deno.serve(async (req) => {
         }
       } catch (err) {
         log.error("Error processing member", {
-          email: member.email.slice(0, 5) + "***",
-          errorMessage: err instanceof Error ? err.message : String(err),
+          email: maskEmail(member.email),
+          errorMessage: extractErrorMessage(err),
         });
         stats.errors++;
       }
@@ -320,7 +281,7 @@ Deno.serve(async (req) => {
       },
     );
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     log.error("Verification reminder job failed", { errorMessage });
 
     await notifyDiscord({

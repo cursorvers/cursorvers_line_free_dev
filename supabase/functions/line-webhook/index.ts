@@ -8,51 +8,38 @@
  * - コード検証成功でDiscord招待を送信
  */
 import { createClient } from "@supabase/supabase-js";
+import { createDiscordInvite } from "../_shared/discord.ts";
+import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { anonymizeUserId, createLogger } from "../_shared/logger.ts";
+import {
+  maskEmail,
+  maskLineUserId,
+  maskVerificationCode,
+} from "../_shared/masking-utils.ts";
 import {
   isCodeExpired,
   isVerificationCodeFormat,
   normalizeCode,
 } from "../_shared/verification-code.ts";
+import { isValidEmail as isEmailFormat } from "../_shared/validation-utils.ts";
 
 const log = createLogger("line-webhook");
 
 // lib モジュール - 定数・型
-import {
-  CONTACT_FORM_URL,
-  COURSE_KEYWORDS,
-  type DiagnosisKeyword,
-  DISCORD_INVITE_URL,
-  SERVICES_LP_URL,
-} from "./lib/constants.ts";
+import { type DiagnosisKeyword } from "./lib/constants.ts";
 
 // lib モジュール - LINE API
-import {
-  pushText,
-  type QuickReply,
-  replyText,
-  verifyLineSignature,
-} from "./lib/line-api.ts";
+import { pushText, replyText, verifyLineSignature } from "./lib/line-api.ts";
 
 // lib モジュール - Quick Reply
-import {
-  buildBackButtonQuickReply,
-  buildDiagnosisQuickReply,
-  buildNewsletterConfirmQuickReply,
-  buildServicesQuickReply,
-} from "./lib/quick-reply.ts";
+import { buildNewsletterConfirmQuickReply } from "./lib/quick-reply.ts";
 
 // lib モジュール - ユーザー状態管理
 import {
-  clearDiagnosisState,
   clearPendingEmail,
   clearUserState,
-  getDiagnosisState,
   getPendingEmail,
-  getToolMode,
   setPendingEmail,
-  setToolMode,
-  updateDiagnosisState,
 } from "./lib/user-state.ts";
 
 // lib モジュール - レート制限
@@ -65,22 +52,29 @@ import {
 // lib モジュール - 機能
 import { runPromptPolisher } from "./lib/prompt-polisher.ts";
 import { runRiskChecker } from "./lib/risk-checker.ts";
-import { buildCourseEntryMessage } from "./lib/course-router.ts";
+
+// lib モジュール - ハンドラー（リファクタリング後）
 import {
-  buildConclusionMessage,
-  buildDiagnosisStartMessage,
-  buildQuestionMessage,
-  type DiagnosisState,
-  getConclusion,
-  getFlowForKeyword,
-  getNextQuestion,
-  getTotalQuestions,
-  isValidAnswer,
-} from "./lib/diagnosis-flow.ts";
+  checkToolMode,
+  dispatchMenuCommand,
+  handleFollowEvent,
+  handleHelp,
+  handleToolModeCancel,
+  matchMenuCommand,
+} from "./lib/event-handlers.ts";
 import {
-  getArticlesByIds,
-  getArticlesByTag,
-} from "./lib/note-recommendations.ts";
+  detectCourseKeyword,
+  getDiagnosisStateForUser,
+  handleCourseKeywordStart,
+  handleDiagnosisAnswer,
+  handleDiagnosisCancel,
+  handleQuickDiagnosisStart,
+} from "./lib/diagnosis-handlers.ts";
+import {
+  formatPaymentHistoryMessage,
+  getPaymentHistoryByLineUserId,
+  isPaymentHistoryCommand,
+} from "./lib/payment-history.ts";
 
 // =======================
 // 型定義
@@ -147,25 +141,9 @@ function bucketLength(len: number | null | undefined): string | null {
   return "1000+";
 }
 
-function normalizeKeyword(raw: string): string {
-  return raw.replace(/　/g, " ").trim();
-}
-
-// メールアドレス形式かどうかを判定
-function isEmailFormat(text: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(text.trim());
-}
-
 // メールアドレスを正規化
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
-}
-
-function detectCourseKeyword(text: string): DiagnosisKeyword | null {
-  const normalized = normalizeKeyword(text);
-  const match = COURSE_KEYWORDS.find((kw) => kw === normalized);
-  return match ?? null;
 }
 
 // Supabase users: line_user_id から user.id を解決 or 作成
@@ -267,6 +245,33 @@ async function handleEmailRegistration(
       existingRecord = lineRecord as MemberRecord | null;
     }
 
+    // LINE IDで既存レコードが見つかり、かつ既にメールが登録されている場合
+    // 異なるメールアドレスでの上書きを防止
+    if (
+      existingRecord &&
+      existingRecord.email &&
+      existingRecord.email !== normalizedEmail
+    ) {
+      log.info("Email already registered for this LINE ID", {
+        lineUserId: maskLineUserId(lineUserId),
+        existingEmail: maskEmail(existingRecord.email),
+      });
+      if (replyToken) {
+        await replyText(
+          replyToken,
+          [
+            "✅ 既にメールアドレスが登録されています",
+            "",
+            `登録済み: ${existingRecord.email.slice(0, 3)}***@***`,
+            "",
+            "別のメールアドレスに変更する場合は、",
+            "お問い合わせください。",
+          ].join("\n"),
+        );
+      }
+      return;
+    }
+
     const now = new Date().toISOString();
     const payload: Record<string, unknown> = {
       email: normalizedEmail,
@@ -355,11 +360,11 @@ async function handleEmailRegistration(
     }
 
     log.info("Email registered", {
-      email: normalizedEmail.slice(0, 5) + "***",
+      email: maskEmail(normalizedEmail),
     });
   } catch (err) {
     log.error("Email registration error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     if (replyToken) {
       await replyText(
@@ -401,7 +406,7 @@ async function handleVerificationCode(
 
     if (!member) {
       log.info("Invalid verification code", {
-        code: code.slice(0, 2) + "****",
+        code: maskVerificationCode(code),
         userId: anonymizeUserId(lineUserId),
       });
       if (replyToken) {
@@ -428,8 +433,8 @@ async function handleVerificationCode(
       isCodeExpired(member.verification_expires_at)
     ) {
       log.info("Verification code expired", {
-        code: code.slice(0, 2) + "****",
-        email: member.email?.slice(0, 5) + "***",
+        code: maskVerificationCode(code),
+        email: maskEmail(member.email),
       });
       if (replyToken) {
         await replyText(
@@ -463,9 +468,9 @@ async function handleVerificationCode(
         }
       } else {
         log.warn("Verification code already used by different LINE user", {
-          code: code.slice(0, 2) + "****",
-          existingLineUser: member.line_user_id.slice(-4),
-          newLineUser: lineUserId.slice(-4),
+          code: maskVerificationCode(code),
+          existingLineUser: maskLineUserId(member.line_user_id),
+          newLineUser: maskLineUserId(lineUserId),
         });
         if (replyToken) {
           await replyText(
@@ -483,13 +488,13 @@ async function handleVerificationCode(
     }
 
     // LINE紐付けを実行（楽観的ロック: line_user_idがnullの場合のみ更新）
+    // Note: discord_invite_sent は Discord招待送信成功後に別途更新
     const { data: updateResult, error: updateError } = await supabase
       .from("members")
       .update({
         line_user_id: lineUserId,
         verification_code: null,
         verification_expires_at: null,
-        discord_invite_sent: true,
         updated_at: new Date().toISOString(),
       })
       .eq("id", member.id)
@@ -512,73 +517,75 @@ async function handleVerificationCode(
 
     // 更新されなかった場合（レースコンディション検出）
     if (!updateResult || updateResult.length === 0) {
-      log.warn(
-        "Race condition detected: LINE already linked by another request",
-        {
+      // 現在のレコードを再取得して状況を確認
+      const { data: currentRecord } = await supabase
+        .from("members")
+        .select("line_user_id, discord_invite_sent")
+        .eq("id", member.id)
+        .maybeSingle();
+
+      if (currentRecord?.line_user_id === lineUserId) {
+        // 同じLINE IDで既に紐付け済み（同一ユーザーの重複リクエスト）
+        log.info("Already linked with same LINE ID", {
           memberId: member.id,
-          lineUserId: lineUserId.slice(-4),
-        },
-      );
-      if (replyToken) {
-        await replyText(
-          replyToken,
-          [
-            "⚠️ このコードは既に使用されています",
-            "",
-            "別のデバイスで認証済みの可能性があります。",
-            "問題がある場合はサポートまでお問い合わせください。",
-          ].join("\n"),
+          lineUserId: maskLineUserId(lineUserId),
+        });
+        if (replyToken) {
+          await replyText(
+            replyToken,
+            [
+              "✅ 既に認証完了しています",
+              "",
+              "Discordコミュニティへの参加がまだの方は",
+              "以下のリンクからご参加ください。",
+              "",
+              DISCORD_INVITE_URL,
+            ].join("\n"),
+          );
+        }
+      } else {
+        // 別のLINE IDで紐付け済み
+        log.warn(
+          "Race condition: LINE already linked by different user",
+          {
+            memberId: member.id,
+            requestedLineUserId: maskLineUserId(lineUserId),
+          },
         );
+        if (replyToken) {
+          await replyText(
+            replyToken,
+            [
+              "⚠️ このコードは既に使用されています",
+              "",
+              "別のLINEアカウントで認証済みです。",
+              "問題がある場合はサポートまでお問い合わせください。",
+            ].join("\n"),
+          );
+        }
       }
       return;
     }
 
     log.info("Verification successful, LINE linked", {
-      email: member.email?.slice(0, 5) + "***",
-      lineUserId: lineUserId.slice(-4),
+      email: maskEmail(member.email),
+      lineUserId: maskLineUserId(lineUserId),
       tier: member.tier,
     });
 
     // Discord招待を生成して送信
-    const discordBotToken = Deno.env.get("DISCORD_BOT_TOKEN");
-    const guildId = Deno.env.get("DISCORD_GUILD_ID");
-
     let discordInviteUrl = DISCORD_INVITE_URL; // フォールバック用
 
-    if (discordBotToken && guildId) {
-      try {
-        const inviteResponse = await fetch(
-          `https://discord.com/api/v10/guilds/${guildId}/invites`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bot ${discordBotToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              max_age: 1209600, // 2週間
-              max_uses: 1,
-              unique: true,
-            }),
-          },
-        );
-
-        if (inviteResponse.ok) {
-          const invite = await inviteResponse.json();
-          discordInviteUrl = `https://discord.gg/${invite.code}`;
-          log.info("Discord invite created for verification", {
-            email: member.email?.slice(0, 5) + "***",
-          });
-        } else {
-          log.warn("Failed to create Discord invite, using fallback", {
-            status: inviteResponse.status,
-          });
-        }
-      } catch (err) {
-        log.error("Discord invite creation error", {
-          errorMessage: err instanceof Error ? err.message : String(err),
-        });
-      }
+    const inviteResult = await createDiscordInvite();
+    if (inviteResult.success && inviteResult.inviteUrl) {
+      discordInviteUrl = inviteResult.inviteUrl;
+      log.info("Discord invite created for verification", {
+        email: maskEmail(member.email),
+      });
+    } else {
+      log.warn("Failed to create Discord invite, using fallback", {
+        error: inviteResult.error,
+      });
     }
 
     // 認証完了メッセージを送信
@@ -586,8 +593,9 @@ async function handleVerificationCode(
       ? "Master Class"
       : "Library Member";
 
+    let discordInviteSent = false;
     if (replyToken) {
-      await replyText(
+      const replySent = await replyText(
         replyToken,
         [
           "🎉 認証完了！",
@@ -608,10 +616,43 @@ async function handleVerificationCode(
           "を実行してロールを取得してください。",
         ].join("\n"),
       );
+
+      if (replySent) {
+        discordInviteSent = true;
+      } else {
+        // reply失敗時はpushでフォールバック
+        log.warn("Reply failed, trying push fallback", {
+          lineUserId: maskLineUserId(lineUserId),
+        });
+        const pushSent = await pushText(
+          lineUserId,
+          [
+            "🎉 認証完了！",
+            "",
+            `【${tierDisplayName}】へようこそ！`,
+            "",
+            "▼ Discord コミュニティ参加はこちら",
+            discordInviteUrl,
+          ].join("\n"),
+        );
+        discordInviteSent = pushSent;
+      }
+    }
+
+    // Discord招待送信成功時のみフラグを更新
+    if (discordInviteSent) {
+      await supabase
+        .from("members")
+        .update({ discord_invite_sent: true })
+        .eq("id", member.id);
+    } else {
+      log.warn("Discord invite not sent, flag remains false for retry", {
+        memberId: member.id,
+      });
     }
   } catch (err) {
     log.error("Verification code handling error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     throw err;
   }
@@ -677,7 +718,7 @@ async function handlePromptPolisher(
     } catch (err) {
       log.error("prompt_polisher error", {
         userId: anonymizeUserId(lineUserId),
-        errorMessage: err instanceof Error ? err.message : String(err),
+        errorMessage: extractErrorMessage(err),
       });
       await pushText(
         lineUserId,
@@ -753,7 +794,7 @@ async function handleRiskChecker(
     } catch (err) {
       log.error("risk_checker error", {
         userId: anonymizeUserId(lineUserId),
-        errorMessage: err instanceof Error ? err.message : String(err),
+        errorMessage: extractErrorMessage(err),
       });
       await pushText(
         lineUserId,
@@ -770,7 +811,7 @@ async function handleRiskChecker(
 }
 
 // =======================
-// Dispatcher 本体
+// Dispatcher 本体（リファクタリング版）
 // =======================
 
 async function handleEvent(event: LineEvent): Promise<void> {
@@ -790,138 +831,51 @@ async function handleEvent(event: LineEvent): Promise<void> {
     const userId = await getOrCreateUser(lineUserId);
 
     // ========================================
-    // Follow イベント（友だち追加時）
+    // 1) Follow イベント（友だち追加時）
     // ========================================
     if (event.type === "follow") {
-      log.info("Follow event", { userId: anonymizeUserId(lineUserId) });
-
-      // 有料決済済み（認証コード保留中）かどうかを確認
-      const { data: pendingPaidMember } = await supabase
-        .from("members")
-        .select("email, tier, verification_code")
-        .not("verification_code", "is", null)
-        .in("tier", ["library", "master"])
-        .is("line_user_id", null)
-        .limit(1);
-
-      // 有料会員で認証コード保留中の場合は、コード入力を促すメッセージ
-      // 注: 厳密には誰の決済かは特定できないが、UXとして案内
-      const hasPendingPaidMembers = pendingPaidMember &&
-        pendingPaidMember.length > 0;
-
-      if (replyToken) {
-        if (hasPendingPaidMembers) {
-          // 有料会員向けメッセージ
-          await replyText(
-            replyToken,
-            [
-              "🎉 友だち追加ありがとうございます！",
-              "",
-              "━━━━━━━━━━━━━━━",
-              "💎 有料会員の方",
-              "━━━━━━━━━━━━━━━",
-              "",
-              "決済完了メールに記載された",
-              "【6桁の認証コード】を入力してください",
-              "",
-              "例: ABC123",
-              "",
-              "━━━━━━━━━━━━━━━",
-              "🎁 無料特典の方",
-              "━━━━━━━━━━━━━━━",
-              "",
-              "メールアドレスを入力してください",
-              "例: your@email.com",
-            ].join("\n"),
-          );
-        } else {
-          // 通常の無料会員向けメッセージ
-          await replyText(
-            replyToken,
-            [
-              "🎉 友だち追加ありがとうございます！",
-              "",
-              "━━━━━━━━━━━━━━━",
-              "🎁 無料特典（メール登録で即GET）",
-              "━━━━━━━━━━━━━━━",
-              "",
-              "📚 Discordコミュニティ参加",
-              "🤖 注目のAI記事要約（毎日更新）",
-              "🛡️ 医療向けセキュリティレポート",
-              "💬 Q&A・相談チャンネル",
-              "⚡ 開発効率化Tips",
-              "📎 資料・リンク集",
-              "",
-              "━━━━━━━━━━━━━━━",
-              "",
-              "▼ メールアドレスを入力して特典GET",
-              "📱 左下のキーボードアイコンをタップ",
-              "例: your@email.com",
-            ].join("\n"),
-          );
-        }
-      }
+      await handleFollowEvent(lineUserId, replyToken);
       return;
     }
 
+    // テキスト抽出
     let text: string | null = null;
     if (event.type === "message" && event.message?.type === "text") {
       text = event.message.text;
     } else if (event.type === "postback" && event.postback?.data) {
       text = event.postback.data;
     }
-
     if (!text) return;
 
     const trimmed = text.trim();
-    console.log("[line-webhook] received text:", trimmed, "user:", lineUserId);
-
-    // ========================================
-    // 0) ツールモード中の処理（最優先）
-    // ========================================
-    const toolMode = await getToolMode(lineUserId);
-    log.debug("Tool mode check", {
-      mode: toolMode,
+    log.debug("Received text", {
+      text: trimmed,
       userId: anonymizeUserId(lineUserId),
     });
 
+    // ========================================
+    // 2) ツールモード中の処理（最優先）
+    // ========================================
+    const toolMode = await checkToolMode(lineUserId);
     if (toolMode) {
-      // 「キャンセル」「戻る」でモードを終了
-      if (
-        trimmed === "キャンセル" || trimmed === "cancel" || trimmed === "戻る"
-      ) {
-        await clearUserState(lineUserId);
-        if (replyToken) {
-          await replyText(
-            replyToken,
-            "モードを終了しました。\n\n下のボタンから選んでください。",
-            buildServicesQuickReply(),
-          );
-        }
+      if (isCancelCommand(trimmed)) {
+        await handleToolModeCancel(lineUserId, replyToken);
         return;
       }
-
-      // プロンプト整形モード → 入力をそのままPolish
       if (toolMode === "polish") {
-        log.debug("Processing polish mode", { inputLength: trimmed.length });
-        await clearUserState(lineUserId); // 1回使ったらモード終了
+        await clearUserState(lineUserId);
         await handlePromptPolisher(trimmed, lineUserId, userId, replyToken);
         return;
       }
-
-      // リスクチェックモード → 入力をそのままチェック
       if (toolMode === "risk_check") {
-        log.debug("Processing risk_check mode", {
-          inputLength: trimmed.length,
-        });
-        await clearUserState(lineUserId); // 1回使ったらモード終了
+        await clearUserState(lineUserId);
         await handleRiskChecker(trimmed, lineUserId, userId, replyToken);
         return;
       }
     }
 
     // ========================================
-    // 0.5) メルマガ同意確認のpostback処理
+    // 3) メルマガ同意確認のpostback処理
     // ========================================
     if (trimmed === "email_opt_in=yes" || trimmed === "email_opt_in=no") {
       const pendingEmail = await getPendingEmail(lineUserId);
@@ -934,7 +888,6 @@ async function handleEvent(event: LineEvent): Promise<void> {
         }
         return;
       }
-
       const optIn = trimmed === "email_opt_in=yes";
       await clearPendingEmail(lineUserId);
       await handleEmailRegistration(
@@ -947,20 +900,19 @@ async function handleEvent(event: LineEvent): Promise<void> {
     }
 
     // ========================================
-    // 0.6) 認証コード入力の検知 → 有料会員認証
+    // 4) 認証コード入力の検知 → 有料会員認証
     // ========================================
     if (isVerificationCodeFormat(trimmed)) {
       const code = normalizeCode(trimmed);
       log.info("Verification code detected", {
-        code: code.slice(0, 2) + "****",
+        code: maskVerificationCode(code),
         userId: anonymizeUserId(lineUserId),
       });
-
       try {
         await handleVerificationCode(code, lineUserId, replyToken);
       } catch (err) {
         log.error("Verification code handling error", {
-          errorMessage: err instanceof Error ? err.message : String(err),
+          errorMessage: extractErrorMessage(err),
         });
         if (replyToken) {
           await replyText(
@@ -973,79 +925,21 @@ async function handleEvent(event: LineEvent): Promise<void> {
     }
 
     // ========================================
-    // 0.7) メールアドレス入力の検知 → 同意確認ボタン表示
+    // 5) メールアドレス入力の検知 → 同意確認ボタン表示
     // ========================================
     if (isEmailFormat(trimmed)) {
-      log.info("Email detected", { email: trimmed.slice(0, 5) + "***" });
-
-      // 同期的に処理（バックグラウンドではなくawaitで待つ）
-      try {
-        const normalizedEmail = normalizeEmail(trimmed);
-
-        await setPendingEmail(lineUserId, normalizedEmail);
-        log.debug("Pending email saved");
-
-        // Reply APIで確認メッセージ送信（Quick Reply付き）
-        if (replyToken) {
-          const text = [
-            "📧 メール登録",
-            `${trimmed}`,
-            "",
-            "━━━━━━━━━━━━━━━",
-            "📬 メルマガ内容",
-            "━━━━━━━━━━━━━━━",
-            "・AIを活用した副業最前線",
-            "・「経験知」をAIで増幅させる思考法",
-            "・「有料級」限定コンテンツ配信",
-            "",
-            "配信しますか？",
-            "※ いつでも配信停止できます",
-          ].join("\n");
-
-          const res = await fetch("https://api.line.me/v2/bot/message/reply", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-            },
-            body: JSON.stringify({
-              replyToken,
-              messages: [{
-                type: "text",
-                text: text,
-                quickReply: buildNewsletterConfirmQuickReply(),
-              }],
-            }),
-          });
-          log.debug("Newsletter confirmation sent", { status: res.status });
-        }
-      } catch (err) {
-        log.error("Email handling error", {
-          errorMessage: err instanceof Error ? err.message : String(err),
-        });
-        if (replyToken) {
-          await replyText(
-            replyToken,
-            "エラーが発生しました。もう一度お試しください。",
-          );
-        }
-      }
-
+      await handleEmailInput(trimmed, lineUserId, replyToken);
       return;
     }
 
     // ========================================
-    // 1) 明示的プレフィックスコマンド
+    // 6) 明示的プレフィックスコマンド
     // ========================================
-
-    // Prompt Polisher（プレフィックス付き）
     if (trimmed.startsWith("洗練:") || trimmed.startsWith("polish:")) {
       const rawInput = trimmed.replace(/^洗練:|^polish:/, "").trim();
       await handlePromptPolisher(rawInput, lineUserId, userId, replyToken);
       return;
     }
-
-    // Risk Checker（プレフィックス付き）
     if (trimmed.startsWith("check:") || trimmed.startsWith("チェック:")) {
       const rawInput = trimmed.replace(/^check:|^チェック:/, "").trim();
       await handleRiskChecker(rawInput, lineUserId, userId, replyToken);
@@ -1053,437 +947,145 @@ async function handleEvent(event: LineEvent): Promise<void> {
     }
 
     // ========================================
-    // 1) 診断フロー中かチェック
+    // 7) 診断フロー中かチェック
     // ========================================
-    const diagnosisState = await getDiagnosisState(lineUserId);
-
+    const diagnosisState = await getDiagnosisStateForUser(lineUserId);
     if (diagnosisState) {
-      // 「キャンセル」で診断を中断
-      if (trimmed === "キャンセル" || trimmed === "cancel") {
-        await clearDiagnosisState(lineUserId);
-        if (replyToken) {
-          await replyText(
-            replyToken,
-            "診断を中断しました。\n\n下のボタンから再度お試しください。",
-            buildDiagnosisQuickReply(),
-          );
-        }
+      if (isCancelCommand(trimmed)) {
+        await handleDiagnosisCancel(lineUserId, replyToken);
         return;
       }
-
-      // 回答が有効かチェック
-      if (!isValidAnswer(diagnosisState, trimmed)) {
-        if (replyToken) {
-          const question = getNextQuestion(diagnosisState);
-          if (question) {
-            const { text: questionText, quickReply } = buildQuestionMessage(
-              question,
-              diagnosisState.layer,
-            );
-            await replyText(
-              replyToken,
-              "選択肢から選んでください。\n\n" + questionText,
-              quickReply as QuickReply,
-            );
-          }
-        }
-        return;
-      }
-
-      // 回答を記録し、次のレイヤーへ
-      const newState: DiagnosisState = {
-        ...diagnosisState,
-        layer: diagnosisState.layer + 1,
-        answers: [...diagnosisState.answers, trimmed],
-      };
-
-      // 総質問数を取得
-      const totalQ = getTotalQuestions(newState.keyword);
-
-      // 全問回答完了 → 結論を表示
-      if (newState.answers.length >= totalQ) {
-        const articleIds = getConclusion(newState);
-        let articles = articleIds ? getArticlesByIds(articleIds) : [];
-
-        // タグベースのフォールバック（記事IDが見つからない場合）
-        if (articles.length === 0) {
-          const interest = newState.answers[1]; // layer2の回答
-          if (interest) {
-            articles = getArticlesByTag(interest, 3);
-            log.debug("Using tag-based fallback", {
-              interest,
-              articleCount: articles.length,
-            });
-          } else {
-            log.warn("No interest found in answers", {
-              answers: newState.answers,
-            });
-          }
-        }
-
-        if (articles.length > 0) {
-          const conclusionMessage = buildConclusionMessage(newState, articles);
-          if (replyToken) {
-            await replyText(replyToken, conclusionMessage);
-          }
-        } else {
-          // 記事が見つからない場合のフォールバック
-          if (replyToken) {
-            await replyText(
-              replyToken,
-              [
-                `【${newState.keyword}】診断完了`,
-                "",
-                "ご回答ありがとうございました。",
-                "関連記事の準備中です。",
-                "",
-                "---",
-                "💬 詳しくは Discord でご相談ください",
-                DISCORD_INVITE_URL,
-              ].join("\n"),
-            );
-          }
-        }
-
-        await clearDiagnosisState(lineUserId);
-        await logInteraction({
-          userId,
-          interactionType: "course_entry",
-          courseKeyword: newState.keyword,
-          inputLength: trimmed.length,
-        });
-        return;
-      }
-
-      // 次の質問を表示
-      await updateDiagnosisState(lineUserId, newState);
-      const nextQuestion = getNextQuestion(newState);
-      if (nextQuestion && replyToken) {
-        const { text: questionText, quickReply } = buildQuestionMessage(
-          nextQuestion,
-          newState.layer,
-          totalQ,
-        );
-        await replyText(replyToken, questionText, quickReply as QuickReply);
-      }
+      await handleDiagnosisAnswer(
+        lineUserId,
+        userId,
+        diagnosisState,
+        trimmed,
+        replyToken,
+        logInteraction,
+      );
       return;
     }
 
     // ========================================
-    // 1.5) 「診断」→ クイック診断フロー開始（3問）
+    // 8) 「診断」→ クイック診断フロー開始
     // ========================================
     if (trimmed === "診断") {
-      console.log("[line-webhook] start quick diagnosis for user:", lineUserId);
-      const flow = getFlowForKeyword("クイック診断");
-      const startMessage = flow
-        ? buildDiagnosisStartMessage("クイック診断")
-        : null;
-      if (flow && startMessage && replyToken) {
-        const initialState: DiagnosisState = {
-          keyword: "クイック診断",
-          layer: 1,
-          answers: [],
-        };
-        try {
-          await updateDiagnosisState(lineUserId, initialState);
-          console.log(
-            "[line-webhook] diagnosis state initialized for user:",
-            lineUserId,
-          );
-        } catch (err) {
-          console.error(
-            "[line-webhook] updateDiagnosisState error (start quick diagnosis)",
-            err,
-          );
-        }
-        await replyText(
-          replyToken,
-          startMessage.text,
-          startMessage.quickReply as QuickReply,
-        );
-      } else {
-        console.warn(
-          "[line-webhook] quick diagnosis flow or startMessage missing",
-        );
-      }
+      await handleQuickDiagnosisStart(lineUserId, replyToken);
       return;
     }
 
     // ========================================
-    // 2) 診断キーワード → すべて3層フロー
+    // 9) 診断キーワード → 3層フロー
     // ========================================
     const courseKeyword = detectCourseKeyword(trimmed);
     if (courseKeyword) {
-      const flow = getFlowForKeyword(courseKeyword);
-      if (flow) {
-        const startMessage = buildDiagnosisStartMessage(courseKeyword);
-        if (startMessage && replyToken) {
-          // 診断状態を初期化
-          const initialState: DiagnosisState = {
-            keyword: courseKeyword,
-            layer: 1,
-            answers: [],
-          };
-          await updateDiagnosisState(lineUserId, initialState);
-          await replyText(
-            replyToken,
-            startMessage.text,
-            startMessage.quickReply as QuickReply,
-          );
-        }
-        return;
-      }
-
-      // フローが定義されていない場合のフォールバック（通常は発生しない）
-      const courseMessage = buildCourseEntryMessage(courseKeyword);
-      if (replyToken) {
-        await replyText(replyToken, courseMessage);
-      }
-      await logInteraction({
+      await handleCourseKeywordStart(
+        lineUserId,
         userId,
-        interactionType: "course_entry",
         courseKeyword,
-        inputLength: trimmed.length,
-      });
+        replyToken,
+        logInteraction,
+      );
       return;
     }
 
     // ========================================
-    // 3) 「特典」→ メール登録でDiscord招待
+    // 10) 支払い履歴照会
     // ========================================
-    if (trimmed === "特典" || trimmed === "特典GET") {
-      // 既にメール登録済みか確認
-      const { data: existingMember } = await supabase
-        .from("members")
-        .select("email")
-        .eq("line_user_id", lineUserId)
-        .maybeSingle();
-
-      if (existingMember?.email) {
-        // 登録済み → Discord URLを再送 + 特典内容リマインド
-        if (replyToken) {
-          await replyText(
-            replyToken,
-            [
-              "✅ 登録済みです！特典をご活用ください",
-              "",
-              "━━━━━━━━━━━━━━━",
-              "🎁 あなたの特典",
-              "━━━━━━━━━━━━━━━",
-              "",
-              "📚 Discordコミュニティ",
-              "🤖 注目のAI記事要約（毎日更新）",
-              "🛡️ 医療向けセキュリティレポート",
-              "💬 Q&A・相談チャンネル",
-              "⚡ 開発効率化Tips",
-              "📎 資料・リンク集",
-              "",
-              "▼ Discord参加はこちら",
-              DISCORD_INVITE_URL,
-            ].join("\n"),
-          );
-        }
-      } else {
-        // 未登録 → メール入力を促す
-        if (replyToken) {
-          await replyText(
-            replyToken,
-            [
-              "━━━━━━━━━━━━━━━",
-              "🎁 無料特典（メール登録で即GET）",
-              "━━━━━━━━━━━━━━━",
-              "",
-              "📚 Discordコミュニティ参加",
-              "🤖 注目のAI記事要約（毎日更新）",
-              "🛡️ 医療向けセキュリティレポート",
-              "💬 Q&A・相談チャンネル",
-              "⚡ 開発効率化Tips",
-              "📎 資料・リンク集",
-              "",
-              "━━━━━━━━━━━━━━━",
-              "",
-              "▼ メールアドレスを入力して特典GET",
-              "📱 左下のキーボードアイコンをタップ",
-              "例: your@email.com",
-            ].join("\n"),
-          );
-        }
-      }
-      return;
-    }
-
-    // ========================================
-    // 3.5) 「コミュニティ」→ 特典案内へ誘導
-    // ========================================
-    if (trimmed === "コミュニティ") {
+    if (isPaymentHistoryCommand(trimmed)) {
+      log.info("Payment history requested", { userId: anonymizeUserId(lineUserId) });
+      const result = await getPaymentHistoryByLineUserId(lineUserId);
+      const message = formatPaymentHistoryMessage(result);
       if (replyToken) {
-        await replyText(
-          replyToken,
-          [
-            "Discord コミュニティへの参加は、",
-            "メールアドレス登録が必要です。",
-            "",
-            "「特典」と入力するか、",
-            "リッチメニューの「特典GET」をタップしてください。",
-          ].join("\n"),
-        );
+        await replyText(replyToken, message);
       }
       return;
     }
 
     // ========================================
-    // 4) 「お問い合わせ」→ 問い合わせフォーム
+    // 11) メニューコマンド
     // ========================================
-    if (trimmed === "お問い合わせ" || trimmed === "問い合わせ") {
-      if (replyToken) {
-        await replyText(
-          replyToken,
-          [
-            "📧 お問い合わせ",
-            "",
-            "ご質問・ご相談は以下のフォームからお願いします。",
-            "",
-            "▼ お問い合わせフォーム",
-            CONTACT_FORM_URL,
-          ].join("\n"),
-        );
-      }
+    const menuCommand = matchMenuCommand(trimmed);
+    if (menuCommand) {
+      await dispatchMenuCommand(menuCommand, lineUserId, replyToken);
       return;
     }
 
     // ========================================
-    // 5) 「サービス一覧」→ サービス選択メニュー
+    // 12) ヘルプメッセージ（デフォルト）
     // ========================================
-    if (trimmed === "サービス一覧") {
-      if (replyToken) {
-        await replyText(
-          replyToken,
-          [
-            "✨ Cursorvers Edu サービス",
-            "",
-            "【無料】LINE上で使えるツール",
-            "・プロンプト整形",
-            "・リスクチェック",
-            "・AI導入診断",
-            "",
-            "【有料】Library Member ¥2,980/月",
-            "・有料記事の全文閲覧",
-            "・検証済みプロンプト集",
-            "・Master Class への充当可能",
-            "",
-            "▼ 詳細・お申込みはこちら",
-            SERVICES_LP_URL,
-            "",
-            "▼ または下のボタンから選択",
-          ].join("\n"),
-          buildServicesQuickReply(),
-        );
-      }
-      return;
-    }
-
-    // ========================================
-    // 6) 「サービス詳細」→ LP へのリンク
-    // ========================================
-    if (trimmed === "サービス詳細を見る") {
-      if (replyToken) {
-        await replyText(
-          replyToken,
-          [
-            "📖 サービス詳細ページ",
-            "",
-            "各プランの詳細・料金はこちらでご確認いただけます。",
-            "",
-            "▼ サービス一覧（Web）",
-            SERVICES_LP_URL,
-          ].join("\n"),
-        );
-      }
-      return;
-    }
-
-    // ========================================
-    // 7) 「プロンプト整形の使い方」→ プロンプト整形モードに入る
-    // ========================================
-    if (trimmed === "プロンプト整形の使い方") {
-      // プロンプト整形モードを設定
-      await setToolMode(lineUserId, "polish");
-
-      if (replyToken) {
-        await replyText(
-          replyToken,
-          [
-            "🔧 プロンプト整形モード",
-            "",
-            "整形したい文章をそのまま入力してください。",
-            "普通にAIに聞くより高品質な回答を引き出せる",
-            "構造化プロンプトに変換します。",
-            "",
-            "📱 左下の「キーボード」アイコンをタップ",
-            "",
-            "【入力例】",
-            "糖尿病患者の食事指導について教えて",
-          ].join("\n"),
-          buildBackButtonQuickReply(),
-        );
-      }
-      return;
-    }
-
-    // ========================================
-    // 8) 「リスクチェックの使い方」→ リスクチェックモードに入る
-    // ========================================
-    if (trimmed === "リスクチェックの使い方") {
-      // リスクチェックモードを設定
-      await setToolMode(lineUserId, "risk_check");
-
-      if (replyToken) {
-        await replyText(
-          replyToken,
-          [
-            "🛡️ リスクチェックモード",
-            "",
-            "チェックしたい文章をそのまま入力してください。",
-            "医療広告・個人情報・医学的妥当性などの",
-            "リスクを分析します。",
-            "",
-            "📱 左下の「キーボード」アイコンをタップ",
-            "",
-            "【入力例】",
-            "この治療法で必ず治ります",
-          ].join("\n"),
-          buildBackButtonQuickReply(),
-        );
-      }
-      return;
-    }
-
-    // ========================================
-    // 9) ヘルプメッセージ
-    // ========================================
-    if (replyToken) {
-      const helpMessage = [
-        "Pocket Defense Tool",
-        "",
-        "■ プロンプト整形",
-        "「洗練:」の後に文章を入力",
-        "",
-        "■ リスクチェック",
-        "「check:」の後に文章を入力",
-        "",
-        "■ AI導入情報・お問い合わせ",
-        "下のボタンから選んでください ↓",
-      ].join("\n");
-
-      await replyText(replyToken, helpMessage, buildDiagnosisQuickReply());
-    }
+    await handleHelp(replyToken);
   } catch (err) {
     log.error("handleEvent error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
       stack: err instanceof Error
         ? err.stack?.split("\n").slice(0, 3).join(" | ")
         : undefined,
     });
+  }
+}
+
+// キャンセルコマンド判定
+function isCancelCommand(text: string): boolean {
+  return text === "キャンセル" || text === "cancel" || text === "戻る";
+}
+
+// メールアドレス入力処理
+async function handleEmailInput(
+  email: string,
+  lineUserId: string,
+  replyToken?: string,
+): Promise<void> {
+  log.info("Email detected", { email: maskEmail(email) });
+
+  try {
+    const normalizedEmail = normalizeEmail(email);
+    await setPendingEmail(lineUserId, normalizedEmail);
+    log.debug("Pending email saved");
+
+    if (replyToken) {
+      const text = [
+        "メール登録",
+        `${email}`,
+        "",
+        "━━━━━━━━━━━━━━━",
+        "メルマガ内容",
+        "━━━━━━━━━━━━━━━",
+        "・AIを活用した副業最前線",
+        "・「経験知」をAIで増幅させる思考法",
+        "・「有料級」限定コンテンツ配信",
+        "",
+        "配信しますか？",
+        "※ いつでも配信停止できます",
+      ].join("\n");
+
+      const res = await fetch("https://api.line.me/v2/bot/message/reply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+        },
+        body: JSON.stringify({
+          replyToken,
+          messages: [{
+            type: "text",
+            text: text,
+            quickReply: buildNewsletterConfirmQuickReply(),
+          }],
+        }),
+      });
+      log.debug("Newsletter confirmation sent", { status: res.status });
+    }
+  } catch (err) {
+    log.error("Email handling error", {
+      errorMessage: extractErrorMessage(err),
+    });
+    if (replyToken) {
+      await replyText(
+        replyToken,
+        "エラーが発生しました。もう一度お試しください。",
+      );
+    }
   }
 }
 
@@ -1519,7 +1121,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     body = JSON.parse(rawBody) as LineWebhookRequestBody;
   } catch (err) {
     log.error("JSON parse error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     return new Response("Bad Request", { status: 400 });
   }
@@ -1532,7 +1134,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     log.debug("All events processed", { eventCount: events.length });
   } catch (err) {
     log.error("Event processing error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
   }
 

@@ -10,6 +10,7 @@
 
 import { createLogger } from "./logger.ts";
 import { isRetryableStatus, withRetry } from "./retry.ts";
+import { extractErrorMessage } from "./error-utils.ts";
 
 const log = createLogger("alert");
 const WEBHOOK_URL = Deno.env.get("DISCORD_ALERT_WEBHOOK");
@@ -146,7 +147,7 @@ export async function notifyDiscord(
 
     return { success: true, attempts };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     const cleanedMessage = errorMessage.replace(/^NON_RETRYABLE:/, "");
 
     log.error("Discord notification failed after retries", {

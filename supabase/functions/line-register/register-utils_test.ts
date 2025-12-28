@@ -153,9 +153,16 @@ Deno.test("register-utils - CORS_HEADERS", async (t) => {
     assertEquals(CORS_HEADERS["Content-Type"], "application/json");
   });
 
-  await t.step("has Access-Control-Allow-Origin header", () => {
-    assertEquals(CORS_HEADERS["Access-Control-Allow-Origin"], "*");
-  });
+  await t.step(
+    "has Access-Control-Allow-Origin header (specific origin for security)",
+    () => {
+      // CORS_HEADERS now uses specific origins instead of "*" for security
+      assertEquals(
+        CORS_HEADERS["Access-Control-Allow-Origin"],
+        "https://cursorvers.com",
+      );
+    },
+  );
 
   await t.step("allows POST and OPTIONS methods", () => {
     assertEquals(CORS_HEADERS["Access-Control-Allow-Methods"], "POST, OPTIONS");
@@ -195,7 +202,10 @@ Deno.test("register-utils - createErrorResponse", async (t) => {
   await t.step("includes CORS headers by default", () => {
     const response = createErrorResponse("Test error");
     assertEquals(response.headers.get("Content-Type"), "application/json");
-    assertEquals(response.headers.get("Access-Control-Allow-Origin"), "*");
+    assertEquals(
+      response.headers.get("Access-Control-Allow-Origin"),
+      "https://cursorvers.com",
+    );
   });
 });
 
@@ -216,7 +226,10 @@ Deno.test("register-utils - createSuccessResponse", async (t) => {
   await t.step("includes CORS headers by default", () => {
     const response = createSuccessResponse({});
     assertEquals(response.headers.get("Content-Type"), "application/json");
-    assertEquals(response.headers.get("Access-Control-Allow-Origin"), "*");
+    assertEquals(
+      response.headers.get("Access-Control-Allow-Origin"),
+      "https://cursorvers.com",
+    );
   });
 
   await t.step("handles complex data", async () => {

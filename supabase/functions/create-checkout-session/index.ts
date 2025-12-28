@@ -1,19 +1,21 @@
 import Stripe from "stripe";
 import { createLogger } from "../_shared/logger.ts";
+import {
+  createCorsHeaders,
+  createCorsPreflightResponse,
+} from "../_shared/http-utils.ts";
+import { isValidEmail } from "../_shared/validation-utils.ts";
 
 const log = createLogger("create-checkout-session");
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return createCorsPreflightResponse(req);
   }
+
+  // リクエストごとにCORSヘッダーを生成
+  const corsHeaders = createCorsHeaders(req);
 
   try {
     // Get environment variables
@@ -57,8 +59,7 @@ Deno.serve(async (req) => {
     }
 
     // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!isValidEmail(email)) {
       return new Response(
         JSON.stringify({ error: "Invalid email format" }),
         {

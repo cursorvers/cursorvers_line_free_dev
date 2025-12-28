@@ -4,6 +4,7 @@
  */
 
 import { COURSE_KEYWORDS, type DiagnosisKeyword } from "./lib/constants.ts";
+import { isValidEmail } from "../_shared/validation-utils.ts";
 
 /**
  * 入力長さをバケット化（匿名化用）
@@ -25,10 +26,10 @@ export function normalizeKeyword(raw: string): string {
 
 /**
  * メールアドレス形式かどうかを判定
+ * Note: Delegates to shared validation utils
  */
 export function isEmailFormat(text: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(text.trim());
+  return isValidEmail(text);
 }
 
 /**

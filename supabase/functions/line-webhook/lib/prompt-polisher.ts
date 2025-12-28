@@ -1,6 +1,7 @@
 /**
  * Prompt Polisher: 雑なメモを医療安全・コンプライアンスを考慮した構造化プロンプトに変換
  */
+import { extractErrorMessage } from "../../_shared/error-utils.ts";
 import { createLogger } from "../../_shared/logger.ts";
 
 const log = createLogger("prompt-polisher");
@@ -163,7 +164,7 @@ export async function runPromptPolisher(
     };
   } catch (err) {
     log.error("Unexpected error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     return {
       success: false,

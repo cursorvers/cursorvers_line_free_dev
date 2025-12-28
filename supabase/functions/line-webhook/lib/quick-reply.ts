@@ -88,6 +88,48 @@ export function buildBackButtonQuickReply(): QuickReply {
 }
 
 /**
+ * マイメニュー用のクイックリプライ（会員向け機能）
+ */
+export function buildMyMenuQuickReply(): QuickReply {
+  return {
+    items: [
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "📋 支払い履歴",
+          text: "支払い履歴",
+        },
+      },
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "🎁 特典確認",
+          text: "特典",
+        },
+      },
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "📞 お問い合わせ",
+          text: "お問い合わせ",
+        },
+      },
+      {
+        type: "action" as const,
+        action: {
+          type: "message" as const,
+          label: "🔧 ツール",
+          text: "サービス一覧",
+        },
+      },
+    ],
+  };
+}
+
+/**
  * メルマガ同意確認用のクイックリプライを生成
  */
 export function buildNewsletterConfirmQuickReply(): QuickReply {

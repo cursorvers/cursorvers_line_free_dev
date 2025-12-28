@@ -14,7 +14,10 @@
     "std-mock": "https://deno.land/std@0.210.0/testing/mock.ts"
   },
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noPropertyAccessFromIndexSignature": true
   },
   "test": {
     "include": ["**/*_test.ts", "**/*.test.ts"]

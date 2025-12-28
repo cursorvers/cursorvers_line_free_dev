@@ -22,13 +22,9 @@ export function normalizeEmail(email?: string | null): string | null {
   return trimmed.toLowerCase();
 }
 
-/**
- * メールアドレスのフォーマットを検証
- */
-export function isValidEmailFormat(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
-  return emailRegex.test(email);
-}
+// Note: Email validation is now centralized in _shared/validation-utils.ts
+// Re-export for backwards compatibility
+export { isValidEmailFormat } from "../_shared/validation-utils.ts";
 
 /**
  * LINE User ID のフォーマットを検証
@@ -56,12 +52,13 @@ export function parseOptInEmail(value: unknown): boolean {
   return true; // default
 }
 
-/**
- * CORS レスポンスヘッダー
- */
+// Note: CORS headers are now managed centrally via ../\_shared/http-utils.ts
+// Use createCorsHeaders(req) for dynamic origin validation
+// Legacy constant kept for backwards compatibility but should not be used
+/** @deprecated Use createCorsHeaders from http-utils.ts instead */
 export const CORS_HEADERS = {
   "Content-Type": "application/json",
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "https://cursorvers.com",
   "Access-Control-Allow-Headers": "Content-Type, x-api-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 } as const;

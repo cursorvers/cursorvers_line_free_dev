@@ -4,6 +4,8 @@
  */
 
 import { createLogger } from "./logger.ts";
+import { extractErrorMessage } from "./error-utils.ts";
+import { maskDiscordUserId } from "./masking-utils.ts";
 
 const log = createLogger("discord");
 
@@ -92,7 +94,7 @@ export async function createDiscordInvite(
     log.info("Discord invite created", { inviteUrl });
     return { success: true, inviteUrl };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     log.error("Discord invite creation error", { errorMessage });
     return { success: false, error: errorMessage };
   }
@@ -126,18 +128,18 @@ export async function addDiscordRole(
     if (!response.ok) {
       log.error("Failed to add Discord role", {
         status: response.status,
-        discordUserId: discordUserId.slice(-4),
+        discordUserId: maskDiscordUserId(discordUserId),
       });
       return { success: false, error: `API error: ${response.status}` };
     }
 
     log.info("Discord role added", {
-      discordUserId: discordUserId.slice(-4),
+      discordUserId: maskDiscordUserId(discordUserId),
       roleId: targetRoleId,
     });
     return { success: true };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     log.error("Discord role add error", { errorMessage });
     return { success: false, error: errorMessage };
   }
@@ -171,7 +173,7 @@ export async function removeDiscordRole(
     // 404 = ユーザーがサーバーにいない or ロールを持っていない → 成功扱い
     if (response.status === 404) {
       log.info("Discord role not found (already removed or user left)", {
-        discordUserId: discordUserId.slice(-4),
+        discordUserId: maskDiscordUserId(discordUserId),
       });
       return { success: true };
     }
@@ -179,18 +181,18 @@ export async function removeDiscordRole(
     if (!response.ok) {
       log.error("Failed to remove Discord role", {
         status: response.status,
-        discordUserId: discordUserId.slice(-4),
+        discordUserId: maskDiscordUserId(discordUserId),
       });
       return { success: false, error: `API error: ${response.status}` };
     }
 
     log.info("Discord role removed", {
-      discordUserId: discordUserId.slice(-4),
+      discordUserId: maskDiscordUserId(discordUserId),
       roleId: targetRoleId,
     });
     return { success: true };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     log.error("Discord role remove error", { errorMessage });
     return { success: false, error: errorMessage };
   }
@@ -254,11 +256,11 @@ export async function sendDiscordDM(
     }
 
     log.info("Discord DM sent", {
-      discordUserId: discordUserId.slice(-4),
+      discordUserId: maskDiscordUserId(discordUserId),
     });
     return { success: true };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     log.error("Discord DM error", { errorMessage });
     return { success: false, error: errorMessage };
   }

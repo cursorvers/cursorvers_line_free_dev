@@ -3,6 +3,7 @@
  * LINE イベントの統計情報を取得し、Discord に通知
  */
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { createLogger, errorToContext } from "../_shared/logger.ts";
 
 const log = createLogger("health-check");
@@ -117,7 +118,7 @@ Deno.serve(async (): Promise<Response> => {
       durationMs: Date.now() - startTime,
     });
 
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = extractErrorMessage(err);
     await sendDiscordMessage(
       `🚨 **Health Check Failed**\nエラー: ${errorMessage}\n発生時刻: ${
         new Date().toISOString()

@@ -2,7 +2,9 @@
  * discord-bot ユーティリティ関数
  */
 
-export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+// Email validation is now centralized in _shared/validation-utils.ts
+// Re-export for backwards compatibility
+export { EMAIL_REGEX, isValidEmail } from "../_shared/validation-utils.ts";
 
 /**
  * HEX文字列をUint8Arrayに変換
@@ -59,9 +61,4 @@ export function normalizeEmail(email: unknown): string {
   return "";
 }
 
-/**
- * メールアドレスのバリデーション
- */
-export function isValidEmail(email: string): boolean {
-  return EMAIL_REGEX.test(email);
-}
+// Note: isValidEmail is re-exported from _shared/validation-utils.ts above

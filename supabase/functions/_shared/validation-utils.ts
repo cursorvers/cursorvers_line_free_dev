@@ -3,13 +3,26 @@
  */
 
 /**
+ * メールアドレスバリデーション用正規表現
+ * Note: 大文字小文字を区別しない (/i フラグ)
+ */
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
+/**
  * メールアドレスが有効かどうかをチェック
+ * - 前後の空白はトリムされる
+ * - 大文字小文字は区別しない
  */
 export function isValidEmail(email: string): boolean {
   if (!email || typeof email !== "string") return false;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  return EMAIL_REGEX.test(email.trim());
 }
+
+/**
+ * メールアドレスフォーマットチェック（isValidEmailのエイリアス）
+ * @deprecated Use isValidEmail instead
+ */
+export const isValidEmailFormat = isValidEmail;
 
 /**
  * URLが有効かどうかをチェック

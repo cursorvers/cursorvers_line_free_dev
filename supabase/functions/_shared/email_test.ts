@@ -43,28 +43,30 @@ Deno.test("email - stripHtml helper (via module behavior)", async (t) => {
   });
 });
 
-Deno.test("email - maskEmail helper", async (t) => {
-  // maskEmailも内部関数なので、ロジックを直接テスト
-  const maskEmail = (email: string): string => {
-    const [local, domain] = email.split("@");
+Deno.test("email - maskEmailWithDomain helper", async (t) => {
+  // maskEmailWithDomainも内部関数なので、ロジックを直接テスト
+  const maskEmailWithDomain = (email: string): string => {
+    const parts = email.split("@");
+    const local = parts[0] ?? "";
+    const domain = parts[1];
     if (!domain) return "***";
     const maskedLocal = local.slice(0, 2) + "***";
     return `${maskedLocal}@${domain}`;
   };
 
   await t.step("masks local part of email", () => {
-    assertEquals(maskEmail("test@example.com"), "te***@example.com");
-    assertEquals(maskEmail("john.doe@gmail.com"), "jo***@gmail.com");
+    assertEquals(maskEmailWithDomain("test@example.com"), "te***@example.com");
+    assertEquals(maskEmailWithDomain("john.doe@gmail.com"), "jo***@gmail.com");
   });
 
   await t.step("handles short local part", () => {
-    assertEquals(maskEmail("a@example.com"), "a***@example.com");
-    assertEquals(maskEmail("ab@example.com"), "ab***@example.com");
+    assertEquals(maskEmailWithDomain("a@example.com"), "a***@example.com");
+    assertEquals(maskEmailWithDomain("ab@example.com"), "ab***@example.com");
   });
 
   await t.step("handles invalid email", () => {
-    assertEquals(maskEmail("notanemail"), "***");
-    assertEquals(maskEmail(""), "***");
+    assertEquals(maskEmailWithDomain("notanemail"), "***");
+    assertEquals(maskEmailWithDomain(""), "***");
   });
 });
 

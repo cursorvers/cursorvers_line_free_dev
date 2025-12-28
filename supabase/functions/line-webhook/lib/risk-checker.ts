@@ -1,9 +1,10 @@
 // supabase/functions/line-webhook/lib/risk-checker.ts
 // Risk Checker: 文章のリスクカテゴリを判定し、修正案を提示
 
-import type { RiskCategory, RiskCheckResult } from "./types.ts";
-import { DISCORD_INVITE_URL } from "./constants.ts";
+import { extractErrorMessage } from "../../_shared/error-utils.ts";
 import { createLogger } from "../../_shared/logger.ts";
+import { DISCORD_INVITE_URL } from "./constants.ts";
+import type { RiskCategory, RiskCheckResult } from "./types.ts";
 
 const log = createLogger("risk-checker");
 
@@ -196,7 +197,7 @@ export async function runRiskChecker(
     };
   } catch (err) {
     log.error("Unexpected error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     return {
       success: false,

@@ -62,7 +62,7 @@ Deno.test("isRetryableError returns true for unknown errors (default behavior)",
 
 Deno.test("withRetry succeeds on first attempt", async () => {
   let attempts = 0;
-  const result = await withRetry(async () => {
+  const result = await withRetry(() => {
     attempts++;
     return "success";
   });
@@ -74,7 +74,7 @@ Deno.test("withRetry succeeds on first attempt", async () => {
 Deno.test("withRetry retries on failure and eventually succeeds", async () => {
   let attempts = 0;
   const result = await withRetry(
-    async () => {
+    () => {
       attempts++;
       if (attempts < 3) {
         throw new Error("temporary failure");
@@ -151,7 +151,7 @@ Deno.test("withRetry calls onRetry callback", async () => {
   const retryLogs: { attempt: number; delay: number }[] = [];
 
   await withRetry(
-    async () => {
+    () => {
       attempts++;
       if (attempts < 3) {
         throw new Error("retry me");
@@ -180,7 +180,7 @@ Deno.test("withRetry respects maxDelay", async () => {
   const retryDelays: number[] = [];
 
   await withRetry(
-    async () => {
+    () => {
       attempts++;
       if (attempts < 5) {
         throw new Error("keep retrying");

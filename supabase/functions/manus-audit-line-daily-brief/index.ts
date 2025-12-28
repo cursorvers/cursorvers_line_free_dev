@@ -52,9 +52,7 @@ const MANUS_AUDIT_API_KEY = Deno.env.get("MANUS_AUDIT_API_KEY");
 const DISCORD_ADMIN_WEBHOOK_URL = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
 const DISCORD_MAINT_WEBHOOK_URL = Deno.env.get("DISCORD_MAINT_WEBHOOK_URL");
 const MANUS_WEBHOOK_URL = Deno.env.get("MANUS_WEBHOOK_URL");
-
-const LANDING_PAGE_URL =
-  "https://mo666-med.github.io/cursorvers_line_free_dev/register.html";
+const LANDING_PAGE_URL = Deno.env.get("LANDING_PAGE_URL") ?? "";
 
 // Validate required environment variables
 function validateEnv(): { valid: boolean; error?: string } {

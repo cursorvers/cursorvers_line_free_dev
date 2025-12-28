@@ -3,6 +3,7 @@
  * 全 Edge Functions から LINE プッシュメッセージを送信
  */
 import { createLogger } from "./logger.ts";
+import { extractErrorMessage } from "./error-utils.ts";
 
 const log = createLogger("line-messaging");
 
@@ -44,7 +45,7 @@ export async function pushLineMessage(
     return true;
   } catch (err) {
     log.error("LINE push error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     return false;
   }

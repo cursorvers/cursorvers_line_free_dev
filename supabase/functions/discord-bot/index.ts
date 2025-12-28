@@ -6,7 +6,9 @@
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import nacl from "tweetnacl";
+import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { EMAIL_REGEX } from "../_shared/validation-utils.ts";
 
 const log = createLogger("discord-bot");
 
@@ -18,8 +20,6 @@ const SEC_BRIEF_CHANNEL_ID = Deno.env.get("SEC_BRIEF_CHANNEL_ID") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
   "";
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
@@ -212,7 +212,7 @@ async function handleJoin(
     const isTimeout = err instanceof DOMException && err.name === "AbortError";
     log.error("Role assignment request failed", {
       isTimeout,
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     return jsonResponse({
       type: 4,
@@ -247,11 +247,37 @@ async function handleJoin(
     });
   }
 
+  // ウェルカムメッセージをチャンネルに公開投稿
+  const channelId = interaction.channel_id;
+  if (channelId) {
+    try {
+      await fetch(
+        `https://discord.com/api/v10/channels/${channelId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            content: `🎉 <@${userId}>さん、**Cursorvers Library**へようこそ！`,
+          }),
+        },
+      );
+    } catch (err) {
+      // ウェルカムメッセージ送信失敗はログのみ（認証自体は成功）
+      log.warn("Failed to send welcome message", {
+        errorMessage: extractErrorMessage(err),
+      });
+    }
+  }
+
   return jsonResponse({
     type: 4,
     data: {
       content:
         "🎉 **認証成功！**\nLibrary Memberの権限を付与しました。\n左側のメニューに限定チャンネルが表示されているか確認してください。",
+      flags: 64,
     },
   });
 }

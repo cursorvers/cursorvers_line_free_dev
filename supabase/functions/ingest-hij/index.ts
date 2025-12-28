@@ -3,7 +3,12 @@
 // Google Apps Script or 手動転送からのJSON POSTを受け取り、hij_rawテーブルに保存
 
 import { createClient } from "@supabase/supabase-js";
+import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { createLogger } from "../_shared/logger.ts";
+import {
+  createCorsPreflightResponse,
+  getCorsOrigin,
+} from "../_shared/http-utils.ts";
 
 const log = createLogger("ingest-hij");
 
@@ -28,22 +33,21 @@ const INGEST_API_KEY = Deno.env.get("INGEST_HIJ_API_KEY");
 Deno.serve(async (req: Request): Promise<Response> => {
   // CORSプリフライト対応
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers":
-          "Content-Type, Authorization, X-API-Key",
-      },
-    });
+    return createCorsPreflightResponse(req);
   }
+
+  // リクエストごとにCORSオリジンを取得
+  const corsOrigin = getCorsOrigin(req.headers.get("Origin"));
+  const responseHeaders = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": corsOrigin,
+  };
 
   // POSTのみ許可
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
       status: 405,
-      headers: { "Content-Type": "application/json" },
+      headers: responseHeaders,
     });
   }
 
@@ -54,7 +58,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       log.warn("Invalid API key attempt");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { "Content-Type": "application/json" },
+        headers: responseHeaders,
       });
     }
   }
@@ -72,7 +76,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }),
         {
           status: 400,
-          headers: { "Content-Type": "application/json" },
+          headers: responseHeaders,
         },
       );
     }
@@ -107,7 +111,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           }),
           {
             status: 200,
-            headers: { "Content-Type": "application/json" },
+            headers: responseHeaders,
           },
         );
       }
@@ -117,7 +121,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         JSON.stringify({ error: "Database Error", details: error.message }),
         {
           status: 500,
-          headers: { "Content-Type": "application/json" },
+          headers: responseHeaders,
         },
       );
     }
@@ -137,18 +141,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }),
       {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: responseHeaders,
       },
     );
   } catch (err) {
     log.error("Request processing error", {
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: extractErrorMessage(err),
     });
     return new Response(
       JSON.stringify({ error: "Internal Server Error", details: String(err) }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: responseHeaders,
       },
     );
   }

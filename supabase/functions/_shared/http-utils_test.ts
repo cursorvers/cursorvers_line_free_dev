@@ -15,37 +15,44 @@ import {
 } from "./http-utils.ts";
 
 Deno.test("http-utils - addCorsHeaders", async (t) => {
-  await t.step("adds CORS headers with default origin", () => {
+  await t.step("adds CORS headers with allowed origin", () => {
     const headers = new Headers();
-    addCorsHeaders(headers);
+    addCorsHeaders(headers, "https://cursorvers.com");
 
-    assertEquals(headers.get("Access-Control-Allow-Origin"), "*");
+    assertEquals(
+      headers.get("Access-Control-Allow-Origin"),
+      "https://cursorvers.com",
+    );
     assertEquals(
       headers.get("Access-Control-Allow-Methods"),
       "GET, POST, OPTIONS",
     );
     assertEquals(
       headers.get("Access-Control-Allow-Headers"),
-      "Content-Type, Authorization",
+      "Content-Type, Authorization, X-API-Key, x-client-info, apikey",
     );
   });
 
-  await t.step("adds CORS headers with custom origin", () => {
+  await t.step("uses first allowed origin for unknown origins", () => {
     const headers = new Headers();
-    addCorsHeaders(headers, "https://example.com");
+    addCorsHeaders(headers, "https://unknown-origin.com");
 
+    // Should return first allowed origin when request origin is not in allowed list
     assertEquals(
       headers.get("Access-Control-Allow-Origin"),
-      "https://example.com",
+      "https://cursorvers.com",
     );
   });
 
   await t.step("preserves existing headers", () => {
     const headers = new Headers({ "X-Custom": "value" });
-    addCorsHeaders(headers);
+    addCorsHeaders(headers, "https://cursorvers.com");
 
     assertEquals(headers.get("X-Custom"), "value");
-    assertEquals(headers.get("Access-Control-Allow-Origin"), "*");
+    assertEquals(
+      headers.get("Access-Control-Allow-Origin"),
+      "https://cursorvers.com",
+    );
   });
 });
 
