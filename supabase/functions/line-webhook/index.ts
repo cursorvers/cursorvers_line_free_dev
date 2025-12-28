@@ -27,8 +27,8 @@ const log = createLogger("line-webhook");
 
 // lib モジュール - 定数・型
 import {
-  DISCORD_INVITE_URL,
   type DiagnosisKeyword,
+  DISCORD_INVITE_URL,
   SERVICES_LP_URL,
 } from "./lib/constants.ts";
 
