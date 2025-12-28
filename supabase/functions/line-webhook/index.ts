@@ -26,7 +26,11 @@ import { isValidEmail as isEmailFormat } from "../_shared/validation-utils.ts";
 const log = createLogger("line-webhook");
 
 // lib モジュール - 定数・型
-import { type DiagnosisKeyword } from "./lib/constants.ts";
+import {
+  DISCORD_INVITE_URL,
+  type DiagnosisKeyword,
+  SERVICES_LP_URL,
+} from "./lib/constants.ts";
 
 // lib モジュール - LINE API
 import { pushText, replyText, verifyLineSignature } from "./lib/line-api.ts";
