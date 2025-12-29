@@ -100,9 +100,9 @@ export interface MaintenanceResult {
 
 export interface RemediationResult {
   triggered: boolean;
-  taskId?: string;
-  taskUrl?: string;
-  error?: string;
+  taskId?: string | undefined;
+  taskUrl?: string | undefined;
+  error?: string | undefined;
 }
 
 export interface AuditResult {

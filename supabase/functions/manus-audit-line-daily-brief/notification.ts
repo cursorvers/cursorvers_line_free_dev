@@ -123,7 +123,7 @@ export async function sendDiscordNotification(
   result: AuditResult,
   options: {
     force?: boolean;
-    webhookUrl?: string;
+    webhookUrl?: string | undefined;
     audience?: NotificationAudience;
   },
 ): Promise<void> {
@@ -162,7 +162,7 @@ export async function sendDiscordNotification(
 
 export async function sendManusNotification(
   result: AuditResult,
-  options: { force?: boolean; webhookUrl?: string },
+  options: { force?: boolean; webhookUrl?: string | undefined },
 ): Promise<void> {
   const { force = false, webhookUrl } = options;
 

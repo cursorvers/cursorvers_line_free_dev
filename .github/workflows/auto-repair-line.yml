@@ -35,12 +35,17 @@ on:
         description: '結果メッセージ'
         value: ${{ jobs.repair.outputs.message }}
 
+permissions:
+  contents: read
+  actions: write
+
 env:
-  SUPABASE_PROJECT_ID: haaxgwyimoqzzxzdaeep
+  SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
 
 jobs:
   repair:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       success: ${{ steps.result.outputs.success }}
       message: ${{ steps.result.outputs.message }}
@@ -57,7 +62,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 1.223.10
 
       - name: Login to Supabase
         run: |
@@ -66,9 +71,10 @@ jobs:
 
       - name: Diagnose Issue
         id: diagnose
+        env:
+          ISSUE_TYPE: ${{ inputs.issue_type }}
         run: |
           echo "=== Diagnosing LINE system ==="
-          ISSUE_TYPE="${{ inputs.issue_type }}"
           echo "Issue type: $ISSUE_TYPE"
 
           # Webhook健全性チェック
@@ -90,10 +96,12 @@ jobs:
       - name: Repair - Webhook (401/JWT issues)
         if: contains(fromJSON('["webhook_401", "webhook_jwt", "all"]'), inputs.issue_type)
         id: repair_webhook
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           echo "=== Repairing LINE Webhook ==="
 
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$DRY_RUN" = "true" ]; then
             echo "[DRY RUN] Would deploy: line-webhook --no-verify-jwt"
             echo "status=skipped" >> $GITHUB_OUTPUT
             exit 0
@@ -114,10 +122,12 @@ jobs:
       - name: Repair - Timeout issues (redeploy all)
         if: contains(fromJSON('["webhook_timeout", "api_down", "all"]'), inputs.issue_type)
         id: repair_timeout
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           echo "=== Repairing timeout/API issues ==="
 
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$DRY_RUN" = "true" ]; then
             echo "[DRY RUN] Would deploy: line-webhook, line-register"
             echo "status=skipped" >> $GITHUB_OUTPUT
             exit 0
@@ -166,11 +176,11 @@ jobs:
 
       - name: Set Result
         id: result
+        env:
+          ISSUE_TYPE: ${{ inputs.issue_type }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          ISSUE_TYPE="${{ inputs.issue_type }}"
-          VERIFIED="${{ steps.verify.outputs.verified }}"
-          DRY_RUN="${{ inputs.dry_run }}"
-
           if [ "$DRY_RUN" = "true" ]; then
             echo "success=true" >> $GITHUB_OUTPUT
             echo "message=[DRY RUN] 修繕シミュレーション完了" >> $GITHUB_OUTPUT
@@ -189,12 +199,11 @@ jobs:
       - name: Fallback to Manus
         if: steps.result.outputs.success == 'false' && inputs.issue_type != 'token_expired'
         env:
-          SUPABASE_URL: https://haaxgwyimoqzzxzdaeep.supabase.co
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ISSUE_TYPE: ${{ inputs.issue_type }}
         run: |
           echo "🤖 GitHub Actions修繕失敗 - Manusにエスカレーション..."
-
-          ISSUE_TYPE="${{ inputs.issue_type }}"
 
           # Manus監査エンドポイントを呼び出し（自動修繕タスク作成をトリガー）
           RESPONSE=$(curl -s -X POST \
@@ -216,10 +225,13 @@ jobs:
 
       - name: Notify Discord
         if: always()
+        env:
+          SUCCESS: ${{ steps.result.outputs.success }}
+          MESSAGE: ${{ steps.result.outputs.message }}
+          ISSUE_TYPE: ${{ inputs.issue_type }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          SUCCESS="${{ steps.result.outputs.success }}"
-          MESSAGE="${{ steps.result.outputs.message }}"
-          ISSUE_TYPE="${{ inputs.issue_type }}"
           MANUS_URL="${MANUS_TASK_URL:-}"
 
           if [ "$SUCCESS" = "true" ]; then
@@ -236,7 +248,10 @@ jobs:
             MANUS_FIELD=",{\"name\": \"Manusタスク\", \"value\": \"[$MANUS_URL]($MANUS_URL)\", \"inline\": false}"
           fi
 
-          curl -X POST "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}" \
+          # JSONエスケープしてDiscordに通知
+          SAFE_MESSAGE=$(echo "$MESSAGE" | jq -Rs '.' | sed 's/^"//;s/"$//')
+
+          curl -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "{
               \"embeds\": [{
@@ -244,10 +259,10 @@ jobs:
                 \"color\": $COLOR,
                 \"fields\": [
                   {\"name\": \"問題タイプ\", \"value\": \"$ISSUE_TYPE\", \"inline\": true},
-                  {\"name\": \"結果\", \"value\": \"$MESSAGE\", \"inline\": false},
-                  {\"name\": \"実行\", \"value\": \"[GitHub Actions](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}
+                  {\"name\": \"結果\", \"value\": \"$SAFE_MESSAGE\", \"inline\": false},
+                  {\"name\": \"実行\", \"value\": \"[GitHub Actions]($RUN_URL)\", \"inline\": true}
                   $MANUS_FIELD
                 ],
                 \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
               }]
-            }"
+            }" || true

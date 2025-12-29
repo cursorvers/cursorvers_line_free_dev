@@ -41,7 +41,7 @@ export async function checkBroadcastSuccess(
   > = {};
 
   for (const record of data || []) {
-    const date = new Date(record.sent_at).toISOString().split("T")[0];
+    const date = new Date(record.sent_at).toISOString().split("T")[0] ?? "";
     if (!dailyStats[date]) {
       dailyStats[date] = { total: 0, successful: 0, failed: 0 };
     }

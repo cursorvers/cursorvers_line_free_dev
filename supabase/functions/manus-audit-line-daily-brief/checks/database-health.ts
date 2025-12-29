@@ -71,13 +71,13 @@ export async function checkDatabaseHealth(
     .limit(10);
 
   if (!usageError && highUsage && highUsage.length > 0) {
-    const maxUsage = highUsage[0].times_used;
-    if (maxUsage > ABNORMAL_USAGE_THRESHOLD) {
+    const topCard = highUsage[0];
+    if (topCard && topCard.times_used > ABNORMAL_USAGE_THRESHOLD) {
       anomalies.push(
-        `異常に多い使用回数: ${maxUsage}回（カードID: ${highUsage[0].id}）`,
+        `異常に多い使用回数: ${topCard.times_used}回（カードID: ${topCard.id}）`,
       );
       warnings.push(
-        `⚠️ 警告: 使用回数が異常に多いカードが検出されました（最大: ${maxUsage}回）`,
+        `⚠️ 警告: 使用回数が異常に多いカードが検出されました（最大: ${topCard.times_used}回）`,
       );
     }
   }

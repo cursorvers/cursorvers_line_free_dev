@@ -200,9 +200,12 @@ Deno.test("notification - buildNotificationMessage", async (t) => {
           passed: true,
           warnings: [],
           details: {
+            webhookHealth: { passed: true },
             apiHealth: { passed: true },
             googleSheetsSync: { passed: true },
             landingPageAccess: { passed: true },
+            lineBotHealth: { passed: true },
+            recentInteractions: { passed: true },
           },
         },
       },

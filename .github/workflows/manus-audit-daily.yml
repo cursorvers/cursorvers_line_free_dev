@@ -19,7 +19,7 @@ on:
           - 'true'
 
 permissions:
-  contents: write
+  contents: read
   actions: write
 
 jobs:
@@ -84,6 +84,11 @@ jobs:
           HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
           BODY=$(echo "$RESPONSE" | sed '$d')
 
+          # BODYをGITHUB_ENVに保存（後続ステップで使用）
+          echo "AUDIT_BODY<<EOF" >> $GITHUB_ENV
+          echo "$BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
           echo "Response: $BODY"
           echo "HTTP Code: $HTTP_CODE"
 
@@ -128,7 +133,7 @@ jobs:
           echo "対象テーマ: $LOW_INVENTORY_THEMES"
 
           gh workflow run replenish-cards.yml \
-            -f themes="$LOW_INVENTORY_THEMES" \
+            -f themes="${LOW_INVENTORY_THEMES}" \
             -f count="20"
 
           echo "✅ AI自動補充ワークフローをトリガーしました"
@@ -142,25 +147,30 @@ jobs:
         run: |
           echo "🔍 LINE問題の検出を開始..."
 
-          # 監査結果からLINE問題を抽出
+          # 監査結果からLINE問題を抽出（AUDIT_BODYはGITHUB_ENV経由で受け取り）
           LINE_ISSUES=""
 
+          if [ -z "$AUDIT_BODY" ]; then
+            echo "⚠️ 監査結果が空です（前ステップでエラーの可能性）"
+            exit 0
+          fi
+
           # Webhook問題
-          if echo "$BODY" | grep -q "LINE Webhook"; then
-            if echo "$BODY" | grep -q "401\|HTTP 401"; then
+          if echo "$AUDIT_BODY" | grep -q "LINE Webhook"; then
+            if echo "$AUDIT_BODY" | grep -q "401\|HTTP 401"; then
               LINE_ISSUES="webhook_401"
-            elif echo "$BODY" | grep -q "タイムアウト\|timeout"; then
+            elif echo "$AUDIT_BODY" | grep -q "タイムアウト\|timeout"; then
               LINE_ISSUES="webhook_timeout"
             fi
           fi
 
           # トークン問題
-          if echo "$BODY" | grep -q "トークン無効\|期限切れ\|401"; then
+          if echo "$AUDIT_BODY" | grep -q "トークン無効\|期限切れ\|401"; then
             LINE_ISSUES="token_expired"
           fi
 
           # API問題
-          if echo "$BODY" | grep -q "LINE登録API.*失敗\|API.*down"; then
+          if echo "$AUDIT_BODY" | grep -q "LINE登録API.*失敗\|API.*down"; then
             LINE_ISSUES="${LINE_ISSUES:-api_down}"
           fi
 

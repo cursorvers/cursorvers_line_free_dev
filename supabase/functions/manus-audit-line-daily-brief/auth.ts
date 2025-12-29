@@ -6,7 +6,7 @@ import { createLogger } from "../_shared/logger.ts";
 const log = createLogger("audit-auth");
 
 interface AuthConfig {
-  apiKey?: string;
+  apiKey?: string | undefined;
   serviceRoleKey: string;
 }
 

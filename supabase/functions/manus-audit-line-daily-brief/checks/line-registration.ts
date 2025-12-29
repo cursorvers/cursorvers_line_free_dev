@@ -29,7 +29,7 @@ const TABLE_NOT_FOUND_CODES = ["PGRST116", "42P01"];
 interface CheckConfig {
   supabaseUrl: string;
   landingPageUrl: string;
-  lineChannelAccessToken?: string;
+  lineChannelAccessToken?: string | undefined;
 }
 
 /**
@@ -436,15 +436,18 @@ async function checkRecentInteractions(
     }
 
     if (count && count > 0 && data && data.length > 0) {
-      log.info("Recent interactions found", {
-        count,
-        lastInteraction: data[0].created_at,
-      });
-      return {
-        passed: true,
-        lastInteraction: data[0].created_at,
-        count,
-      };
+      const latestInteraction = data[0];
+      if (latestInteraction) {
+        log.info("Recent interactions found", {
+          count,
+          lastInteraction: latestInteraction.created_at,
+        });
+        return {
+          passed: true,
+          lastInteraction: latestInteraction.created_at,
+          count,
+        };
+      }
     }
 
     return {
