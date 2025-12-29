@@ -49,6 +49,7 @@ export interface DatabaseHealthCheckResult extends CheckResult {
 
 export interface LineRegistrationCheckResult extends CheckResult {
   details: {
+    webhookHealth: { passed: boolean; responseTime?: number; error?: string };
     apiHealth: { passed: boolean; responseTime?: number; error?: string };
     googleSheetsSync: { passed: boolean; lastUpdate?: string; error?: string };
     landingPageAccess: {

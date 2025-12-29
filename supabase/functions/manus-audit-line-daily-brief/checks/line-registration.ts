@@ -26,6 +26,20 @@ export async function checkLineRegistrationSystem(
   const warnings: string[] = [];
   let allPassed = true;
 
+  // 0. Check LINE Webhook health (リッチメニュー応答用)
+  const webhookHealth = await checkWebhookHealth(config.supabaseUrl);
+  if (!webhookHealth.passed) {
+    allPassed = false;
+    if (webhookHealth.error) {
+      warnings.push(`🚨 LINE Webhook: ${webhookHealth.error}`);
+    }
+  }
+  if (webhookHealth.responseTime && webhookHealth.responseTime > API_TIMEOUT_MS) {
+    warnings.push(
+      `⚠️ LINE Webhook: レスポンス時間が遅い (${webhookHealth.responseTime}ms)`,
+    );
+  }
+
   // 1. Check LINE register API health
   const apiHealth = await checkApiHealth(config.supabaseUrl);
   if (!apiHealth.passed) {
@@ -81,11 +95,54 @@ export async function checkLineRegistrationSystem(
     passed: allPassed,
     warnings,
     details: {
+      webhookHealth,
       apiHealth,
       googleSheetsSync,
       landingPageAccess,
     },
   };
+}
+
+/**
+ * LINE Webhook の疎通チェック（GETリクエスト）
+ */
+async function checkWebhookHealth(
+  supabaseUrl: string,
+): Promise<{ passed: boolean; responseTime?: number; error?: string }> {
+  try {
+    const startTime = Date.now();
+    const response = await fetch(`${supabaseUrl}/functions/v1/line-webhook`, {
+      method: "GET",
+    });
+    const responseTime = Date.now() - startTime;
+
+    if (response.ok) {
+      const text = await response.text();
+      if (text.includes("line-webhook is running")) {
+        log.info("LINE Webhook is healthy", { responseTime });
+        return { passed: true, responseTime };
+      } else {
+        return {
+          passed: false,
+          responseTime,
+          error: `予期しないレスポンス: ${text.slice(0, 50)}`,
+        };
+      }
+    } else {
+      return {
+        passed: false,
+        responseTime,
+        error: `HTTP ${response.status}`,
+      };
+    }
+  } catch (error) {
+    return {
+      passed: false,
+      error: `接続失敗 - ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
 }
 
 async function checkApiHealth(

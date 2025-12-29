@@ -1,0 +1,6 @@
+{
+  "version": "5",
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno": "8c1c3233f80bde3359192f205329957393c1847341c318ee8e907d15793fa615"
+  }
+}
