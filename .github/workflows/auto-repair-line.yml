@@ -1,0 +1,253 @@
+name: Auto Repair LINE System
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_type:
+        description: '修繕タイプ'
+        required: true
+        type: choice
+        options:
+          - webhook_401
+          - webhook_timeout
+          - webhook_jwt
+          - token_expired
+          - api_down
+          - all
+      dry_run:
+        description: 'ドライラン（実際には実行しない）'
+        required: false
+        type: boolean
+        default: false
+
+  # 監査ワークフローからの呼び出し
+  workflow_call:
+    inputs:
+      issue_type:
+        description: '修繕タイプ'
+        required: true
+        type: string
+    outputs:
+      success:
+        description: '修繕成功したか'
+        value: ${{ jobs.repair.outputs.success }}
+      message:
+        description: '結果メッセージ'
+        value: ${{ jobs.repair.outputs.message }}
+
+env:
+  SUPABASE_PROJECT_ID: haaxgwyimoqzzxzdaeep
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    outputs:
+      success: ${{ steps.result.outputs.success }}
+      message: ${{ steps.result.outputs.message }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Login to Supabase
+        run: |
+          echo "Logging in to Supabase..."
+          supabase login --token ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Diagnose Issue
+        id: diagnose
+        run: |
+          echo "=== Diagnosing LINE system ==="
+          ISSUE_TYPE="${{ inputs.issue_type }}"
+          echo "Issue type: $ISSUE_TYPE"
+
+          # Webhook健全性チェック
+          echo "Checking webhook health..."
+          WEBHOOK_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://${{ env.SUPABASE_PROJECT_ID }}.supabase.co/functions/v1/line-webhook" || echo "000")
+          echo "Webhook response code: $WEBHOOK_RESPONSE"
+          echo "webhook_status=$WEBHOOK_RESPONSE" >> $GITHUB_OUTPUT
+
+          # LINE登録API チェック
+          echo "Checking line-register API..."
+          API_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "https://${{ env.SUPABASE_PROJECT_ID }}.supabase.co/functions/v1/line-register" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"health-check@example.com","opt_in_email":false}' || echo "000")
+          echo "API response code: $API_RESPONSE"
+          echo "api_status=$API_RESPONSE" >> $GITHUB_OUTPUT
+
+      - name: Repair - Webhook (401/JWT issues)
+        if: contains(fromJSON('["webhook_401", "webhook_jwt", "all"]'), inputs.issue_type)
+        id: repair_webhook
+        run: |
+          echo "=== Repairing LINE Webhook ==="
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "[DRY RUN] Would deploy: line-webhook --no-verify-jwt"
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Deploying line-webhook with --no-verify-jwt..."
+          if supabase functions deploy line-webhook \
+            --no-verify-jwt \
+            --project-ref ${{ env.SUPABASE_PROJECT_ID }}; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "LINE Webhook deployed successfully"
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "LINE Webhook deployment failed"
+            exit 1
+          fi
+
+      - name: Repair - Timeout issues (redeploy all)
+        if: contains(fromJSON('["webhook_timeout", "api_down", "all"]'), inputs.issue_type)
+        id: repair_timeout
+        run: |
+          echo "=== Repairing timeout/API issues ==="
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "[DRY RUN] Would deploy: line-webhook, line-register"
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Deploying line-webhook..."
+          supabase functions deploy line-webhook \
+            --no-verify-jwt \
+            --project-ref ${{ env.SUPABASE_PROJECT_ID }}
+
+          echo "Deploying line-register..."
+          supabase functions deploy line-register \
+            --project-ref ${{ env.SUPABASE_PROJECT_ID }}
+
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Repair - Token expired (notification only)
+        if: inputs.issue_type == 'token_expired'
+        id: repair_token
+        run: |
+          echo "=== Token Expired - Manual intervention required ==="
+          echo "LINE_CHANNEL_ACCESS_TOKEN needs to be refreshed manually."
+          echo "Steps:"
+          echo "1. Go to LINE Developers Console"
+          echo "2. Generate new Channel Access Token"
+          echo "3. Run: supabase secrets set LINE_CHANNEL_ACCESS_TOKEN=<new_token>"
+          echo "status=manual_required" >> $GITHUB_OUTPUT
+
+      - name: Verify Repair
+        if: inputs.dry_run != true
+        id: verify
+        run: |
+          echo "=== Verifying repair ==="
+          sleep 10  # Wait for deployment to propagate
+
+          # Re-check webhook
+          WEBHOOK_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://${{ env.SUPABASE_PROJECT_ID }}.supabase.co/functions/v1/line-webhook" || echo "000")
+          echo "Webhook response after repair: $WEBHOOK_RESPONSE"
+
+          if [ "$WEBHOOK_RESPONSE" = "200" ]; then
+            echo "verified=true" >> $GITHUB_OUTPUT
+          else
+            echo "verified=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set Result
+        id: result
+        run: |
+          ISSUE_TYPE="${{ inputs.issue_type }}"
+          VERIFIED="${{ steps.verify.outputs.verified }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+            echo "message=[DRY RUN] 修繕シミュレーション完了" >> $GITHUB_OUTPUT
+          elif [ "$ISSUE_TYPE" = "token_expired" ]; then
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "message=トークン期限切れは手動対応が必要です" >> $GITHUB_OUTPUT
+          elif [ "$VERIFIED" = "true" ]; then
+            echo "success=true" >> $GITHUB_OUTPUT
+            echo "message=修繕成功: $ISSUE_TYPE" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "message=修繕失敗: $ISSUE_TYPE - Manusにエスカレーション" >> $GITHUB_OUTPUT
+          fi
+
+      # Manusフォールバック: GitHub Actionsで修繕失敗時
+      - name: Fallback to Manus
+        if: steps.result.outputs.success == 'false' && inputs.issue_type != 'token_expired'
+        env:
+          SUPABASE_URL: https://haaxgwyimoqzzxzdaeep.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "🤖 GitHub Actions修繕失敗 - Manusにエスカレーション..."
+
+          ISSUE_TYPE="${{ inputs.issue_type }}"
+
+          # Manus監査エンドポイントを呼び出し（自動修繕タスク作成をトリガー）
+          RESPONSE=$(curl -s -X POST \
+            "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief?mode=daily" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
+
+          echo "Manus audit response: $RESPONSE"
+
+          # レスポンスからManusタスクURLを抽出
+          TASK_URL=$(echo "$RESPONSE" | jq -r '.remediation.taskUrl // empty')
+
+          if [ -n "$TASK_URL" ]; then
+            echo "MANUS_TASK_URL=$TASK_URL" >> $GITHUB_ENV
+            echo "✅ Manusタスクを作成: $TASK_URL"
+          else
+            echo "⚠️ Manusタスク作成失敗または不要"
+          fi
+
+      - name: Notify Discord
+        if: always()
+        run: |
+          SUCCESS="${{ steps.result.outputs.success }}"
+          MESSAGE="${{ steps.result.outputs.message }}"
+          ISSUE_TYPE="${{ inputs.issue_type }}"
+          MANUS_URL="${MANUS_TASK_URL:-}"
+
+          if [ "$SUCCESS" = "true" ]; then
+            EMOJI="✅"
+            COLOR="3066993"
+          else
+            EMOJI="❌"
+            COLOR="15158332"
+          fi
+
+          # Manusフォールバック情報を追加
+          MANUS_FIELD=""
+          if [ -n "$MANUS_URL" ]; then
+            MANUS_FIELD=",{\"name\": \"Manusタスク\", \"value\": \"[$MANUS_URL]($MANUS_URL)\", \"inline\": false}"
+          fi
+
+          curl -X POST "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"$EMOJI LINE自動修繕レポート\",
+                \"color\": $COLOR,
+                \"fields\": [
+                  {\"name\": \"問題タイプ\", \"value\": \"$ISSUE_TYPE\", \"inline\": true},
+                  {\"name\": \"結果\", \"value\": \"$MESSAGE\", \"inline\": false},
+                  {\"name\": \"実行\", \"value\": \"[GitHub Actions](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}
+                  $MANUS_FIELD
+                ],
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }"

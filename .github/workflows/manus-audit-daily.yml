@@ -133,6 +133,51 @@ jobs:
 
           echo "✅ AI自動補充ワークフローをトリガーしました"
 
+      # LINE問題検出時の自動修繕 (GitHub Actions → Manus フォールバック)
+      - name: Detect LINE issues and trigger auto-repair
+        id: line_repair
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "🔍 LINE問題の検出を開始..."
+
+          # 監査結果からLINE問題を抽出
+          LINE_ISSUES=""
+
+          # Webhook問題
+          if echo "$BODY" | grep -q "LINE Webhook"; then
+            if echo "$BODY" | grep -q "401\|HTTP 401"; then
+              LINE_ISSUES="webhook_401"
+            elif echo "$BODY" | grep -q "タイムアウト\|timeout"; then
+              LINE_ISSUES="webhook_timeout"
+            fi
+          fi
+
+          # トークン問題
+          if echo "$BODY" | grep -q "トークン無効\|期限切れ\|401"; then
+            LINE_ISSUES="token_expired"
+          fi
+
+          # API問題
+          if echo "$BODY" | grep -q "LINE登録API.*失敗\|API.*down"; then
+            LINE_ISSUES="${LINE_ISSUES:-api_down}"
+          fi
+
+          if [ -n "$LINE_ISSUES" ]; then
+            echo "⚠️ LINE問題を検出: $LINE_ISSUES"
+            echo "LINE_ISSUES=$LINE_ISSUES" >> $GITHUB_ENV
+
+            echo "🔧 GitHub Actions自動修繕を開始..."
+            gh workflow run auto-repair-line.yml \
+              -f issue_type="$LINE_ISSUES" \
+              -f dry_run="false"
+
+            echo "REPAIR_TRIGGERED=true" >> $GITHUB_ENV
+          else
+            echo "✅ LINE問題なし"
+          fi
+
       - name: Notify on failure
         if: failure() || env.AUDIT_FAILED == 'true'
         env:
