@@ -43,8 +43,8 @@ jobs:
       - name: Deploy line-webhook
         id: deploy_line_webhook
         run: |
-          echo "=== Deploy line-webhook ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy line-webhook --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          echo "=== Deploy line-webhook (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
+          if supabase functions deploy line-webhook --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
