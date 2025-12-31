@@ -288,7 +288,10 @@ async function checkGoogleSheetsSync(
   }
 
   try {
-    const client = await createSheetsClientFromEnv(googleSaJson, membersSheetId);
+    const client = await createSheetsClientFromEnv(
+      googleSaJson,
+      membersSheetId,
+    );
     const metadata = await client.getMetadata(MEMBERS_SHEET_TAB);
 
     log.info("Google Sheets API connection verified", {
