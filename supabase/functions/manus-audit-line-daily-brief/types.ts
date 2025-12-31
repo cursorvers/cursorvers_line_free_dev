@@ -63,6 +63,7 @@ export interface ResponseTimeHealthResult extends BaseHealthResult {
 /** Google Sheets同期チェック結果 */
 export interface SheetsSyncResult extends BaseHealthResult {
   lastUpdate?: string;
+  rowCount?: number;
 }
 
 /** LINE Bot APIヘルスチェック結果 */

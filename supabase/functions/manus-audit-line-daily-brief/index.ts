@@ -28,7 +28,10 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { createLogger } from "../_shared/logger.ts";
-import { triggerAutoRemediation } from "../_shared/manus-api.ts";
+import {
+  triggerAutoRemediation,
+  triggerIntelligentRepair,
+} from "../_shared/manus-api.ts";
 import { verifyAuth } from "./auth.ts";
 import {
   checkBroadcastSuccess,
@@ -54,6 +57,12 @@ const DISCORD_MAINT_WEBHOOK_URL = Deno.env.get("DISCORD_MAINT_WEBHOOK_URL");
 const MANUS_WEBHOOK_URL = Deno.env.get("MANUS_WEBHOOK_URL");
 const LANDING_PAGE_URL = Deno.env.get("LANDING_PAGE_URL") ?? "";
 const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
+// Google Sheets連携（任意）
+const GOOGLE_SA_JSON = Deno.env.get("GOOGLE_SA_JSON");
+const MEMBERS_SHEET_ID = Deno.env.get("MEMBERS_SHEET_ID");
+// インテリジェント修繕モード（デフォルト: 有効）
+const USE_INTELLIGENT_REPAIR =
+  Deno.env.get("USE_INTELLIGENT_REPAIR") !== "false";
 
 // Validate required environment variables
 function validateEnv(): { valid: boolean; error?: string } {
@@ -184,6 +193,8 @@ Deno.serve(async (req) => {
         supabaseUrl: SUPABASE_URL!,
         landingPageUrl: LANDING_PAGE_URL,
         lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
+        googleSaJson: GOOGLE_SA_JSON,
+        membersSheetId: MEMBERS_SHEET_ID,
       },
     );
 
@@ -208,26 +219,54 @@ Deno.serve(async (req) => {
 
     // Trigger auto-remediation if there are issues
     if (!result.summary.allPassed && !isReportMode) {
-      log.info("Triggering auto-remediation via Manus", {
+      log.info("Triggering auto-remediation", {
+        mode: USE_INTELLIGENT_REPAIR ? "intelligent" : "legacy",
         warningCount: result.summary.warningCount,
         errorCount: result.summary.errorCount,
       });
 
-      const remediationResult = await triggerAutoRemediation(result);
-      result.remediation = {
-        triggered: true,
-        taskId: remediationResult.taskId,
-        taskUrl: remediationResult.taskUrl,
-        error: remediationResult.error,
-      };
+      if (USE_INTELLIGENT_REPAIR) {
+        // 新しいインテリジェント修繕モード
+        const repairResult = await triggerIntelligentRepair(result, {
+          dryRun: isTestMode, // テストモードではドライラン
+          autoEscalate: true,
+          notify: ["discord"],
+        });
 
-      if (remediationResult.success) {
-        log.info("Auto-remediation task created", {
+        result.remediation = {
+          triggered: true,
+          error: repairResult.error,
+        };
+
+        if (repairResult.success) {
+          log.info("Intelligent repair completed", {
+            diagnosis: repairResult.diagnosis?.severity,
+            overallStatus: repairResult.summary?.overallStatus,
+            successCount: repairResult.summary?.successCount,
+          });
+        } else {
+          log.warn("Intelligent repair failed", { error: repairResult.error });
+        }
+      } else {
+        // レガシーモード（Manusタスク作成のみ）
+        const remediationResult = await triggerAutoRemediation(result);
+        result.remediation = {
+          triggered: true,
           taskId: remediationResult.taskId,
           taskUrl: remediationResult.taskUrl,
-        });
-      } else {
-        log.warn("Auto-remediation failed", { error: remediationResult.error });
+          error: remediationResult.error,
+        };
+
+        if (remediationResult.success) {
+          log.info("Auto-remediation task created", {
+            taskId: remediationResult.taskId,
+            taskUrl: remediationResult.taskUrl,
+          });
+        } else {
+          log.warn("Auto-remediation failed", {
+            error: remediationResult.error,
+          });
+        }
       }
     }
 

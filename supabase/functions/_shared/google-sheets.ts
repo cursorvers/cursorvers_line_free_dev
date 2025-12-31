@@ -12,11 +12,18 @@ export interface GoogleServiceAccount {
   private_key: string;
 }
 
+/** シートメタデータ */
+export interface SheetMetadata {
+  rowCount: number;
+  title: string;
+}
+
 /** Google Sheets クライアント */
 export interface SheetsClient {
   append(tabName: string, values: unknown[][]): Promise<void>;
   update(tabName: string, values: unknown[][]): Promise<void>;
   clearBelowHeader(tabName: string): Promise<void>;
+  getMetadata(tabName: string): Promise<SheetMetadata>;
 }
 
 /**
@@ -170,6 +177,40 @@ export async function buildSheetsClient(
         });
         throw new Error(`Sheets clear failed: ${res.status}`);
       }
+    },
+
+    async getMetadata(tabName: string): Promise<SheetMetadata> {
+      const url =
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets(properties(title,gridProperties))`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: authHeaders,
+      });
+
+      if (!res.ok) {
+        const errorBody = await res.text();
+        log.error("Sheets metadata fetch failed", {
+          tabName,
+          status: res.status,
+          errorBody,
+        });
+        throw new Error(`Sheets metadata fetch failed: ${res.status}`);
+      }
+
+      const data = await res.json();
+      const sheets = data.sheets as Array<{
+        properties: { title: string; gridProperties: { rowCount: number } };
+      }>;
+      const sheet = sheets.find((s) => s.properties.title === tabName);
+
+      if (!sheet) {
+        throw new Error(`Tab "${tabName}" not found`);
+      }
+
+      return {
+        title: sheet.properties.title,
+        rowCount: sheet.properties.gridProperties.rowCount,
+      };
     },
   };
 }

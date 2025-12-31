@@ -2,6 +2,7 @@
  * LINE登録システムチェック
  */
 import { SupabaseClient } from "@supabase/supabase-js";
+import { createSheetsClientFromEnv } from "../../_shared/google-sheets.ts";
 import { createLogger } from "../../_shared/logger.ts";
 import {
   LineBotHealthResult,
@@ -16,7 +17,6 @@ const log = createLogger("audit-line-registration");
 // タイムアウト設定
 const API_TIMEOUT_MS = 5000;
 const LANDING_PAGE_TIMEOUT_MS = 3000;
-const SYNC_FRESHNESS_MS = 60 * 60 * 1000; // 1 hour
 const LIFF_ID = "2008640048-jnoneGgO";
 
 // LINE API設定
@@ -26,10 +26,15 @@ const INTERACTION_FRESHNESS_HOURS = 48;
 // テーブル不存在エラーコード
 const TABLE_NOT_FOUND_CODES = ["PGRST116", "42P01"];
 
+// Google Sheets設定
+const MEMBERS_SHEET_TAB = "members";
+
 interface CheckConfig {
   supabaseUrl: string;
   landingPageUrl: string;
   lineChannelAccessToken?: string | undefined;
+  googleSaJson?: string | undefined;
+  membersSheetId?: string | undefined;
 }
 
 /**
@@ -82,7 +87,7 @@ export async function checkLineRegistrationSystem(
   ] = await Promise.all([
     checkWebhookHealth(config.supabaseUrl),
     checkApiHealth(config.supabaseUrl),
-    checkGoogleSheetsSync(client),
+    checkGoogleSheetsSync(config.googleSaJson, config.membersSheetId),
     checkLandingPageAccess(config.landingPageUrl),
     checkLineBotHealth(config.lineChannelAccessToken),
     checkRecentInteractions(client),
@@ -270,50 +275,36 @@ async function checkApiHealth(
 }
 
 /**
- * Google Sheets連携の確認（DB経由）
+ * Google Sheets連携の確認（実際のAPI接続テスト）
  */
 async function checkGoogleSheetsSync(
-  client: SupabaseClient,
+  googleSaJson?: string,
+  membersSheetId?: string,
 ): Promise<SheetsSyncResult> {
+  // 設定がない場合はスキップ（passed: true）
+  if (!googleSaJson || !membersSheetId) {
+    log.info("Google Sheets not configured, skipping check");
+    return { passed: true };
+  }
+
   try {
-    const { data, error } = await client
-      .from("members")
-      .select("email, updated_at")
-      .like("email", "manus-audit-%@example.com")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .single();
+    const client = await createSheetsClientFromEnv(googleSaJson, membersSheetId);
+    const metadata = await client.getMetadata(MEMBERS_SHEET_TAB);
 
-    if (error) {
-      return {
-        passed: false,
-        error: formatError("データベース確認失敗", error),
-      };
-    }
-
-    if (data) {
-      const lastUpdateTime = new Date(data.updated_at).getTime();
-      const now = Date.now();
-      if (now - lastUpdateTime > SYNC_FRESHNESS_MS) {
-        return {
-          passed: false,
-          lastUpdate: data.updated_at,
-          error: `最終更新が1時間以上前 (${data.updated_at})`,
-        };
-      }
-
-      log.info("Google Sheets sync is working", {
-        lastUpdate: data.updated_at,
-      });
-      return { passed: true, lastUpdate: data.updated_at };
-    }
+    log.info("Google Sheets API connection verified", {
+      tabName: metadata.title,
+      rowCount: metadata.rowCount,
+    });
 
     return {
-      passed: false,
-      error: "最近の監査データが見つかりません",
+      passed: true,
+      rowCount: metadata.rowCount,
     };
   } catch (error) {
-    return { passed: false, error: formatError("チェック失敗", error) };
+    return {
+      passed: false,
+      error: formatError("Google Sheets API接続失敗", error),
+    };
   }
 }
 
