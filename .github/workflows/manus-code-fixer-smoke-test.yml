@@ -1,0 +1,52 @@
+name: Manus Code Fixer Smoke Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Invoke Manus Code Fixer
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          MANUS_FIXER_API_KEY: ${{ secrets.MANUS_FIXER_API_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$MANUS_FIXER_API_KEY" ]; then
+            echo "Missing SUPABASE_URL or MANUS_FIXER_API_KEY" >&2
+            exit 1
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg branch "$GITHUB_REF_NAME" \
+            --arg path "supabase/functions" \
+            --arg commitSha "$GITHUB_SHA" \
+            --arg file "line-webhook/index.ts" \
+            '{
+              repository: $repository,
+              branch: $branch,
+              path: $path,
+              commitSha: $commitSha,
+              failures: [
+                { type: "format", files: [$file] }
+              ]
+            }')
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "$SUPABASE_URL/functions/v1/manus-code-fixer" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: $MANUS_FIXER_API_KEY" \
+            -d "$PAYLOAD")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "Response: $BODY"
+          echo "HTTP Code: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            exit 1
+          fi
