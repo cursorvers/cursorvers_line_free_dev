@@ -80,7 +80,10 @@ const getEnv = (name: (typeof REQUIRED_ENV_VARS)[number]): string => {
 import { createLogger } from "../_shared/logger.ts";
 
 const MANUS_FIXER_API_KEY = getEnv("MANUS_FIXER_API_KEY");
-const DISCORD_WEBHOOK_URL = Deno.env.get("DISCORD_MANUS_WEBHOOK_URL");
+const DISCORD_WEBHOOK_URL = Deno.env.get("DISCORD_MANUS_WEBHOOK_URL") ??
+  Deno.env.get("DISCORD_WEBHOOK_URL") ??
+  Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL") ??
+  Deno.env.get("DISCORD_SYSTEM_WEBHOOK");
 const GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN") ??
   Deno.env.get("GITHUB_TOKEN");
 const GITHUB_API_BASE = Deno.env.get("GITHUB_API_BASE") ??
