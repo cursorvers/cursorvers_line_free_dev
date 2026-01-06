@@ -188,3 +188,9 @@ gh run view <run-id> --log
 - ✅ README.md全面改訂
 - ✅ 孤児レコードマージ機能追加（LINE登録→有料決済時の重複解消）
 - ✅ merge-utils.ts + テスト追加（280テスト達成）
+
+## Platform 連携ルール
+
+**システム変更時は `Cursorvers_Platform/docs/system-architecture.md` を更新すること。**
+
+詳細: `/Users/masayuki/Cursorvers_Platform/.claude/CLAUDE.md` の「システム変更時（自動反映ルール）」を参照
