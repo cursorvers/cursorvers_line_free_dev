@@ -37,7 +37,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.MANUS_GITHUB_TOKEN || github.token }}
+          token: ${{ github.token }}
 
       - name: Resolve inputs
         id: resolve
