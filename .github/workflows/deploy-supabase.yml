@@ -194,6 +194,19 @@ jobs:
             echo "result=failed" >> $GITHUB_OUTPUT
           fi
 
+      - name: Deploy manus-code-fixer
+        id: deploy_manus_code_fixer
+        run: |
+          echo "=== Deploy manus-code-fixer (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
+          if supabase functions deploy manus-code-fixer --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+            echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
+            echo "result=success" >> $GITHUB_OUTPUT
+          else
+            echo "DEPLOY_FAILED=$((DEPLOY_FAILED + 1))" >> $GITHUB_ENV
+            echo "FAILED_FUNCTIONS=${FAILED_FUNCTIONS}manus-code-fixer," >> $GITHUB_ENV
+            echo "result=failed" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy discord-bot
         id: deploy_discord_bot
         run: |
