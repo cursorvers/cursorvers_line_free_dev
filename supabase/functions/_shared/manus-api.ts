@@ -349,7 +349,8 @@ curl -X POST "https://discord.com/api/webhooks/..." \\
 }
 
 /**
- * 監査エラー時にManusで自動修繕タスクを作成
+ * 監査エラー時にManusで自動修繕タスクを作成（レガシー）
+ * @deprecated triggerIntelligentRepairを使用してください
  */
 export async function triggerAutoRemediation(
   auditResult: Parameters<typeof buildRemediationPrompt>[0],
@@ -379,4 +380,324 @@ export async function triggerAutoRemediation(
     success: false,
     error: result.error,
   };
+}
+
+// ============================================================
+// Manus Intelligent Repair - AI判断と自動修繕
+// ============================================================
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+  "";
+
+interface IntelligentRepairOptions {
+  dryRun?: boolean | undefined;
+  autoEscalate?: boolean | undefined;
+  notify?: string[] | undefined;
+}
+
+interface IntelligentRepairResult {
+  success: boolean;
+  diagnosis?: {
+    issues: Array<{
+      type: string;
+      description: string;
+      rootCause: string;
+      priority: number;
+    }>;
+    severity: string;
+    confidence: number;
+  };
+  summary?: {
+    totalSteps: number;
+    successCount: number;
+    failedCount: number;
+    overallStatus: string;
+  };
+  error?: string | undefined;
+}
+
+/**
+ * Manus Intelligent Repairを呼び出してAI判断・自動修繕を実行
+ *
+ * 従来のtriggerAutoRemediationと異なり、
+ * - ローカルでAI診断を実行
+ * - 修繕計画を自動作成
+ * - 修繕を自動実行
+ * - 結果を検証してレポート
+ */
+export async function triggerIntelligentRepair(
+  auditResult: Parameters<typeof buildRemediationPrompt>[0],
+  options: IntelligentRepairOptions = {},
+): Promise<IntelligentRepairResult> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    log.error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured");
+    return { success: false, error: "Environment not configured" };
+  }
+
+  const endpoint = `${SUPABASE_URL}/functions/v1/manus-intelligent-repair`;
+
+  log.info("Triggering intelligent repair", {
+    dryRun: options.dryRun ?? false,
+    issueCount: [
+      !auditResult.checks.cardInventory.passed,
+      !auditResult.checks.broadcastSuccess.passed,
+      auditResult.checks.databaseHealth &&
+      !auditResult.checks.databaseHealth.passed,
+      auditResult.checks.lineRegistrationSystem &&
+      !auditResult.checks.lineRegistrationSystem.passed,
+    ].filter(Boolean).length,
+  });
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        audit_result: auditResult,
+        trigger: "scheduled",
+        options: {
+          dry_run: options.dryRun ?? false,
+          auto_escalate: options.autoEscalate ?? true,
+          notify: options.notify ?? ["discord"],
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      log.error("Intelligent repair API error", {
+        status: response.status,
+        body: errorBody,
+      });
+      return {
+        success: false,
+        error: `API error: ${response.status} - ${errorBody}`,
+      };
+    }
+
+    const data = await response.json();
+
+    log.info("Intelligent repair completed", {
+      overallStatus: data.summary?.overallStatus,
+      successCount: data.summary?.successCount,
+      failedCount: data.summary?.failedCount,
+    });
+
+    return {
+      success: data.summary?.overallStatus !== "failed",
+      diagnosis: data.diagnosis,
+      summary: data.summary,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    log.error("Intelligent repair request failed", { error: errorMessage });
+    return { success: false, error: errorMessage };
+  }
+}
+
+// ============================================================
+// Manus AI Diagnosis - LLMによる高度な診断
+// ============================================================
+
+const MANUS_AI_DIAGNOSIS_TIMEOUT = 30000; // 30秒
+
+interface ManusAIDiagnosisResult {
+  success: boolean;
+  diagnosis?: {
+    issues: Array<{
+      type: string;
+      description: string;
+      rootCause: string;
+      suggestedActions: string[];
+      priority: number;
+    }>;
+    severity: "critical" | "high" | "medium" | "low";
+    confidence: number;
+    reasoning: string;
+  } | undefined;
+  fallbackUsed: boolean;
+  error?: string | undefined;
+}
+
+/**
+ * Manus AIを使って監査結果を診断
+ *
+ * フェイルセーフ:
+ * - API障害時 → ルールベース診断にフォールバック
+ * - タイムアウト → ルールベース診断にフォールバック
+ * - 不正レスポンス → ルールベース診断にフォールバック
+ */
+export async function diagnoseWithManusAI(
+  auditResult: Parameters<typeof buildRemediationPrompt>[0],
+  fallbackDiagnosis: ManusAIDiagnosisResult["diagnosis"],
+): Promise<ManusAIDiagnosisResult> {
+  if (!MANUS_API_KEY) {
+    log.warn("MANUS_API_KEY not configured, using fallback diagnosis");
+    return {
+      success: true,
+      diagnosis: fallbackDiagnosis,
+      fallbackUsed: true,
+    };
+  }
+
+  const diagnosisPrompt = buildDiagnosisPrompt(auditResult);
+
+  log.info("Requesting Manus AI diagnosis", {
+    promptLength: diagnosisPrompt.length,
+  });
+
+  try {
+    // タイムアウト付きでManus APIを呼び出し
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      MANUS_AI_DIAGNOSIS_TIMEOUT,
+    );
+
+    const endpoint = `${MANUS_BASE_URL}/v1/tasks`;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "API_KEY": MANUS_API_KEY,
+      },
+      body: JSON.stringify({
+        prompt: diagnosisPrompt,
+        agentProfile: "manus-1.6-lite", // 高速なモデルを使用
+        taskMode: "chat", // 対話モードで即座に回答
+        locale: "ja",
+        hideInTaskList: true,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      log.warn("Manus AI diagnosis failed, using fallback", {
+        status: response.status,
+      });
+      return {
+        success: true,
+        diagnosis: fallbackDiagnosis,
+        fallbackUsed: true,
+        error: `API error: ${response.status}`,
+      };
+    }
+
+    const data = await response.json();
+
+    // レスポンスの検証
+    if (!data || !data.task_id) {
+      log.warn("Invalid Manus AI response, using fallback");
+      return {
+        success: true,
+        diagnosis: fallbackDiagnosis,
+        fallbackUsed: true,
+        error: "Invalid response format",
+      };
+    }
+
+    // 注: Manus APIはタスクを作成するだけで、即座に結果を返さない
+    // 本番運用では、タスク完了を待つか、Webhookで結果を受け取る必要がある
+    // 現在はフォールバック診断を使用
+    log.info("Manus AI task created, using fallback for immediate response", {
+      taskId: data.task_id,
+    });
+
+    return {
+      success: true,
+      diagnosis: fallbackDiagnosis,
+      fallbackUsed: true, // 実際にはタスク作成のみ
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (error instanceof Error && error.name === "AbortError") {
+      log.warn("Manus AI diagnosis timeout, using fallback");
+      return {
+        success: true,
+        diagnosis: fallbackDiagnosis,
+        fallbackUsed: true,
+        error: "Timeout",
+      };
+    }
+
+    log.warn("Manus AI diagnosis error, using fallback", {
+      error: errorMessage,
+    });
+
+    return {
+      success: true,
+      diagnosis: fallbackDiagnosis,
+      fallbackUsed: true,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * AI診断用のプロンプトを構築
+ */
+function buildDiagnosisPrompt(auditResult: Parameters<typeof buildRemediationPrompt>[0]): string {
+  const sanitizedWarnings = {
+    cardInventory: sanitizeWarnings(auditResult.checks.cardInventory.warnings),
+    broadcastSuccess: sanitizeWarnings(auditResult.checks.broadcastSuccess.warnings),
+    databaseHealth: auditResult.checks.databaseHealth
+      ? sanitizeWarnings(auditResult.checks.databaseHealth.warnings)
+      : [],
+    lineRegistrationSystem: auditResult.checks.lineRegistrationSystem
+      ? sanitizeWarnings(auditResult.checks.lineRegistrationSystem.warnings)
+      : [],
+  };
+
+  return `
+# LINE Daily Brief システム監査結果の診断
+
+以下の監査結果を分析し、問題の根本原因と推奨アクションをJSON形式で返してください。
+
+## 監査結果
+
+### カード在庫チェック
+- 結果: ${auditResult.checks.cardInventory.passed ? "OK" : "NG"}
+- 警告: ${sanitizedWarnings.cardInventory.join(", ") || "なし"}
+
+### 配信成功率チェック
+- 結果: ${auditResult.checks.broadcastSuccess.passed ? "OK" : "NG"}
+- 警告: ${sanitizedWarnings.broadcastSuccess.join(", ") || "なし"}
+
+### データベース健全性チェック
+- 結果: ${auditResult.checks.databaseHealth?.passed ?? "未実施"}
+- 警告: ${sanitizedWarnings.databaseHealth.join(", ") || "なし"}
+
+### LINE登録システムチェック
+- 結果: ${auditResult.checks.lineRegistrationSystem?.passed ?? "未実施"}
+- 警告: ${sanitizedWarnings.lineRegistrationSystem.join(", ") || "なし"}
+
+## 出力フォーマット
+
+以下のJSON形式で回答してください:
+
+\`\`\`json
+{
+  "issues": [
+    {
+      "type": "card_inventory_low | broadcast_failure | database_anomaly | line_webhook_error",
+      "description": "問題の説明",
+      "rootCause": "根本原因の分析",
+      "suggestedActions": ["アクション1", "アクション2"],
+      "priority": 1-10
+    }
+  ],
+  "severity": "critical | high | medium | low",
+  "confidence": 0-100,
+  "reasoning": "診断の根拠"
+}
+\`\`\`
+`.trim();
 }

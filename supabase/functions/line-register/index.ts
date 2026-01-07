@@ -16,6 +16,7 @@ import {
   createCorsHeaders,
   createCorsPreflightResponse,
 } from "../_shared/http-utils.ts";
+import { notifyLineEvent } from "../_shared/n8n-notify.ts";
 
 const log = createLogger("line-register");
 
@@ -214,8 +215,8 @@ Deno.serve(async (req) => {
       updated_at: getJSTTimestamp(),
     };
 
-    if (email) payload.email = email;
-    if (lineUserId) payload.line_user_id = lineUserId;
+    if (email) payload["email"] = email;
+    if (lineUserId) payload["line_user_id"] = lineUserId;
 
     let error;
 
@@ -254,7 +255,7 @@ Deno.serve(async (req) => {
         }
       } else {
         // 既存が無料の場合のみ更新（tierはfreeを維持）
-        payload.tier = "free";
+        payload["tier"] = "free";
 
         if (existingRecord.email && existingRecord.email === email) {
           const { error: updateError } = await supabase
@@ -281,7 +282,7 @@ Deno.serve(async (req) => {
       }
     } else {
       // 新規作成（無料として）
-      payload.tier = "free";
+      payload["tier"] = "free";
       const { error: insertError } = await supabase
         .from("members")
         .insert(payload);
@@ -338,11 +339,11 @@ Deno.serve(async (req) => {
     // Google Sheets へ追記（設定されている場合のみ）
     await appendMemberRow([
       email ?? "",
-      (payload.tier as string) ?? "",
-      (payload.status as string) ?? "",
+      (payload["tier"] as string) ?? "",
+      (payload["status"] as string) ?? "",
       "", // period_end（未管理）
       optInEmail,
-      (payload.updated_at as string) ?? getJSTTimestamp(),
+      (payload["updated_at"] as string) ?? getJSTTimestamp(),
       lineUserId ?? "",
       "", // stripe_customer_id（未設定）
       "", // stripe_subscription_id（未設定）
@@ -355,6 +356,20 @@ Deno.serve(async (req) => {
       optInEmail: optInEmail,
       isUpdate: !!existingRecord,
     });
+
+    // 新規登録時のみn8n経由でDiscord通知（非同期・失敗しても続行）
+    if (!existingRecord && lineUserId) {
+      notifyLineEvent(
+        "new_registration",
+        lineUserId,
+        undefined, // displayNameはLIFF側で取得していないためundefined
+        undefined, // pictureUrl
+      ).catch((err) => {
+        log.warn("n8n notification failed", {
+          error: extractErrorMessage(err),
+        });
+      });
+    }
 
     return new Response(
       JSON.stringify({

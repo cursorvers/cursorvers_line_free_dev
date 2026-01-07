@@ -6,6 +6,10 @@
 // Re-export for backwards compatibility
 export { EMAIL_REGEX, isValidEmail } from "../_shared/validation-utils.ts";
 
+// splitMessage と hexToUint8Array は _shared/utils.ts に統合
+// Re-export for backwards compatibility
+export { hexToUint8Array, splitMessage } from "../_shared/utils.ts";
+
 /**
  * メールアドレスを正規化（トリム＋小文字化）
  */
@@ -17,49 +21,6 @@ export function normalizeEmail(email: unknown): string {
     return String(email).trim().toLowerCase();
   }
   return "";
-}
-
-/**
- * Discord メッセージを指定文字数で分割
- * Discord の 2000 文字制限に対応
- */
-export function splitMessage(text: string, maxLength = 2000): string[] {
-  const chunks: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLength) {
-      chunks.push(remaining);
-      break;
-    }
-
-    // 改行位置で分割を試みる
-    let splitIndex = remaining.lastIndexOf("\n", maxLength);
-    if (splitIndex === -1 || splitIndex < maxLength / 2) {
-      // 改行が見つからない場合はスペースで分割
-      splitIndex = remaining.lastIndexOf(" ", maxLength);
-    }
-    if (splitIndex === -1 || splitIndex < maxLength / 2) {
-      // それでも見つからない場合は強制分割
-      splitIndex = maxLength;
-    }
-
-    chunks.push(remaining.substring(0, splitIndex));
-    remaining = remaining.substring(splitIndex).trimStart();
-  }
-
-  return chunks;
-}
-
-/**
- * HEX文字列をUint8Arrayに変換（署名検証用）
- */
-export function hexToUint8Array(hex: string): Uint8Array {
-  const matches = hex.match(/.{1,2}/g);
-  if (!matches) {
-    throw new Error("Invalid hex string");
-  }
-  return new Uint8Array(matches.map((byte) => parseInt(byte, 16)));
 }
 
 /**

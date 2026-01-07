@@ -32,6 +32,12 @@ if echo "$RESPONSE_BODY" | grep -q "Invalid JWT"; then
   FIX_SCRIPT="manual_api_key_update"
 fi
 
+if echo "$RESPONSE_BODY" | grep -q "Bad credentials"; then
+  ERROR_TYPE="github_bad_credentials"
+  ERROR_MESSAGE="GitHub token is invalid or expired"
+  FIX_SCRIPT="manual_github_token_refresh"
+fi
+
 # YAML syntax error
 if echo "$RESPONSE_BODY" | grep -q "yaml syntax"; then
   ERROR_TYPE="yaml_syntax"

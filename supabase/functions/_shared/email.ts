@@ -29,8 +29,8 @@ export interface EmailPayload {
 
 export interface EmailResult {
   success: boolean;
-  messageId?: string;
-  error?: string;
+  messageId?: string | undefined;
+  error?: string | undefined;
 }
 
 /**

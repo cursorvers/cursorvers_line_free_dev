@@ -10,7 +10,7 @@
 
 #### `DISCORD_ADMIN_WEBHOOK_URL`
 - **用途**: システム監査、エラー通知、日次レポート送信
-- **設定値**: `https://discord.com/api/webhooks/1448220557211336776/fakXFuRH2nG-c-gF6kUAnekjaim3mgJ9zeFg6ft7NILcL1_9iA8gChqiPray-aIbK5LB`
+- **設定値**: Discord Webhookから取得（形式: `https://discord.com/api/webhooks/{webhook_id}/{token}`）
 - **使用箇所**:
   - `.github/workflows/manus-audit-daily.yml`
   - `.github/workflows/manus-audit-weekly.yml`

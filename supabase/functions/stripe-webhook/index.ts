@@ -114,7 +114,7 @@ async function mergeOrphanLineRecord(
   if (emailNullOrphanList && emailNullOrphanList.length > 0) {
     // 最も古い孤児レコードのline_user_idを有料レコードに移行
     const orphan = emailNullOrphanList[0];
-    if (orphan.line_user_id) {
+    if (orphan && orphan.line_user_id) {
       // 有料レコードにline_user_idを設定
       await supabase
         .from("members")
@@ -478,8 +478,8 @@ Deno.serve(async (req) => {
           // 既存メンバー → 必要なフィールドのみ更新
           const updatePayload: Record<string, unknown> = { ...basePayload };
           if (verificationCode) {
-            updatePayload.verification_code = verificationCode;
-            updatePayload.verification_expires_at = verificationExpiresAt;
+            updatePayload["verification_code"] = verificationCode;
+            updatePayload["verification_expires_at"] = verificationExpiresAt;
           }
           // discord_invite_sent は更新しない（既存の値を維持）
 
@@ -622,7 +622,7 @@ Deno.serve(async (req) => {
             log.info("Discord invite already sent, skipping", {
               email: maskEmail(customerEmail),
             });
-          } else {
+          } else if (verificationCode) {
             // LINE未登録 → 認証コード付きウェルカムメールを送信
             const tierDisplayName = membershipTier === "master"
               ? "Master Class"

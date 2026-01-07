@@ -119,7 +119,7 @@ export function extractBearerToken(request: Request): string | null {
   const auth = request.headers.get("Authorization");
   if (!auth) return null;
   const match = auth.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 /**

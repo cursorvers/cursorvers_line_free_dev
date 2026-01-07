@@ -173,7 +173,7 @@ function getWeekStart(date: Date): string {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 月曜日に調整
   d.setDate(diff);
-  return d.toISOString().split("T")[0];
+  return d.toISOString().split("T")[0] ?? "";
 }
 
 // GitHub Actions cron用のAPIキー検証

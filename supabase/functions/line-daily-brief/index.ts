@@ -168,10 +168,15 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
   }
 
   availableThemes.sort((a, b) => a.total_times_used - b.total_times_used);
-  const selectedTheme = availableThemes[0].theme;
+  const firstTheme = availableThemes[0];
+  if (!firstTheme) {
+    log.warn("No themes available after sort");
+    return null;
+  }
+  const selectedTheme = firstTheme.theme;
   log.info("Selected theme", {
     selectedTheme,
-    totalTimesUsed: availableThemes[0].total_times_used,
+    totalTimesUsed: firstTheme.total_times_used,
   });
 
   const { data: cards, error } = await client
@@ -317,11 +322,11 @@ async function recordBroadcastHistory(
   };
 
   // Add new columns if they exist
-  if (data.theme) insertData.theme = data.theme;
-  if (data.broadcastStatus) insertData.broadcast_status = data.broadcastStatus;
-  if (data.lineRequestId) insertData.line_request_id = data.lineRequestId;
+  if (data.theme) insertData["theme"] = data.theme;
+  if (data.broadcastStatus) insertData["broadcast_status"] = data.broadcastStatus;
+  if (data.lineRequestId) insertData["line_request_id"] = data.lineRequestId;
   if (data.lineResponseStatus !== null) {
-    insertData.line_response_status = data.lineResponseStatus;
+    insertData["line_response_status"] = data.lineResponseStatus;
   }
 
   const { error } = await client.from("line_card_broadcasts").insert(

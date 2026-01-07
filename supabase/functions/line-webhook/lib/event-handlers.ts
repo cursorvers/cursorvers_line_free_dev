@@ -18,6 +18,8 @@ import {
   buildServicesQuickReply,
 } from "./quick-reply.ts";
 import { clearUserState, getToolMode, setToolMode } from "./user-state.ts";
+import { notifyLineEvent } from "../../_shared/n8n-notify.ts";
+import { extractErrorMessage } from "../../_shared/error-utils.ts";
 
 const log = createLogger("event-handlers");
 
@@ -39,6 +41,13 @@ export async function handleFollowEvent(
   replyToken?: string,
 ): Promise<void> {
   log.info("Follow event", { userId: anonymizeUserId(lineUserId) });
+
+  // n8n経由でDiscord通知（非同期・失敗しても続行）
+  notifyLineEvent("follow", lineUserId).catch((err) => {
+    log.warn("n8n notification failed", {
+      error: extractErrorMessage(err),
+    });
+  });
 
   // 有料決済済み（認証コード保留中）かどうかを確認
   const { data: pendingPaidMember } = await supabase

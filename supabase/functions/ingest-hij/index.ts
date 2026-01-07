@@ -24,7 +24,7 @@ interface IngestPayload {
 function extractTLP(text: string): string | null {
   // TLP:GREEN, TLP:AMBER, TLP:RED, TLP:CLEAR をマッチ
   const match = text.match(/TLP:\s*(GREEN|AMBER|RED|CLEAR)/i);
-  return match ? match[1].toUpperCase() : null;
+  return match?.[1]?.toUpperCase() ?? null;
 }
 
 // APIキー検証用（簡易認証）

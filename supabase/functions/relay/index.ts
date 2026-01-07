@@ -13,14 +13,14 @@ const FEATURE_BOT_ENABLED = Deno.env.get("FEATURE_BOT_ENABLED") !== "false";
 type LineEvent = {
   type: string;
   timestamp?: number;
-  source?: { type?: string; userId?: string };
-  replyToken?: string;
+  source?: { type?: string; userId?: string | undefined };
+  replyToken?: string | undefined;
   [key: string]: unknown;
 };
 
 type LineWebhookBody = {
-  destination?: string;
-  events?: LineEvent[];
+  destination?: string | undefined;
+  events?: LineEvent[] | undefined;
 };
 
 function requireEnv(name: string): string {
