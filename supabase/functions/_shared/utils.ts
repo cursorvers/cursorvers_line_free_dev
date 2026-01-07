@@ -25,7 +25,10 @@ export const MONTHLY_PRICE_YEN = 2980;
  * Discordの2000文字制限に対応するためのメッセージ分割
  * 改行 > スペース > 強制分割の順で分割点を探す
  */
-export function splitMessage(text: string, maxLength = DISCORD_MESSAGE_LIMIT): string[] {
+export function splitMessage(
+  text: string,
+  maxLength = DISCORD_MESSAGE_LIMIT,
+): string[] {
   const chunks: string[] = [];
   let remaining = text;
 
