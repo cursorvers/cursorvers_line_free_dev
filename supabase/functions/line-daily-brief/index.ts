@@ -176,7 +176,7 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
 
   const { data: cards, error } = await client
     .from("line_cards")
-    .select("*")
+    .select("id,body,theme,source_path,times_used,status")
     .eq("theme", selectedTheme)
     .in("status", ["ready", "used"])
     .order("times_used", { ascending: true })

@@ -285,7 +285,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const { data: rows, error: fetchError } = await supabase
       .from("hij_raw")
-      .select("*")
+      .select("id,subject,sent_at,raw_text,tlp")
       .gte("sent_at", weekAgo.toISOString())
       .lte("sent_at", now.toISOString())
       .or("tlp.eq.GREEN,tlp.is.null")
