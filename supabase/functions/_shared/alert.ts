@@ -25,7 +25,9 @@ export interface NotifyResult {
 /**
  * Discordにアラートメッセージを送信
  */
-export async function notifyDiscord(options: NotifyOptions): Promise<NotifyResult> {
+export async function notifyDiscord(
+  options: NotifyOptions,
+): Promise<NotifyResult> {
   const webhook = getDiscordWebhook();
   if (!webhook) {
     return { success: false, attempts: 0, error: "Webhook not configured" };
