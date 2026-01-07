@@ -106,7 +106,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const { data: events, error: eventsError } = await supabase
     .from("line_events")
-    .select("created_at,line_user_id,message_text,normalized_keyword,risk_level,contains_phi,membership_email,membership_tier,subscription_status,billing_cycle_anchor,tuition_credit_yen,stripe_customer_email,reply_success,error_code,metadata")
+    .select(
+      "created_at,line_user_id,message_text,normalized_keyword,risk_level,contains_phi,membership_email,membership_tier,subscription_status,billing_cycle_anchor,tuition_credit_yen,stripe_customer_email,reply_success,error_code,metadata",
+    )
     .gte("created_at", twelveHoursAgo.toISOString())
     .order("created_at", { ascending: true });
 
