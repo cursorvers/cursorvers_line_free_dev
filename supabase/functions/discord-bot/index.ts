@@ -13,6 +13,9 @@ import { hexToUint8Array, splitMessage } from "../_shared/utils.ts";
 
 const log = createLogger("discord-bot");
 
+// --- 定数 ---
+const DISCORD_API_TIMEOUT = 2000; // Discord API タイムアウト (ms)
+
 // 環境変数（起動時に検証）
 const DISCORD_PUBLIC_KEY = Deno.env.get("DISCORD_PUBLIC_KEY") ?? "";
 const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
@@ -173,7 +176,7 @@ async function handleJoin(
 
   // ロール付与 (Discord API) with timeout + rate-limit handling
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2000);
+  const timeoutId = setTimeout(() => controller.abort(), DISCORD_API_TIMEOUT);
 
   try {
     const roleRes = await fetch(

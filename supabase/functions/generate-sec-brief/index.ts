@@ -12,6 +12,9 @@ import {
 
 const log = createLogger("generate-sec-brief");
 
+// --- 定数 ---
+const OPENAI_API_TIMEOUT = 60000; // OpenAI API タイムアウト (ms)
+
 // トピックカテゴリの型定義
 type SecBriefTopicCategory =
   | "remote_work"
@@ -366,7 +369,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // タイムアウト付きでOpenAI API呼び出し（60秒）
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), OPENAI_API_TIMEOUT);
 
     let openaiRes: Response;
     try {
