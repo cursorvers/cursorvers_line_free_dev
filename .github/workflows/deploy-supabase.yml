@@ -37,6 +37,11 @@ jobs:
           STRIPE_WEBHOOK_SECRET: smoke-test-secret
           STRIPE_WEBHOOK_SMOKE_MODE: "true"
           STRIPE_API_KEY: sk_test_smoke
+          STRIPE_CHECKOUT_SMOKE_MODE: "true"
+          STRIPE_PRICE_ID_LIBRARY: price_smoke
+          STRIPE_SUCCESS_URL_LIBRARY: https://example.com/success
+          STRIPE_CANCEL_URL_LIBRARY: https://example.com/cancel
+          LINE_REGISTER_SMOKE_MODE: "true"
           DISCORD_WEBHOOK_URL: https://example.com
           DISCORD_SYSTEM_WEBHOOK: https://example.com
         run: |
@@ -136,11 +141,187 @@ jobs:
             fi
           }
 
+          run_discord_smoke() {
+            local name="$1"
+            local file="$2"
+            local log_file="/tmp/${name}.log"
+            local body_file="/tmp/${name}-body.txt"
+            local discord_body
+            local timestamp
+
+            discord_body='{"type":1}'
+            timestamp=$(date +%s)
+
+            eval "$(
+              DISCORD_BODY="$discord_body" DISCORD_TIMESTAMP="$timestamp" \
+                deno eval --quiet --allow-env --allow-net -c supabase/functions/deno.json '
+import nacl from "tweetnacl";
+const body = Deno.env.get("DISCORD_BODY") ?? "";
+const timestamp = Deno.env.get("DISCORD_TIMESTAMP") ?? "";
+const keyPair = nacl.sign.keyPair();
+const encoder = new TextEncoder();
+const signature = nacl.sign.detached(
+  encoder.encode(timestamp + body),
+  keyPair.secretKey,
+);
+const toHex = (bytes) =>
+  Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+console.log(`SMOKE_DISCORD_PUBLIC_KEY=${toHex(keyPair.publicKey)}`);
+console.log(`SMOKE_DISCORD_SIGNATURE=${toHex(signature)}`);
+')"
+
+            if [ -z "${SMOKE_DISCORD_PUBLIC_KEY:-}" ] || [ -z "${SMOKE_DISCORD_SIGNATURE:-}" ]; then
+              echo "${name}: Failed to generate Discord signature"
+              exit 1
+            fi
+
+            DISCORD_PUBLIC_KEY="$SMOKE_DISCORD_PUBLIC_KEY" \
+              DISCORD_BOT_TOKEN="smoke-token" \
+              DISCORD_ROLE_ID="smoke-role" \
+              SEC_BRIEF_CHANNEL_ID="smoke-channel" \
+              SUPABASE_URL="$SUPABASE_URL" \
+              SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
+              deno run --allow-env --allow-net "$file" >"$log_file" 2>&1 &
+            local pid=$!
+
+            local status=000
+            for i in 1 2 3 4 5; do
+              sleep 1
+              status=$(curl -s -o "$body_file" -w "%{http_code}" \
+                -H "X-Signature-Ed25519: $SMOKE_DISCORD_SIGNATURE" \
+                -H "X-Signature-Timestamp: $timestamp" \
+                -H "content-type: application/json" \
+                -d "$discord_body" \
+                http://localhost:8000/ || true)
+              if [ "$status" != "000" ]; then
+                break
+              fi
+            done
+
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+
+            if [ "$status" != "200" ]; then
+              echo "${name}: Unexpected status: $status"
+              echo "Response:"
+              cat "$body_file" || true
+              echo "Log:"
+              tail -n 50 "$log_file" || true
+              exit 1
+            fi
+
+            local response_body
+            response_body=$(cat "$body_file" || true)
+            if ! echo "$response_body" | grep -q '"type":1'; then
+              echo "${name}: Unexpected body: $response_body"
+              exit 1
+            fi
+          }
+
+          run_checkout_smoke() {
+            local name="$1"
+            local file="$2"
+            local log_file="/tmp/${name}.log"
+            local body_file="/tmp/${name}-body.txt"
+            local checkout_body
+
+            checkout_body='{"email":"smoke@example.com","opt_in_email":true,"agree_terms":true}'
+
+            STRIPE_CHECKOUT_SMOKE_MODE="true" \
+              STRIPE_API_KEY="sk_test_smoke" \
+              STRIPE_PRICE_ID_LIBRARY="price_smoke" \
+              STRIPE_SUCCESS_URL_LIBRARY="https://example.com/success" \
+              STRIPE_CANCEL_URL_LIBRARY="https://example.com/cancel" \
+              deno run --allow-env --allow-net "$file" >"$log_file" 2>&1 &
+            local pid=$!
+
+            local status=000
+            for i in 1 2 3 4 5; do
+              sleep 1
+              status=$(curl -s -o "$body_file" -w "%{http_code}" \
+                -H "x-smoke-test: true" \
+                -H "content-type: application/json" \
+                -d "$checkout_body" \
+                http://localhost:8000/ || true)
+              if [ "$status" != "000" ]; then
+                break
+              fi
+            done
+
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+
+            if [ "$status" != "200" ]; then
+              echo "${name}: Unexpected status: $status"
+              echo "Response:"
+              cat "$body_file" || true
+              echo "Log:"
+              tail -n 50 "$log_file" || true
+              exit 1
+            fi
+
+            local response_body
+            response_body=$(cat "$body_file" || true)
+            if ! echo "$response_body" | grep -q "checkout-smoke"; then
+              echo "${name}: Unexpected body: $response_body"
+              exit 1
+            fi
+          }
+
+          run_line_register_smoke() {
+            local name="$1"
+            local file="$2"
+            local log_file="/tmp/${name}.log"
+            local body_file="/tmp/${name}-body.txt"
+            local register_body
+
+            register_body='{"email":"smoke@example.com"}'
+
+            LINE_REGISTER_SMOKE_MODE="true" \
+              deno run --allow-env --allow-net "$file" >"$log_file" 2>&1 &
+            local pid=$!
+
+            local status=000
+            for i in 1 2 3 4 5; do
+              sleep 1
+              status=$(curl -s -o "$body_file" -w "%{http_code}" \
+                -H "x-smoke-test: true" \
+                -H "content-type: application/json" \
+                -d "$register_body" \
+                http://localhost:8000/ || true)
+              if [ "$status" != "000" ]; then
+                break
+              fi
+            done
+
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+
+            if [ "$status" != "200" ]; then
+              echo "${name}: Unexpected status: $status"
+              echo "Response:"
+              cat "$body_file" || true
+              echo "Log:"
+              tail -n 50 "$log_file" || true
+              exit 1
+            fi
+
+            local response_body
+            response_body=$(cat "$body_file" || true)
+            if ! echo "$response_body" | grep -q '"smoke":true'; then
+              echo "${name}: Unexpected body: $response_body"
+              exit 1
+            fi
+          }
+
           stripe_body='{"id":"evt_smoke","object":"event","type":"test.event","data":{"object":{}}}'
 
           run_line_smoke "line-bot" "supabase/functions/line-bot/index.ts"
           run_line_smoke "line-webhook" "supabase/functions/line-webhook/index.ts"
           run_stripe_smoke "stripe-webhook" "supabase/functions/stripe-webhook/index.ts"
+          run_discord_smoke "discord-bot" "supabase/functions/discord-bot/index.ts"
+          run_checkout_smoke "create-checkout-session" "supabase/functions/create-checkout-session/index.ts"
+          run_line_register_smoke "line-register" "supabase/functions/line-register/index.ts"
 
   deploy:
     needs: [line-bot-smoke]

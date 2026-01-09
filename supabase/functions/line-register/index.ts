@@ -106,6 +106,16 @@ Deno.serve(async (req) => {
       return badRequest("Method not allowed", 405);
     }
 
+    const smokeMode = Deno.env.get("LINE_REGISTER_SMOKE_MODE") === "true";
+    const isSmokeRequest = smokeMode && req.headers.get("x-smoke-test") === "true";
+    if (isSmokeRequest) {
+      log.info("LINE register smoke mode", { method: req.method });
+      return new Response(
+        JSON.stringify({ ok: true, smoke: true }),
+        { status: 200, headers },
+      );
+    }
+
     let body: {
       line_user_id?: string;
       email?: string | null;

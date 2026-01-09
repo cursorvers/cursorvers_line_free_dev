@@ -17,6 +17,22 @@ Deno.serve(async (req) => {
   // リクエストごとにCORSヘッダーを生成
   const corsHeaders = createCorsHeaders(req);
 
+  const smokeMode = Deno.env.get("STRIPE_CHECKOUT_SMOKE_MODE") === "true";
+  const isSmokeRequest = smokeMode && req.headers.get("x-smoke-test") === "true";
+  if (isSmokeRequest) {
+    log.info("Stripe checkout smoke mode", { method: req.method });
+    return new Response(
+      JSON.stringify({
+        url: "https://example.com/checkout-smoke",
+        smoke: true,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
   try {
     // Get environment variables
     const stripeApiKey = Deno.env.get("STRIPE_API_KEY");
