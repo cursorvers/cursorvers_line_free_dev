@@ -18,7 +18,8 @@ Deno.serve(async (req) => {
   const corsHeaders = createCorsHeaders(req);
 
   const smokeMode = Deno.env.get("STRIPE_CHECKOUT_SMOKE_MODE") === "true";
-  const isSmokeRequest = smokeMode && req.headers.get("x-smoke-test") === "true";
+  const isSmokeRequest = smokeMode &&
+    req.headers.get("x-smoke-test") === "true";
   if (isSmokeRequest) {
     log.info("Stripe checkout smoke mode", { method: req.method });
     return new Response(

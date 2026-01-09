@@ -107,7 +107,8 @@ Deno.serve(async (req) => {
     }
 
     const smokeMode = Deno.env.get("LINE_REGISTER_SMOKE_MODE") === "true";
-    const isSmokeRequest = smokeMode && req.headers.get("x-smoke-test") === "true";
+    const isSmokeRequest = smokeMode &&
+      req.headers.get("x-smoke-test") === "true";
     if (isSmokeRequest) {
       log.info("LINE register smoke mode", { method: req.method });
       return new Response(
