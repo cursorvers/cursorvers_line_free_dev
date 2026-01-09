@@ -1,0 +1,90 @@
+name: Stripe Consistency Check
+
+on:
+  schedule:
+    # 毎日 00:30 JST (15:30 UTC)
+    - cron: "30 15 * * *"
+  workflow_dispatch:
+
+jobs:
+  stripe-consistency-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Setup log directory
+        run: |
+          mkdir -p workflow-logs
+          echo "LOG_FILE=workflow-logs/stripe-consistency-check-$(date -u +%Y%m%d_%H%M%S).log" >> $GITHUB_ENV
+
+      - name: Run stripe consistency check
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          exec > >(tee -a "$LOG_FILE") 2>&1
+          echo "🔍 Running stripe consistency check..."
+
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "⚠️ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY; skipping."
+            exit 0
+          fi
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "$SUPABASE_URL/functions/v1/stripe-consistency-check" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            echo "✅ Stripe consistency check completed"
+          else
+            echo "❌ Stripe consistency check failed"
+            exit 1
+          fi
+
+      - name: Notify Discord on failure
+        if: failure()
+        run: |
+          if [ -n "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "embeds": [{
+                  "title": "❌ Stripe Consistency Check Failed",
+                  "description": "Stripeイベントとmembers更新の整合性チェックが失敗しました。",
+                  "color": 15158332,
+                  "fields": [
+                    {
+                      "name": "Repository",
+                      "value": "'"$GITHUB_REPOSITORY"'",
+                      "inline": true
+                    },
+                    {
+                      "name": "Workflow",
+                      "value": "Stripe Consistency Check",
+                      "inline": true
+                    },
+                    {
+                      "name": "Run",
+                      "value": "[View Logs]('"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"')",
+                      "inline": false
+                    }
+                  ],
+                  "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
+                }]
+              }'
+          fi
+
+      - name: Upload workflow logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stripe-consistency-check-logs-${{ github.run_number }}-${{ github.run_attempt }}
+          path: workflow-logs/
+          retention-days: 90

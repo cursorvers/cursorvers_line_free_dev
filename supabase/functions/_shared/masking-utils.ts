@@ -48,3 +48,13 @@ export function maskVerificationCode(
   if (!code) return null;
   return code.slice(0, 2) + "****";
 }
+
+/**
+ * 汎用IDマスク（最後の4文字のみ表示）
+ * @param id - マスクするID
+ * @returns マスクされた文字列
+ */
+export function maskId(id: string): string {
+  if (id.length <= 4) return "****";
+  return "***" + id.slice(-4);
+}

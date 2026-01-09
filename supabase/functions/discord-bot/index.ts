@@ -8,6 +8,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import nacl from "tweetnacl";
 import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { createLogger } from "../_shared/logger.ts";
+import { maskEmail, maskId } from "../_shared/masking-utils.ts";
 import { EMAIL_REGEX } from "../_shared/validation-utils.ts";
 import {
   DISCORD_SAFE_MESSAGE_LIMIT,
@@ -19,6 +20,11 @@ const log = createLogger("discord-bot");
 
 // --- 定数 ---
 const DISCORD_API_TIMEOUT = 2000; // Discord API タイムアウト (ms)
+const RATE_LIMIT = {
+  MAX_ATTEMPTS: 5,
+  WINDOW_SECONDS: 60,
+  ACTION: "discord_join",
+} as const;
 
 // 環境変数（起動時に検証）
 const DISCORD_PUBLIC_KEY = Deno.env.get("DISCORD_PUBLIC_KEY") ?? "";
@@ -124,6 +130,17 @@ async function handleJoin(
     });
   }
 
+  const isAllowed = await checkRateLimit(supabase, userId);
+  if (!isAllowed) {
+    return jsonResponse({
+      type: 4,
+      data: {
+        content: "⚠️ 試行回数が上限に達しました。1分後に再度お試しください。",
+        flags: 64,
+      },
+    });
+  }
+
   if (!email) {
     return jsonResponse({
       type: 4,
@@ -157,6 +174,9 @@ async function handleJoin(
     .maybeSingle();
 
   if (error || !member) {
+    await recordAttempt(supabase, userId, false, {
+      email: maskEmail(email) ?? "***",
+    });
     return jsonResponse({
       type: 4,
       data: {
@@ -255,6 +275,10 @@ async function handleJoin(
     });
   }
 
+  await recordAttempt(supabase, userId, true, {
+    email: maskEmail(email) ?? "***",
+  });
+
   // ウェルカムメッセージをチャンネルに公開投稿
   const channelId = interaction.channel_id;
   if (channelId) {
@@ -288,6 +312,68 @@ async function handleJoin(
       flags: 64,
     },
   });
+}
+
+async function checkRateLimit(
+  supabase: SupabaseClient,
+  identifier: string,
+): Promise<boolean> {
+  try {
+    const windowStart = new Date(
+      Date.now() - RATE_LIMIT.WINDOW_SECONDS * 1000,
+    ).toISOString();
+
+    const { count, error } = await supabase
+      .from("rate_limits")
+      .select("*", { count: "exact", head: true })
+      .eq("identifier", identifier)
+      .eq("action", RATE_LIMIT.ACTION)
+      .gte("attempted_at", windowStart);
+
+    if (error) {
+      log.warn("Rate limit check failed, allowing request", {
+        errorMessage: error.message,
+      });
+      return true;
+    }
+
+    const attempts = count ?? 0;
+    if (attempts >= RATE_LIMIT.MAX_ATTEMPTS) {
+      log.warn("Rate limit exceeded", {
+        identifier: maskId(identifier),
+        attempts,
+        limit: RATE_LIMIT.MAX_ATTEMPTS,
+      });
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    log.warn("Rate limit check exception, allowing request", {
+      errorMessage: extractErrorMessage(err),
+    });
+    return true;
+  }
+}
+
+async function recordAttempt(
+  supabase: SupabaseClient,
+  identifier: string,
+  success: boolean,
+  metadata: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    await supabase.from("rate_limits").insert({
+      identifier,
+      action: RATE_LIMIT.ACTION,
+      success,
+      metadata,
+    });
+  } catch (err) {
+    log.warn("Failed to record rate limit attempt", {
+      errorMessage: extractErrorMessage(err),
+    });
+  }
 }
 
 // ============================================

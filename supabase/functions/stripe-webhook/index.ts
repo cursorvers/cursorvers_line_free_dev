@@ -8,7 +8,7 @@
  * 3. LINE登録後にコード入力でDiscord招待を送信
  * 4. 既にLINE紐付け済みの場合は即座にDiscord招待
  */
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { notifyDiscord } from "../_shared/alert.ts";
 import { createDiscordInvite, removeDiscordRole } from "../_shared/discord.ts";
@@ -34,6 +34,11 @@ import {
 import { notifyStripeEvent } from "../_shared/n8n-notify.ts";
 
 const log = createLogger("stripe-webhook");
+const RATE_LIMIT = {
+  MAX_REQUESTS: 100,
+  WINDOW_SECONDS: 60,
+  ACTION: "stripe_webhook",
+} as const;
 
 // Google Sheets 連携（任意）
 const MEMBERS_SHEET_ID = Deno.env.get("MEMBERS_SHEET_ID") ?? "";
@@ -244,606 +249,766 @@ async function sendDiscordInviteViaLine(
   }
 }
 
-Deno.serve(async (req) => {
-  const signature = req.headers.get("Stripe-Signature");
-  const body = await req.text();
-  const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-
-  // 署名ヘッダーの検証（必須）
-  if (!signature) {
-    log.warn("Missing Stripe-Signature header");
-    return new Response("Missing signature", { status: 400 });
-  }
-
-  // 環境変数の検証（サーバー設定エラー）
-  if (!webhookSecret) {
-    log.error("STRIPE_WEBHOOK_SECRET not configured");
-    return new Response("Server configuration error", { status: 500 });
-  }
-
-  let event;
-
-  try {
-    event = await stripe.webhooks.constructEventAsync(
-      body,
-      signature,
-      webhookSecret,
-      undefined,
-      cryptoProvider,
-    );
-  } catch (err) {
-    const errorMessage = extractErrorMessage(err);
-    log.error("Webhook signature verification failed", { errorMessage });
-    await notifyDiscord({
-      title: "MANUS ALERT: Stripe webhook signature failed",
-      message: errorMessage,
-    });
-    return new Response(errorMessage, { status: 400 });
-  }
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+function getClientIP(req: Request): string {
+  return (
+    req.headers.get("cf-connecting-ip") ??
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      req.headers.get("x-real-ip") ??
+      "unknown"
   );
+}
 
-  // グローバル冪等性チェック: イベントIDで重複処理を防止
-  const { data: existingEvent } = await supabase
-    .from("stripe_events_processed")
-    .select("event_id")
-    .eq("event_id", event.id)
-    .maybeSingle();
+async function checkRateLimit(
+  supabase: SupabaseClient,
+  identifier: string,
+): Promise<boolean> {
+  try {
+    const windowStart = new Date(
+      Date.now() - RATE_LIMIT.WINDOW_SECONDS * 1000,
+    ).toISOString();
 
-  if (existingEvent) {
-    log.info("Event already processed, skipping", {
-      eventId: event.id,
-      eventType: event.type,
+    const { count, error } = await supabase
+      .from("rate_limits")
+      .select("*", { count: "exact", head: true })
+      .eq("identifier", identifier)
+      .eq("action", RATE_LIMIT.ACTION)
+      .gte("attempted_at", windowStart);
+
+    if (error) {
+      log.warn("Rate limit check failed, allowing request", {
+        errorMessage: error.message,
+      });
+      return true;
+    }
+
+    const attempts = count ?? 0;
+    if (attempts >= RATE_LIMIT.MAX_REQUESTS) {
+      log.warn("Rate limit exceeded", {
+        identifier,
+        attempts,
+        limit: RATE_LIMIT.MAX_REQUESTS,
+      });
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    log.warn("Rate limit check exception, allowing request", {
+      errorMessage: extractErrorMessage(err),
     });
-    return new Response(
-      JSON.stringify({ received: true, skipped: "event_already_processed" }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return true;
   }
+}
 
-  // イベントを処理済みとして記録（楽観的ロック）
-  const { error: insertError } = await supabase
-    .from("stripe_events_processed")
-    .insert({
-      event_id: event.id,
-      event_type: event.type,
-      customer_email: null, // 後で更新
+async function recordRequest(
+  supabase: SupabaseClient,
+  identifier: string,
+  success: boolean,
+  metadata: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    await supabase.from("rate_limits").insert({
+      identifier,
+      action: RATE_LIMIT.ACTION,
+      success,
+      metadata,
+    });
+  } catch (err) {
+    log.warn("Failed to record rate limit", {
+      errorMessage: extractErrorMessage(err),
+    });
+  }
+}
+
+Deno.serve(async (req) => {
+  try {
+    const signature = req.headers.get("Stripe-Signature");
+    const body = await req.text();
+    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const requestId = crypto.randomUUID();
+    const clientIP = getClientIP(req);
+
+    log.info("Request received", {
+      requestId,
+      clientIP,
+      method: req.method,
     });
 
-  if (insertError) {
-    // 既に挿入済み（並行処理による競合）の場合はスキップ
-    if (insertError.code === "23505") {
-      // unique_violation
-      log.info("Event insertion conflict, skipping (concurrent processing)", {
+    // 環境変数の検証（サーバー設定エラー）
+    if (!webhookSecret) {
+      log.error("STRIPE_WEBHOOK_SECRET not configured");
+      await notifyDiscord({
+        title: "MANUS ALERT: Stripe webhook secret missing",
+        message: "STRIPE_WEBHOOK_SECRET not configured",
+        severity: "critical",
+      });
+      return new Response("Server configuration error", { status: 500 });
+    }
+
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
+      log.error("Supabase configuration missing");
+      await notifyDiscord({
+        title: "MANUS ALERT: Supabase config missing",
+        message: "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured",
+        severity: "critical",
+      });
+      return new Response("Server configuration error", { status: 500 });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const isAllowed = await checkRateLimit(supabase, clientIP);
+    if (!isAllowed) {
+      log.warn("Rate limit exceeded", { requestId, clientIP });
+      return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 署名ヘッダーの検証（必須）
+    if (!signature) {
+      log.warn("Missing Stripe-Signature header", { requestId, clientIP });
+      await notifyDiscord({
+        title: "MANUS ALERT: Stripe webhook missing signature",
+        message: "Missing Stripe-Signature header",
+        severity: "warning",
+      });
+      await recordRequest(supabase, clientIP, false, {
+        reason: "missing_signature",
+        requestId,
+      });
+      return new Response("Missing signature", { status: 400 });
+    }
+
+    let event;
+
+    try {
+      event = await stripe.webhooks.constructEventAsync(
+        body,
+        signature,
+        webhookSecret,
+        undefined,
+        cryptoProvider,
+      );
+    } catch (err) {
+      const errorMessage = extractErrorMessage(err);
+      log.error("Webhook signature verification failed", { errorMessage });
+      await notifyDiscord({
+        title: "MANUS ALERT: Stripe webhook signature failed",
+        message: errorMessage,
+        severity: "error",
+      });
+      await recordRequest(supabase, clientIP, false, {
+        reason: "invalid_signature",
+        requestId,
+      });
+      return new Response(errorMessage, { status: 400 });
+    }
+
+    await recordRequest(supabase, clientIP, true, {
+      eventType: event.type,
+      requestId,
+    });
+
+    // グローバル冪等性チェック: イベントIDで重複処理を防止
+    const { data: existingEvent } = await supabase
+      .from("stripe_events_processed")
+      .select("event_id")
+      .eq("event_id", event.id)
+      .maybeSingle();
+
+    if (existingEvent) {
+      log.info("Event already processed, skipping", {
         eventId: event.id,
+        eventType: event.type,
       });
       return new Response(
-        JSON.stringify({ received: true, skipped: "concurrent_conflict" }),
+        JSON.stringify({ received: true, skipped: "event_already_processed" }),
         { headers: { "Content-Type": "application/json" } },
       );
     }
-    // その他のエラーはログして続行（テーブル未作成時など）
-    log.warn("Failed to record event, continuing anyway", {
-      eventId: event.id,
-      error: insertError.message,
-    });
-  }
 
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const customerEmail = session.customer_details?.email;
-      const paymentStatus = session.payment_status;
-      const mode = session.mode;
-
-      log.info("Checkout session completed", {
-        sessionId: session.id,
-        email: customerEmail,
-        paymentStatus,
-        mode,
+    // イベントを処理済みとして記録（楽観的ロック）
+    const { error: insertError } = await supabase
+      .from("stripe_events_processed")
+      .insert({
+        event_id: event.id,
+        event_type: event.type,
+        customer_email: null, // 後で更新
       });
 
-      // Payment Linkからの決済完了のみ処理（payment_statusがpaidの場合）
-      if (customerEmail && paymentStatus === "paid") {
-        // 冪等性チェック: 既にこのセッションで処理済みかどうか確認
-        const { data: existingMember } = await supabase
-          .from("members")
-          .select(
-            "id, line_user_id, discord_invite_sent, verification_code, verification_expires_at, stripe_customer_id",
-          )
-          .eq("email", customerEmail)
-          .maybeSingle();
+    if (insertError) {
+      // 既に挿入済み（並行処理による競合）の場合はスキップ
+      if (insertError.code === "23505") {
+        // unique_violation
+        log.info("Event insertion conflict, skipping (concurrent processing)", {
+          eventId: event.id,
+        });
+        return new Response(
+          JSON.stringify({ received: true, skipped: "concurrent_conflict" }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }
+      // その他のエラーはログして続行（テーブル未作成時など）
+      log.warn("Failed to record event, continuing anyway", {
+        eventId: event.id,
+        error: insertError.message,
+      });
+      await notifyDiscord({
+        title: "MANUS ALERT: Stripe event record failed",
+        message: insertError.message,
+        severity: "warning",
+        context: { eventId: event.id, eventType: event.type },
+      });
+    }
 
-        // 既に同じstripe_customer_idで処理済みの場合はスキップ
-        if (
-          existingMember?.stripe_customer_id === session.customer &&
-          existingMember?.discord_invite_sent === true
-        ) {
-          log.info("Idempotency check: Already processed this session", {
-            email: maskEmail(customerEmail),
-            sessionId: session.id,
-          });
-          return new Response(
-            JSON.stringify({ received: true, skipped: "already_processed" }),
-            {
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-        // サブスクリプション情報を取得
-        const subscriptionId = session.subscription as string | null;
-        let subscriptionStatus = "active";
-        let nextBillingAt: string | null = null;
-        let stripeSubscriptionId: string | null = null;
-        const optInEmail =
-          (session.metadata?.opt_in_email ?? "").toString().toLowerCase() ===
-            "true";
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const customerEmail = session.customer_details?.email;
+        const paymentStatus = session.payment_status;
+        const mode = session.mode;
 
-        // 顧客名を取得
-        const customerName = session.customer_details?.name || null;
+        log.info("Checkout session completed", {
+          sessionId: session.id,
+          email: customerEmail,
+          paymentStatus,
+          mode,
+        });
 
-        // サブスクリプション型の場合、詳細情報を取得
-        if (subscriptionId && typeof subscriptionId === "string") {
-          try {
-            const subscription = await stripe.subscriptions.retrieve(
-              subscriptionId,
-            );
-            subscriptionStatus = subscription.status;
-            stripeSubscriptionId = subscription.id;
-            nextBillingAt = subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000).toISOString()
-              : null;
-            log.info("Subscription details retrieved", {
-              subscriptionId,
-              subscriptionStatus,
+        // Payment Linkからの決済完了のみ処理（payment_statusがpaidの場合）
+        if (customerEmail && paymentStatus === "paid") {
+          // 冪等性チェック: 既にこのセッションで処理済みかどうか確認
+          const { data: existingMember } = await supabase
+            .from("members")
+            .select(
+              "id, line_user_id, discord_invite_sent, verification_code, verification_expires_at, stripe_customer_id",
+            )
+            .eq("email", customerEmail)
+            .maybeSingle();
+
+          // 既に同じstripe_customer_idで処理済みの場合はスキップ
+          if (
+            existingMember?.stripe_customer_id === session.customer &&
+            existingMember?.discord_invite_sent === true
+          ) {
+            log.info("Idempotency check: Already processed this session", {
+              email: maskEmail(customerEmail),
+              sessionId: session.id,
             });
+            return new Response(
+              JSON.stringify({ received: true, skipped: "already_processed" }),
+              {
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          }
+          // サブスクリプション情報を取得
+          const subscriptionId = session.subscription as string | null;
+          let subscriptionStatus = "active";
+          let nextBillingAt: string | null = null;
+          let stripeSubscriptionId: string | null = null;
+          const optInEmail =
+            (session.metadata?.opt_in_email ?? "").toString().toLowerCase() ===
+              "true";
+
+          // 顧客名を取得
+          const customerName = session.customer_details?.name || null;
+
+          // サブスクリプション型の場合、詳細情報を取得
+          if (subscriptionId && typeof subscriptionId === "string") {
+            try {
+              const subscription = await stripe.subscriptions.retrieve(
+                subscriptionId,
+              );
+              subscriptionStatus = subscription.status;
+              stripeSubscriptionId = subscription.id;
+              nextBillingAt = subscription.current_period_end
+                ? new Date(subscription.current_period_end * 1000).toISOString()
+                : null;
+              log.info("Subscription details retrieved", {
+                subscriptionId,
+                subscriptionStatus,
+              });
+            } catch (err) {
+              log.error("Failed to retrieve subscription", {
+                subscriptionId,
+                errorMessage: extractErrorMessage(err),
+              });
+            }
+          }
+
+          // tier判定（金額とPayment Link IDから判定）
+          const paymentLinkId = typeof session.payment_link === "string"
+            ? session.payment_link
+            : null;
+          const membershipTier = determineMembershipTier(
+            session.amount_total,
+            paymentLinkId,
+          );
+
+          // 認証コード生成ロジック
+          // LINE紐付け済み or Discord招待済みの場合はコード不要
+          let verificationCode: string | null = null;
+          let verificationExpiresAt: string | null = null;
+          const alreadyLinked = existingMember?.line_user_id != null;
+          const alreadyInvited = existingMember?.discord_invite_sent === true;
+
+          if (!alreadyLinked && !alreadyInvited) {
+            // LINE未紐付け かつ Discord未招待 → コードが必要
+            if (
+              existingMember?.verification_code &&
+              existingMember?.verification_expires_at
+            ) {
+              // 既存コードの有効期限を確認
+              const expiresAt = new Date(
+                existingMember.verification_expires_at,
+              );
+              if (expiresAt > new Date()) {
+                // 有効なコードが存在 → 再利用
+                verificationCode = existingMember.verification_code;
+                verificationExpiresAt = existingMember.verification_expires_at;
+                log.info("Reusing existing verification code", {
+                  email: maskEmail(customerEmail),
+                  expiresAt: verificationExpiresAt,
+                });
+              }
+            }
+
+            // 既存の有効なコードがない場合のみ新規生成
+            if (!verificationCode) {
+              verificationCode = generateVerificationCode();
+              verificationExpiresAt = getCodeExpiryDate().toISOString();
+              log.info("Generated new verification code", {
+                email: maskEmail(customerEmail),
+              });
+            }
+          } else {
+            log.info("Skipping verification code (already linked or invited)", {
+              email: maskEmail(customerEmail),
+              alreadyLinked,
+              alreadyInvited,
+            });
+          }
+
+          // 既存メンバーの場合は discord_invite_sent をリセットしない
+          const basePayload = {
+            email: customerEmail,
+            name: customerName,
+            stripe_customer_id: session.customer as string | null,
+            stripe_subscription_id: stripeSubscriptionId,
+            status: "active",
+            stripe_subscription_status: subscriptionStatus,
+            tier: membershipTier,
+            period_end: nextBillingAt,
+            opt_in_email: optInEmail,
+            updated_at: new Date().toISOString(),
+          };
+
+          let error;
+          if (existingMember) {
+            // 既存メンバー → 必要なフィールドのみ更新
+            const updatePayload: Record<string, unknown> = { ...basePayload };
+            if (verificationCode) {
+              updatePayload["verification_code"] = verificationCode;
+              updatePayload["verification_expires_at"] = verificationExpiresAt;
+            }
+            // discord_invite_sent は更新しない（既存の値を維持）
+
+            const { error: updateError } = await supabase
+              .from("members")
+              .update(updatePayload)
+              .eq("email", customerEmail);
+            error = updateError;
+          } else {
+            // 新規メンバー → 全フィールドを設定
+            const { error: insertError } = await supabase
+              .from("members")
+              .insert({
+                ...basePayload,
+                verification_code: verificationCode,
+                verification_expires_at: verificationExpiresAt,
+                discord_invite_sent: false,
+              });
+            error = insertError;
+          }
+
+          if (error) {
+            log.error("DB Insert Error", { errorMessage: error.message });
+            await notifyDiscord({
+              title: "MANUS ALERT: members upsert failed",
+              message: error.message ?? "unknown DB error",
+              severity: "error",
+              context: { email: customerEmail, membershipTier, subscriptionId },
+            });
+            return new Response(JSON.stringify({ error: error.message }), {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            });
+          } else {
+            log.info("Member joined", {
+              email: customerEmail,
+              tier: membershipTier,
+            });
+
+            // n8n経由でDiscord通知（非同期・失敗しても続行）
+            notifyStripeEvent(
+              event.type,
+              customerEmail,
+              customerName,
+              session.amount_total,
+              session.currency ?? "jpy",
+              mode ?? "payment",
+              session.id,
+            ).catch((err) => {
+              log.warn("n8n notification failed", {
+                error: extractErrorMessage(err),
+              });
+            });
+
+            // 支払い履歴を保存
+            await savePaymentFromCheckout(supabase, session, membershipTier);
+
+            // upsert後のレコードを取得
+            const { data: memberData } = await supabase
+              .from("members")
+              .select("id, line_user_id")
+              .eq("email", customerEmail)
+              .maybeSingle();
+
+            let lineUserId: string | null = memberData?.line_user_id ?? null;
+
+            // 孤児レコード（LINE IDのみで登録）をマージ
+            if (memberData?.id) {
+              const mergeResult = await mergeOrphanLineRecord(
+                supabase,
+                customerEmail,
+                memberData.id,
+              );
+              if (mergeResult.merged && mergeResult.orphanLineUserId) {
+                lineUserId = mergeResult.orphanLineUserId;
+                log.info("Orphan LINE record merged", {
+                  email: maskEmail(customerEmail),
+                  lineUserId: maskLineUserId(lineUserId),
+                });
+              }
+            }
+
+            // Google Sheets へ追記（設定されている場合のみ）
+            await appendMemberRow([
+              customerEmail ?? "",
+              customerName ?? "",
+              membershipTier ?? "",
+              "active",
+              nextBillingAt ?? "",
+              optInEmail,
+              lineUserId ?? "",
+              new Date().toISOString(),
+            ]);
+
+            // discord_invite_sent 状況を確認
+            const { data: currentMember } = await supabase
+              .from("members")
+              .select("discord_invite_sent")
+              .eq("email", customerEmail)
+              .maybeSingle();
+
+            const alreadySentDiscordInvite =
+              currentMember?.discord_invite_sent === true;
+
+            // LINE紐付け状況に応じて処理を分岐
+            if (lineUserId && !alreadySentDiscordInvite) {
+              // 既にLINE紐付け済み かつ Discord招待未送信 → 即座にDiscord招待を送信
+              log.info(
+                "LINE already linked, sending Discord invite immediately",
+                {
+                  email: maskEmail(customerEmail),
+                  lineUserId: maskLineUserId(lineUserId),
+                },
+              );
+              const discordInviteSent = await sendDiscordInviteViaLine(
+                customerEmail,
+                customerName,
+                membershipTier,
+                lineUserId,
+              );
+
+              // LINE送信成功時のみフラグを更新
+              if (discordInviteSent) {
+                // 認証コードをクリア（不要になったため）
+                await supabase
+                  .from("members")
+                  .update({
+                    verification_code: null,
+                    verification_expires_at: null,
+                    discord_invite_sent: true,
+                  })
+                  .eq("email", customerEmail);
+              } else {
+                log.warn(
+                  "Discord invite not sent, keeping verification code for retry",
+                  { email: maskEmail(customerEmail) },
+                );
+              }
+            } else if (lineUserId && alreadySentDiscordInvite) {
+              // LINE紐付け済み かつ Discord招待送信済み → スキップ
+              log.info("Discord invite already sent, skipping", {
+                email: maskEmail(customerEmail),
+              });
+            } else if (verificationCode) {
+              // LINE未登録 → 認証コード付きウェルカムメールを送信
+              const tierDisplayName = membershipTier === "master"
+                ? "Master Class"
+                : "Library Member";
+
+              log.info("LINE not linked, sending welcome email with code", {
+                email: maskEmail(customerEmail),
+                code: maskVerificationCode(verificationCode),
+              });
+
+              const emailResult = await sendPaidMemberWelcomeEmail(
+                customerEmail,
+                verificationCode,
+                tierDisplayName,
+              );
+
+              if (!emailResult.success) {
+                log.error("Failed to send welcome email", {
+                  email: maskEmail(customerEmail),
+                  error: emailResult.error,
+                });
+                await notifyDiscord({
+                  title: "MANUS ALERT: Welcome email failed",
+                  message: `Failed to send welcome email to ${
+                    customerEmail.slice(0, 5)
+                  }***`,
+                  context: { tier: membershipTier, error: emailResult.error },
+                });
+              }
+            }
+          }
+        } else {
+          log.info("Payment not completed", {
+            email: customerEmail,
+            paymentStatus,
+          });
+        }
+        break;
+      }
+
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
+        let customerEmail: string | null = null;
+
+        // Customerオブジェクトからemailを取得
+        if (typeof subscription.customer === "string") {
+          try {
+            const customer = await stripe.customers.retrieve(
+              subscription.customer,
+            );
+            if (customer && !customer.deleted) {
+              customerEmail = customer.email || null;
+            }
           } catch (err) {
-            log.error("Failed to retrieve subscription", {
-              subscriptionId,
+            log.error("Failed to retrieve customer", {
+              customerId: subscription.customer,
               errorMessage: extractErrorMessage(err),
             });
           }
         }
 
-        // tier判定（金額とPayment Link IDから判定）
-        const paymentLinkId = typeof session.payment_link === "string"
-          ? session.payment_link
-          : null;
-        const membershipTier = determineMembershipTier(
-          session.amount_total,
-          paymentLinkId,
-        );
-
-        // 認証コード生成ロジック
-        // LINE紐付け済み or Discord招待済みの場合はコード不要
-        let verificationCode: string | null = null;
-        let verificationExpiresAt: string | null = null;
-        const alreadyLinked = existingMember?.line_user_id != null;
-        const alreadyInvited = existingMember?.discord_invite_sent === true;
-
-        if (!alreadyLinked && !alreadyInvited) {
-          // LINE未紐付け かつ Discord未招待 → コードが必要
-          if (
-            existingMember?.verification_code &&
-            existingMember?.verification_expires_at
-          ) {
-            // 既存コードの有効期限を確認
-            const expiresAt = new Date(existingMember.verification_expires_at);
-            if (expiresAt > new Date()) {
-              // 有効なコードが存在 → 再利用
-              verificationCode = existingMember.verification_code;
-              verificationExpiresAt = existingMember.verification_expires_at;
-              log.info("Reusing existing verification code", {
-                email: maskEmail(customerEmail),
-                expiresAt: verificationExpiresAt,
-              });
-            }
-          }
-
-          // 既存の有効なコードがない場合のみ新規生成
-          if (!verificationCode) {
-            verificationCode = generateVerificationCode();
-            verificationExpiresAt = getCodeExpiryDate().toISOString();
-            log.info("Generated new verification code", {
-              email: maskEmail(customerEmail),
-            });
-          }
-        } else {
-          log.info("Skipping verification code (already linked or invited)", {
-            email: maskEmail(customerEmail),
-            alreadyLinked,
-            alreadyInvited,
-          });
-        }
-
-        // 既存メンバーの場合は discord_invite_sent をリセットしない
-        const basePayload = {
-          email: customerEmail,
-          name: customerName,
-          stripe_customer_id: session.customer as string | null,
-          stripe_subscription_id: stripeSubscriptionId,
-          status: "active",
-          stripe_subscription_status: subscriptionStatus,
-          tier: membershipTier,
-          period_end: nextBillingAt,
-          opt_in_email: optInEmail,
-          updated_at: new Date().toISOString(),
-        };
-
-        let error;
-        if (existingMember) {
-          // 既存メンバー → 必要なフィールドのみ更新
-          const updatePayload: Record<string, unknown> = { ...basePayload };
-          if (verificationCode) {
-            updatePayload["verification_code"] = verificationCode;
-            updatePayload["verification_expires_at"] = verificationExpiresAt;
-          }
-          // discord_invite_sent は更新しない（既存の値を維持）
-
-          const { error: updateError } = await supabase
+        if (customerEmail) {
+          const { error } = await supabase
             .from("members")
-            .update(updatePayload)
+            .update({
+              stripe_subscription_status: subscription.status,
+              status: determineStatus(subscription.status),
+              period_end: subscription.current_period_end
+                ? new Date(subscription.current_period_end * 1000).toISOString()
+                : null,
+              stripe_subscription_id: subscription.id,
+              updated_at: new Date().toISOString(),
+            })
             .eq("email", customerEmail);
-          error = updateError;
-        } else {
-          // 新規メンバー → 全フィールドを設定
-          const { error: insertError } = await supabase
-            .from("members")
-            .insert({
-              ...basePayload,
-              verification_code: verificationCode,
-              verification_expires_at: verificationExpiresAt,
-              discord_invite_sent: false,
+
+          if (error) {
+            log.error("DB Update Error", { errorMessage: error.message });
+            await notifyDiscord({
+              title: "MANUS ALERT: Stripe subscription update failed",
+              message: error.message,
+              severity: "error",
+              context: {
+                email: maskEmail(customerEmail),
+                subscriptionId: subscription.id,
+              },
             });
-          error = insertError;
+          } else {
+            log.info("Subscription updated", {
+              subscriptionId: subscription.id,
+            });
+          }
+        }
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+        let customerEmail: string | null = null;
+
+        // Customerオブジェクトからemailを取得
+        if (typeof subscription.customer === "string") {
+          try {
+            const customer = await stripe.customers.retrieve(
+              subscription.customer,
+            );
+            if (customer && !customer.deleted) {
+              customerEmail = customer.email || null;
+            }
+          } catch (err) {
+            log.error("Failed to retrieve customer", {
+              customerId: subscription.customer,
+              errorMessage: extractErrorMessage(err),
+            });
+          }
         }
 
-        if (error) {
-          log.error("DB Insert Error", { errorMessage: error.message });
-          await notifyDiscord({
-            title: "MANUS ALERT: members upsert failed",
-            message: error.message ?? "unknown DB error",
-            context: { email: customerEmail, membershipTier, subscriptionId },
-          });
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          });
-        } else {
-          log.info("Member joined", {
-            email: customerEmail,
-            tier: membershipTier,
-          });
-
-          // n8n経由でDiscord通知（非同期・失敗しても続行）
-          notifyStripeEvent(
-            event.type,
-            customerEmail,
-            customerName,
-            session.amount_total,
-            session.currency ?? "jpy",
-            mode ?? "payment",
-            session.id,
-          ).catch((err) => {
-            log.warn("n8n notification failed", {
-              error: extractErrorMessage(err),
-            });
-          });
-
-          // 支払い履歴を保存
-          await savePaymentFromCheckout(supabase, session, membershipTier);
-
-          // upsert後のレコードを取得
+        if (customerEmail) {
+          // 会員情報を取得（LINE ID, Discord ID）
           const { data: memberData } = await supabase
             .from("members")
-            .select("id, line_user_id")
+            .select("id, line_user_id, discord_user_id, tier")
             .eq("email", customerEmail)
             .maybeSingle();
 
-          let lineUserId: string | null = memberData?.line_user_id ?? null;
-
-          // 孤児レコード（LINE IDのみで登録）をマージ
-          if (memberData?.id) {
-            const mergeResult = await mergeOrphanLineRecord(
-              supabase,
-              customerEmail,
-              memberData.id,
-            );
-            if (mergeResult.merged && mergeResult.orphanLineUserId) {
-              lineUserId = mergeResult.orphanLineUserId;
-              log.info("Orphan LINE record merged", {
-                email: maskEmail(customerEmail),
-                lineUserId: maskLineUserId(lineUserId),
-              });
-            }
-          }
-
-          // Google Sheets へ追記（設定されている場合のみ）
-          await appendMemberRow([
-            customerEmail ?? "",
-            customerName ?? "",
-            membershipTier ?? "",
-            "active",
-            nextBillingAt ?? "",
-            optInEmail,
-            lineUserId ?? "",
-            new Date().toISOString(),
-          ]);
-
-          // discord_invite_sent 状況を確認
-          const { data: currentMember } = await supabase
+          // DB更新
+          const { error } = await supabase
             .from("members")
-            .select("discord_invite_sent")
-            .eq("email", customerEmail)
-            .maybeSingle();
+            .update({
+              stripe_subscription_status: "canceled",
+              status: "inactive",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("email", customerEmail);
 
-          const alreadySentDiscordInvite =
-            currentMember?.discord_invite_sent === true;
-
-          // LINE紐付け状況に応じて処理を分岐
-          if (lineUserId && !alreadySentDiscordInvite) {
-            // 既にLINE紐付け済み かつ Discord招待未送信 → 即座にDiscord招待を送信
-            log.info(
-              "LINE already linked, sending Discord invite immediately",
-              {
+          if (error) {
+            log.error("DB Update Error", { errorMessage: error.message });
+            await notifyDiscord({
+              title: "MANUS ALERT: Stripe subscription cancel update failed",
+              message: error.message,
+              severity: "error",
+              context: {
                 email: maskEmail(customerEmail),
-                lineUserId: maskLineUserId(lineUserId),
+                subscriptionId: subscription.id,
               },
-            );
-            const discordInviteSent = await sendDiscordInviteViaLine(
-              customerEmail,
-              customerName,
-              membershipTier,
-              lineUserId,
-            );
+            });
+          } else {
+            log.info("Subscription canceled", {
+              subscriptionId: subscription.id,
+              email: maskEmail(customerEmail),
+            });
 
-            // LINE送信成功時のみフラグを更新
-            if (discordInviteSent) {
-              // 認証コードをクリア（不要になったため）
-              await supabase
-                .from("members")
-                .update({
-                  verification_code: null,
-                  verification_expires_at: null,
-                  discord_invite_sent: true,
-                })
-                .eq("email", customerEmail);
-            } else {
-              log.warn(
-                "Discord invite not sent, keeping verification code for retry",
-                { email: maskEmail(customerEmail) },
+            // Discord Role削除
+            if (memberData?.discord_user_id) {
+              const roleResult = await removeDiscordRole(
+                memberData.discord_user_id,
               );
+              if (roleResult.success) {
+                log.info("Discord role removed on cancellation", {
+                  email: maskEmail(customerEmail),
+                });
+              } else {
+                log.warn("Failed to remove Discord role", {
+                  error: roleResult.error,
+                });
+              }
             }
-          } else if (lineUserId && alreadySentDiscordInvite) {
-            // LINE紐付け済み かつ Discord招待送信済み → スキップ
-            log.info("Discord invite already sent, skipping", {
-              email: maskEmail(customerEmail),
+
+            // LINE通知（離脱完了）
+            if (memberData?.line_user_id) {
+              const tierName = memberData.tier === "master"
+                ? "Master Class"
+                : "Library Member";
+
+              const cancelMessage = [
+                "📢 メンバーシップ終了のお知らせ",
+                "",
+                `${tierName}のメンバーシップが終了しました。`,
+                "",
+                "━━━━━━━━━━━━━━━",
+                "ご利用ありがとうございました。",
+                "",
+                "再度ご入会いただく場合は、",
+                "改めて決済手続きをお願いいたします。",
+                "━━━━━━━━━━━━━━━",
+              ].join("\n");
+
+              const sent = await pushLineMessage(
+                memberData.line_user_id,
+                cancelMessage,
+              );
+              if (sent) {
+                log.info("Cancellation notification sent via LINE", {
+                  email: maskEmail(customerEmail),
+                });
+              } else {
+                log.warn("Failed to send cancellation notification via LINE");
+              }
+            }
+
+            // 管理者通知
+            await notifyDiscord({
+              title: "Member Subscription Canceled",
+              message: `**Email**: ${customerEmail}\n**Tier**: ${
+                memberData?.tier ?? "unknown"
+              }\n**LINE**: ${
+                memberData?.line_user_id ? "通知済" : "未登録"
+              }\n**Discord**: ${
+                memberData?.discord_user_id ? "Role削除済" : "未登録"
+              }`,
+              severity: "warning",
             });
-          } else if (verificationCode) {
-            // LINE未登録 → 認証コード付きウェルカムメールを送信
-            const tierDisplayName = membershipTier === "master"
-              ? "Master Class"
-              : "Library Member";
-
-            log.info("LINE not linked, sending welcome email with code", {
-              email: maskEmail(customerEmail),
-              code: maskVerificationCode(verificationCode),
-            });
-
-            const emailResult = await sendPaidMemberWelcomeEmail(
-              customerEmail,
-              verificationCode,
-              tierDisplayName,
-            );
-
-            if (!emailResult.success) {
-              log.error("Failed to send welcome email", {
-                email: maskEmail(customerEmail),
-                error: emailResult.error,
-              });
-              await notifyDiscord({
-                title: "MANUS ALERT: Welcome email failed",
-                message: `Failed to send welcome email to ${
-                  customerEmail.slice(0, 5)
-                }***`,
-                context: { tier: membershipTier, error: emailResult.error },
-              });
-            }
           }
         }
-      } else {
-        log.info("Payment not completed", {
-          email: customerEmail,
-          paymentStatus,
-        });
-      }
-      break;
-    }
-
-    case "customer.subscription.updated": {
-      const subscription = event.data.object as Stripe.Subscription;
-      let customerEmail: string | null = null;
-
-      // Customerオブジェクトからemailを取得
-      if (typeof subscription.customer === "string") {
-        try {
-          const customer = await stripe.customers.retrieve(
-            subscription.customer,
-          );
-          if (customer && !customer.deleted) {
-            customerEmail = customer.email || null;
-          }
-        } catch (err) {
-          log.error("Failed to retrieve customer", {
-            customerId: subscription.customer,
-            errorMessage: extractErrorMessage(err),
-          });
-        }
+        break;
       }
 
-      if (customerEmail) {
-        const { error } = await supabase
-          .from("members")
-          .update({
-            stripe_subscription_status: subscription.status,
-            status: determineStatus(subscription.status),
-            period_end: subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000).toISOString()
-              : null,
-            stripe_subscription_id: subscription.id,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("email", customerEmail);
-
-        if (error) {
-          log.error("DB Update Error", { errorMessage: error.message });
-        } else {log.info("Subscription updated", {
-            subscriptionId: subscription.id,
-          });}
-      }
-      break;
-    }
-
-    case "customer.subscription.deleted": {
-      const subscription = event.data.object as Stripe.Subscription;
-      let customerEmail: string | null = null;
-
-      // Customerオブジェクトからemailを取得
-      if (typeof subscription.customer === "string") {
-        try {
-          const customer = await stripe.customers.retrieve(
-            subscription.customer,
-          );
-          if (customer && !customer.deleted) {
-            customerEmail = customer.email || null;
-          }
-        } catch (err) {
-          log.error("Failed to retrieve customer", {
-            customerId: subscription.customer,
-            errorMessage: extractErrorMessage(err),
-          });
-        }
-      }
-
-      if (customerEmail) {
-        // 会員情報を取得（LINE ID, Discord ID）
-        const { data: memberData } = await supabase
-          .from("members")
-          .select("id, line_user_id, discord_user_id, tier")
-          .eq("email", customerEmail)
-          .maybeSingle();
-
-        // DB更新
-        const { error } = await supabase
-          .from("members")
-          .update({
-            stripe_subscription_status: "canceled",
-            status: "inactive",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("email", customerEmail);
-
-        if (error) {
-          log.error("DB Update Error", { errorMessage: error.message });
-        } else {
-          log.info("Subscription canceled", {
-            subscriptionId: subscription.id,
-            email: maskEmail(customerEmail),
-          });
-
-          // Discord Role削除
-          if (memberData?.discord_user_id) {
-            const roleResult = await removeDiscordRole(
-              memberData.discord_user_id,
-            );
-            if (roleResult.success) {
-              log.info("Discord role removed on cancellation", {
-                email: maskEmail(customerEmail),
-              });
-            } else {
-              log.warn("Failed to remove Discord role", {
-                error: roleResult.error,
-              });
-            }
-          }
-
-          // LINE通知（離脱完了）
-          if (memberData?.line_user_id) {
-            const tierName = memberData.tier === "master"
-              ? "Master Class"
-              : "Library Member";
-
-            const cancelMessage = [
-              "📢 メンバーシップ終了のお知らせ",
-              "",
-              `${tierName}のメンバーシップが終了しました。`,
-              "",
-              "━━━━━━━━━━━━━━━",
-              "ご利用ありがとうございました。",
-              "",
-              "再度ご入会いただく場合は、",
-              "改めて決済手続きをお願いいたします。",
-              "━━━━━━━━━━━━━━━",
-            ].join("\n");
-
-            const sent = await pushLineMessage(
-              memberData.line_user_id,
-              cancelMessage,
-            );
-            if (sent) {
-              log.info("Cancellation notification sent via LINE", {
-                email: maskEmail(customerEmail),
-              });
-            } else {
-              log.warn("Failed to send cancellation notification via LINE");
-            }
-          }
-
-          // 管理者通知
-          await notifyDiscord({
-            title: "Member Subscription Canceled",
-            message: `**Email**: ${customerEmail}\n**Tier**: ${
-              memberData?.tier ?? "unknown"
-            }\n**LINE**: ${
-              memberData?.line_user_id ? "通知済" : "未登録"
-            }\n**Discord**: ${
-              memberData?.discord_user_id ? "Role削除済" : "未登録"
-            }`,
-            severity: "warning",
-          });
-        }
-      }
-      break;
-    }
-
-    // 課金イベント: 支払い履歴を記録
-    case "charge.succeeded":
-    case "charge.failed":
-    case "charge.refunded": {
-      const charge = event.data.object as Stripe.Charge;
-      log.info("Charge event received", {
-        chargeId: charge.id,
-        type: event.type,
-        amount: charge.amount,
-        status: charge.status,
-      });
-
-      // 支払い履歴を保存
-      const result = await savePaymentFromCharge(supabase, charge);
-      if (!result.success) {
-        log.warn("Failed to save charge to payment history", {
+      // 課金イベント: 支払い履歴を記録
+      case "charge.succeeded":
+      case "charge.failed":
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        log.info("Charge event received", {
           chargeId: charge.id,
-          error: result.error,
+          type: event.type,
+          amount: charge.amount,
+          status: charge.status,
         });
-      }
-      break;
-    }
-  }
 
-  return new Response(JSON.stringify({ received: true }), {
-    headers: { "Content-Type": "application/json" },
-  });
+        // 支払い履歴を保存
+        const result = await savePaymentFromCharge(supabase, charge);
+        if (!result.success) {
+          log.warn("Failed to save charge to payment history", {
+            chargeId: charge.id,
+            error: result.error,
+          });
+        }
+        break;
+      }
+    }
+
+    return new Response(JSON.stringify({ received: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    const errorMessage = extractErrorMessage(err);
+    log.error("Unhandled Stripe webhook error", { errorMessage });
+    await notifyDiscord({
+      title: "MANUS ALERT: Stripe webhook error",
+      message: errorMessage,
+      severity: "critical",
+    });
+    return new Response("Internal server error", { status: 500 });
+  }
 });
