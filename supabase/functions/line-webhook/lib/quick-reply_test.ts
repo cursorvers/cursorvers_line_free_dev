@@ -1,7 +1,7 @@
 /**
  * LINE Quick Reply ビルダーテスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
 import {
   buildBackButtonQuickReply,
   buildDiagnosisQuickReply,
@@ -34,6 +34,7 @@ Deno.test("quick-reply - buildDiagnosisQuickReply", async (t) => {
   await t.step("includes contact button", () => {
     const result = buildDiagnosisQuickReply();
     const lastItem = result.items[result.items.length - 1];
+    assertExists(lastItem);
     assertEquals(lastItem.action.label, "お問い合わせ");
     assertEquals(lastItem.action.text, "お問い合わせ");
   });
@@ -42,6 +43,7 @@ Deno.test("quick-reply - buildDiagnosisQuickReply", async (t) => {
     const result = buildDiagnosisQuickReply();
     const firstItem = result.items[0];
     // Label should not end with 診断
+    assertExists(firstItem);
     assertEquals(firstItem.action.label?.includes("診断"), false);
   });
 });
@@ -86,12 +88,16 @@ Deno.test("quick-reply - buildBackButtonQuickReply", async (t) => {
 
   await t.step("has back button with correct label", () => {
     const result = buildBackButtonQuickReply();
-    assertEquals(result.items[0].action.label, "← 戻る");
+    const firstItem = result.items[0];
+    assertExists(firstItem);
+    assertEquals(firstItem.action.label, "← 戻る");
   });
 
   await t.step("sends 戻る as text", () => {
     const result = buildBackButtonQuickReply();
-    assertEquals(result.items[0].action.text, "戻る");
+    const firstItem = result.items[0];
+    assertExists(firstItem);
+    assertEquals(firstItem.action.text, "戻る");
   });
 });
 

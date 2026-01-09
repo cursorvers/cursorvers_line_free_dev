@@ -1,7 +1,7 @@
 /**
  * discord-bot validation-utils テスト
  */
-import { assertEquals, assertThrows } from "std-assert";
+import { assertEquals, assertExists, assertThrows } from "std-assert";
 import {
   EMAIL_REGEX,
   hexToUint8Array,
@@ -86,9 +86,13 @@ Deno.test("validation-utils - splitMessage", async (t) => {
     const result = splitMessage(text, 100);
 
     assertEquals(result.length, 3);
-    assertEquals(result[0].length, 100);
-    assertEquals(result[1].length, 100);
-    assertEquals(result[2].length, 100);
+    const [first, second, third] = result;
+    assertExists(first);
+    assertExists(second);
+    assertExists(third);
+    assertEquals(first.length, 100);
+    assertEquals(second.length, 100);
+    assertEquals(third.length, 100);
   });
 
   await t.step("handles empty string", () => {
@@ -101,8 +105,11 @@ Deno.test("validation-utils - splitMessage", async (t) => {
     const result = splitMessage(text);
 
     assertEquals(result.length, 2);
-    assertEquals(result[0].length, 2000);
-    assertEquals(result[1].length, 2000);
+    const [first, second] = result;
+    assertExists(first);
+    assertExists(second);
+    assertEquals(first.length, 2000);
+    assertEquals(second.length, 2000);
   });
 });
 

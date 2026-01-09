@@ -259,7 +259,7 @@ Deno.test("diagnosis-flow: buildConclusionMessage creates correct format", () =>
   assert(message.includes("Discord コミュニティへ！"));
 });
 
-Deno.test("diagnosis-flow: buildConclusionMessage handles null URLs", () => {
+Deno.test("diagnosis-flow: buildConclusionMessage handles missing URLs", () => {
   const state: DiagnosisState = {
     keyword: "病院AIリスク診断",
     layer: 3,
@@ -270,7 +270,7 @@ Deno.test("diagnosis-flow: buildConclusionMessage handles null URLs", () => {
     ],
   };
   const articles = [
-    { title: "記事1", url: undefined },
+    { title: "記事1" },
   ];
 
   const message = buildConclusionMessage(state, articles);

@@ -8,7 +8,8 @@
  */
 export function extractTLP(text: string): string | null {
   const match = text.match(/TLP:\s*(GREEN|AMBER|RED|CLEAR)/i);
-  return match ? match[1].toUpperCase() : null;
+  const value = match?.[1];
+  return value ? value.toUpperCase() : null;
 }
 
 /**

@@ -1,0 +1,70 @@
+# 開発歴
+# - 2026-01-09: LINE Bot署名検証スモークテスト追加。
+name: LINE Bot Smoke Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Smoke test signed POST
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DISCORD_WEBHOOK_URL: https://example.com
+          DISCORD_SYSTEM_WEBHOOK: https://example.com
+        run: |
+          set -euo pipefail
+          : "${LINE_CHANNEL_ACCESS_TOKEN:?LINE_CHANNEL_ACCESS_TOKEN missing}"
+          : "${LINE_CHANNEL_SECRET:?LINE_CHANNEL_SECRET missing}"
+          : "${SUPABASE_URL:?SUPABASE_URL missing}"
+          : "${SUPABASE_SERVICE_ROLE_KEY:?SUPABASE_SERVICE_ROLE_KEY missing}"
+
+          body='{"events":[]}'
+          signature=$(printf "%s" "$body" | openssl dgst -sha256 -hmac "$LINE_CHANNEL_SECRET" -binary | openssl base64 -A)
+
+          deno run --allow-env --allow-net supabase/functions/line-bot/index.ts >/tmp/line-bot.log 2>&1 &
+          pid=$!
+          cleanup() { kill "$pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+
+          status=000
+          for i in 1 2 3 4 5; do
+            sleep 1
+            status=$(curl -s -o /tmp/line-bot-body.txt -w "%{http_code}" \
+              -H "x-line-signature: $signature" \
+              -H "content-type: application/json" \
+              -d "$body" \
+              http://localhost:8000/ || true)
+            if [ "$status" != "000" ]; then
+              break
+            fi
+          done
+
+          if [ "$status" != "200" ]; then
+            echo "Unexpected status: $status"
+            echo "Response:"
+            cat /tmp/line-bot-body.txt || true
+            echo "Log:"
+            tail -n 50 /tmp/line-bot.log || true
+            exit 1
+          fi
+
+          response_body=$(cat /tmp/line-bot-body.txt || true)
+          if [ "$response_body" != "OK" ]; then
+            echo "Unexpected body: $response_body"
+            exit 1
+          fi

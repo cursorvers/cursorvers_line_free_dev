@@ -3,7 +3,7 @@
  *
  * 実際のAPIを呼び出さずに、AI診断・修繕計画のロジックをテスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
 import type { AuditResult } from "../manus-audit-line-daily-brief/types.ts";
 
 // ============================================================
@@ -188,17 +188,19 @@ Deno.test("simulation - カード在庫不足（軽度）", () => {
   const diagnosis = diagnoseIssues(result);
 
   assertEquals(diagnosis.issues.length, 1);
-  assertEquals(diagnosis.issues[0].type, "card_inventory_low");
-  assertEquals(diagnosis.issues[0].suggestedActions, ["generate_cards"]);
+  const firstIssue = diagnosis.issues[0];
+  assertExists(firstIssue);
+  assertEquals(firstIssue.type, "card_inventory_low");
+  assertEquals(firstIssue.suggestedActions, ["generate_cards"]);
   assertEquals(diagnosis.severity, "low"); // 45枚は30以上なのでlow
 
   console.log("\n📊 シミュレーション結果（カード在庫不足・軽度）:");
   console.log(`  - 検出問題: ${diagnosis.issues.length}件`);
-  console.log(`  - 問題: ${diagnosis.issues[0].description}`);
-  console.log(`  - 根本原因: ${diagnosis.issues[0].rootCause}`);
+  console.log(`  - 問題: ${firstIssue.description}`);
+  console.log(`  - 根本原因: ${firstIssue.rootCause}`);
   console.log(`  - 重大度: ${diagnosis.severity}`);
   console.log(
-    `  - 推奨アクション: ${diagnosis.issues[0].suggestedActions.join(", ")}`,
+    `  - 推奨アクション: ${firstIssue.suggestedActions.join(", ")}`,
   );
   console.log("  → 計画: カード生成ワークフローをトリガー\n");
 });
@@ -215,13 +217,15 @@ Deno.test("simulation - カード在庫不足（重度）", () => {
 
   assertEquals(diagnosis.issues.length, 1);
   assertEquals(diagnosis.severity, "critical"); // 10枚未満なのでcritical
+  const firstIssue = diagnosis.issues[0];
+  assertExists(firstIssue);
 
   console.log("\n📊 シミュレーション結果（カード在庫不足・重度）:");
   console.log(`  - 検出問題: ${diagnosis.issues.length}件`);
-  console.log(`  - 問題: ${diagnosis.issues[0].description}`);
-  console.log(`  - 根本原因: ${diagnosis.issues[0].rootCause}`);
+  console.log(`  - 問題: ${firstIssue.description}`);
+  console.log(`  - 根本原因: ${firstIssue.rootCause}`);
   console.log(`  - 重大度: ${diagnosis.severity} ⚠️ 緊急対応必要`);
-  console.log(`  - 優先度: ${diagnosis.issues[0].priority}/10`);
+  console.log(`  - 優先度: ${firstIssue.priority}/10`);
   console.log("  → 計画: 即座にカード生成 + アラート通知\n");
 });
 
@@ -246,18 +250,20 @@ Deno.test("simulation - LINE Webhook障害", () => {
   const diagnosis = diagnoseIssues(result);
 
   assertEquals(diagnosis.issues.length, 1);
-  assertEquals(diagnosis.issues[0].type, "line_webhook_error");
+  const firstIssue = diagnosis.issues[0];
+  assertExists(firstIssue);
+  assertEquals(firstIssue.type, "line_webhook_error");
   assertEquals(diagnosis.severity, "critical");
-  assertEquals(diagnosis.issues[0].priority, 10); // 最高優先度
+  assertEquals(firstIssue.priority, 10); // 最高優先度
 
   console.log("\n📊 シミュレーション結果（LINE Webhook障害）:");
   console.log(`  - 検出問題: ${diagnosis.issues.length}件`);
-  console.log(`  - 問題: ${diagnosis.issues[0].description}`);
-  console.log(`  - 根本原因: ${diagnosis.issues[0].rootCause}`);
+  console.log(`  - 問題: ${firstIssue.description}`);
+  console.log(`  - 根本原因: ${firstIssue.rootCause}`);
   console.log(`  - 重大度: ${diagnosis.severity} 🚨 最優先対応`);
-  console.log(`  - 優先度: ${diagnosis.issues[0].priority}/10`);
+  console.log(`  - 優先度: ${firstIssue.priority}/10`);
   console.log(
-    `  - 推奨アクション: ${diagnosis.issues[0].suggestedActions.join(", ")}`,
+    `  - 推奨アクション: ${firstIssue.suggestedActions.join(", ")}`,
   );
   console.log("  → 計画: 1) 関数再デプロイ 2) シークレット確認\n");
 });
@@ -295,9 +301,13 @@ Deno.test("simulation - 複合障害", () => {
   assertEquals(diagnosis.severity, "critical");
 
   // 優先度順にソートされているか確認
-  assertEquals(diagnosis.issues[0].type, "line_webhook_error"); // priority 10
-  assertEquals(diagnosis.issues[1].type, "broadcast_failure"); // priority 8
-  assertEquals(diagnosis.issues[2].type, "card_inventory_low"); // priority 6
+  const [firstIssue, secondIssue, thirdIssue] = diagnosis.issues;
+  assertExists(firstIssue);
+  assertExists(secondIssue);
+  assertExists(thirdIssue);
+  assertEquals(firstIssue.type, "line_webhook_error"); // priority 10
+  assertEquals(secondIssue.type, "broadcast_failure"); // priority 8
+  assertEquals(thirdIssue.type, "card_inventory_low"); // priority 6
 
   console.log("\n📊 シミュレーション結果（複合障害）:");
   console.log(`  - 検出問題: ${diagnosis.issues.length}件`);

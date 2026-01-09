@@ -2,7 +2,7 @@
  * merge-utils.ts テスト
  * 孤児レコード検出とマージ判定ロジックのテスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
 import {
   canMergeLineId,
   findOrphanRecords,
@@ -247,8 +247,11 @@ Deno.test("merge-utils - findOrphanRecords", async (t) => {
     ];
     const orphans = findOrphanRecords(records);
     assertEquals(orphans.length, 2);
-    assertEquals(orphans[0].id, "2");
-    assertEquals(orphans[1].id, "3");
+    const [firstOrphan, secondOrphan] = orphans;
+    assertExists(firstOrphan);
+    assertExists(secondOrphan);
+    assertEquals(firstOrphan.id, "2");
+    assertEquals(secondOrphan.id, "3");
   });
 
   await t.step("returns empty array when no orphans", () => {
@@ -273,7 +276,9 @@ Deno.test("merge-utils - findOrphanRecords", async (t) => {
     ];
     const orphans = findOrphanRecords(records);
     assertEquals(orphans.length, 1);
-    assertEquals(orphans[0].id, "3");
+    const orphan = orphans[0];
+    assertExists(orphan);
+    assertEquals(orphan.id, "3");
   });
 
   await t.step("returns empty for empty input", () => {

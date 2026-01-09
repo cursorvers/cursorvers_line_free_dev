@@ -1,7 +1,7 @@
 /**
  * generate-sec-brief ユーティリティテスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
 import { buildUserPrompt, getWeekStart, splitMessage } from "./utils.ts";
 
 Deno.test("generate-sec-brief - getWeekStart", async (t) => {
@@ -57,7 +57,9 @@ Deno.test("generate-sec-brief - splitMessage", async (t) => {
     const result = splitMessage(text, 15);
     assertEquals(result.length > 1, true);
     // First chunk should not contain second line
-    assertEquals(result[0].includes("二行目"), false);
+    const firstChunk = result[0];
+    assertExists(firstChunk);
+    assertEquals(firstChunk.includes("二行目"), false);
   });
 
   await t.step("handles text without newlines", () => {

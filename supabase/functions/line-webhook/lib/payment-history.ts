@@ -12,9 +12,11 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
   "";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
+const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  })
+  : null;
 
 // 支払い履歴レコードの型
 interface PaymentHistoryItem {
@@ -44,6 +46,15 @@ export async function getPaymentHistoryByLineUserId(
   lineUserId: string,
   limit = 5,
 ): Promise<PaymentHistoryResult> {
+  if (!supabase) {
+    log.error("Supabase configuration missing for payment history");
+    return {
+      success: false,
+      payments: [],
+      totalPaid: 0,
+      error: "Supabase configuration missing",
+    };
+  }
   try {
     // まずmembersテーブルからmember_idを取得
     const { data: member, error: memberError } = await supabase

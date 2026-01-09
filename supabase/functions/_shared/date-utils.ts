@@ -16,7 +16,8 @@ export function getNowJST(): Date {
  */
 export function formatDateJST(date: Date): string {
   const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-  return jst.toISOString().split("T")[0];
+  const [datePart] = jst.toISOString().split("T");
+  return datePart ?? "";
 }
 
 /**

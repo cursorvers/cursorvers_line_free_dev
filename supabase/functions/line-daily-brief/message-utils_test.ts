@@ -124,7 +124,7 @@ Deno.test("message-utils - formatMessage", async (t) => {
 
     assertEquals(message.includes("短いメッセージ"), true);
     // 末尾の省略記号がないことを確認（フッター前）
-    const bodyPart = message.split("──────────")[0];
+    const bodyPart = message.split("──────────")[0] ?? "";
     assertEquals(bodyPart.endsWith("...\n\n"), false);
   });
 });

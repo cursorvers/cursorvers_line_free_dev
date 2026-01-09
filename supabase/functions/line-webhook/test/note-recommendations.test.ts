@@ -83,9 +83,13 @@ Deno.test("note-recommendations: getArticlesByIds returns multiple articles", ()
   const articles = getArticlesByIds(ids);
 
   assertEquals(articles.length, 3);
-  assertEquals(articles[0].id, "clinic_roi_2025");
-  assertEquals(articles[1].id, "why_ai_fails");
-  assertEquals(articles[2].id, "ehr_3sho2");
+  const [firstArticle, secondArticle, thirdArticle] = articles;
+  assertExists(firstArticle);
+  assertExists(secondArticle);
+  assertExists(thirdArticle);
+  assertEquals(firstArticle.id, "clinic_roi_2025");
+  assertEquals(secondArticle.id, "why_ai_fails");
+  assertEquals(thirdArticle.id, "ehr_3sho2");
 });
 
 Deno.test("note-recommendations: getArticlesByIds skips non-existent IDs", () => {
@@ -93,8 +97,11 @@ Deno.test("note-recommendations: getArticlesByIds skips non-existent IDs", () =>
   const articles = getArticlesByIds(ids);
 
   assertEquals(articles.length, 2);
-  assertEquals(articles[0].id, "clinic_roi_2025");
-  assertEquals(articles[1].id, "why_ai_fails");
+  const [firstArticle, secondArticle] = articles;
+  assertExists(firstArticle);
+  assertExists(secondArticle);
+  assertEquals(firstArticle.id, "clinic_roi_2025");
+  assertEquals(secondArticle.id, "why_ai_fails");
 });
 
 Deno.test("note-recommendations: getArticlesByIds returns empty array for all invalid IDs", () => {
@@ -230,6 +237,7 @@ Deno.test("note-recommendations: All courses have required structure", () => {
 
     // Check first article structure
     const firstArticle = course.articles[0];
+    assertExists(firstArticle);
     assertExists(firstArticle.id);
     assertExists(firstArticle.title);
     assert("url" in firstArticle);

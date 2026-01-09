@@ -281,12 +281,17 @@ Deno.test("prompt-polisher: runPromptPolisher sends correct API request", async 
     (url: string | URL | Request, init?: RequestInit) => {
       // Capture the request for inspection
       if (init) {
-        capturedRequest = {
+        const request: CapturedRequest = {
           url: url.toString(),
-          method: init.method,
-          headers: init.headers,
           body: JSON.parse(init.body as string) as OpenAIRequest,
         };
+        if (init.method) {
+          request.method = init.method;
+        }
+        if (init.headers) {
+          request.headers = init.headers;
+        }
+        capturedRequest = request;
       }
 
       return Promise.resolve(
@@ -317,10 +322,13 @@ Deno.test("prompt-polisher: runPromptPolisher sends correct API request", async 
     assertEquals(req.method, "POST");
     assertEquals(req.body.model, "gpt-4o");
     assertEquals(req.body.messages.length, 2);
-    assertEquals(req.body.messages[0].role, "system");
-    assertEquals(req.body.messages[1].role, "user");
+    const [systemMessage, userMessage] = req.body.messages;
+    assertExists(systemMessage);
+    assertExists(userMessage);
+    assertEquals(systemMessage.role, "system");
+    assertEquals(userMessage.role, "user");
     assertEquals(
-      req.body.messages[1].content,
+      userMessage.content,
       "診断について教えて",
     );
   } finally {

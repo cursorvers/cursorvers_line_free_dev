@@ -151,8 +151,8 @@ Deno.test("http-utils - parseQueryParams", async (t) => {
     const url = new URL("https://example.com?foo=bar&baz=qux");
     const params = parseQueryParams(url);
 
-    assertEquals(params.foo, "bar");
-    assertEquals(params.baz, "qux");
+    assertEquals(params["foo"], "bar");
+    assertEquals(params["baz"], "qux");
   });
 
   await t.step("handles empty query string", () => {
@@ -166,7 +166,7 @@ Deno.test("http-utils - parseQueryParams", async (t) => {
     const url = new URL("https://example.com?name=%E3%83%86%E3%82%B9%E3%83%88");
     const params = parseQueryParams(url);
 
-    assertEquals(params.name, "テスト");
+    assertEquals(params["name"], "テスト");
   });
 });
 

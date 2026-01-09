@@ -87,9 +87,11 @@ Deno.test("buildBackButtonQuickReply - returns single item", () => {
 Deno.test("buildBackButtonQuickReply - has correct back button", () => {
   const result = buildBackButtonQuickReply();
 
-  assertEquals(result.items[0].action.label, "← 戻る");
-  assertEquals(result.items[0].action.text, "戻る");
-  assertEquals(result.items[0].action.type, "message");
+  const firstItem = result.items[0];
+  assertExists(firstItem);
+  assertEquals(firstItem.action.label, "← 戻る");
+  assertEquals(firstItem.action.text, "戻る");
+  assertEquals(firstItem.action.type, "message");
 });
 
 Deno.test("buildNewsletterConfirmQuickReply - returns 2 items", () => {

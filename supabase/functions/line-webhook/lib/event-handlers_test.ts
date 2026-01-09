@@ -209,8 +209,8 @@ Deno.test("LINE linking race condition handling", async (t) => {
   });
 
   await t.step("different LINE ID - should show error message", () => {
-    const requestedLineUserId = "U1111111111111111111111111111111";
-    const currentRecordLineUserId = "U2222222222222222222222222222222";
+    const requestedLineUserId: string = "U1111111111111111111111111111111";
+    const currentRecordLineUserId: string = "U2222222222222222222222222222222";
 
     const isDifferentLineId = currentRecordLineUserId !== requestedLineUserId;
 

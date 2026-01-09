@@ -1,7 +1,7 @@
 /**
  * _shared/utils ユーティリティテスト
  */
-import { assertEquals, assertThrows } from "std-assert";
+import { assertEquals, assertExists, assertThrows } from "std-assert";
 import { hexToUint8Array, splitMessage } from "./utils.ts";
 
 Deno.test("utils - splitMessage", async (t) => {
@@ -34,9 +34,13 @@ Deno.test("utils - splitMessage", async (t) => {
     const result = splitMessage(text, 100);
 
     assertEquals(result.length, 3);
-    assertEquals(result[0].length, 100);
-    assertEquals(result[1].length, 100);
-    assertEquals(result[2].length, 100);
+    const [first, second, third] = result;
+    assertExists(first);
+    assertExists(second);
+    assertExists(third);
+    assertEquals(first.length, 100);
+    assertEquals(second.length, 100);
+    assertEquals(third.length, 100);
   });
 
   await t.step("handles empty string", () => {

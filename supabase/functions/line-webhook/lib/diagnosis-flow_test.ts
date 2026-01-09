@@ -1,7 +1,7 @@
 /**
  * 診断フローテスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
 import {
   buildConclusionMessage,
   buildDiagnosisStartMessage,
@@ -230,8 +230,10 @@ Deno.test("diagnosis-flow - buildQuestionMessage", async (t) => {
       result.quickReply as { items: Array<{ action: { label: string } }> }
     ).items;
 
-    assertEquals(items[0].action.label.length <= 20, true);
-    assertEquals(items[0].action.label.endsWith("..."), true);
+    const firstItem = items[0];
+    assertExists(firstItem);
+    assertEquals(firstItem.action.label.length <= 20, true);
+    assertEquals(firstItem.action.label.endsWith("..."), true);
   });
 });
 

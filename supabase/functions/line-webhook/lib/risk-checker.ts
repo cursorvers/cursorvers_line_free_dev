@@ -8,7 +8,7 @@ import type { RiskCategory, RiskCheckResult } from "./types.ts";
 
 const log = createLogger("risk-checker");
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+const getOpenAiApiKey = () => Deno.env.get("OPENAI_API_KEY") ?? "";
 
 // System Prompt: リスクチェッカー（点数化＋ガイドライン明示対応）
 const SYSTEM_PROMPT = `あなたは、医療従事者向けの文章リスクチェッカーです。
@@ -101,7 +101,8 @@ interface RiskCheckerResponse {
 export async function runRiskChecker(
   rawInput: string,
 ): Promise<RiskCheckerResponse> {
-  if (!OPENAI_API_KEY) {
+  const openAiApiKey = getOpenAiApiKey();
+  if (!openAiApiKey) {
     return {
       success: false,
       error: "OpenAI API キーが設定されていません。管理者に連絡してください。",
@@ -113,7 +114,7 @@ export async function runRiskChecker(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openAiApiKey}`,
       },
       body: JSON.stringify({
         model: "gpt-4o",

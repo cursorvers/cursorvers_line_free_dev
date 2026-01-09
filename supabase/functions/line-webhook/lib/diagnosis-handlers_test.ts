@@ -113,7 +113,14 @@ Deno.test("DiagnosisResult interface", async (t) => {
   });
 
   await t.step("invalid answer result (no newState)", () => {
-    const result = {
+    const result: {
+      completed: boolean;
+      newState?: {
+        keyword: DiagnosisKeyword;
+        layer: number;
+        answers: string[];
+      };
+    } = {
       completed: false,
     };
 

@@ -1,7 +1,7 @@
 /**
  * stats-exporter サマリー関数のテスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
 
 /** LINE イベントレコード (テスト用) */
 interface LineEvent {
@@ -160,15 +160,17 @@ Deno.test("buildDailySummary counts events correctly", () => {
   const result = buildDailySummary(events);
 
   assertEquals(result.length, 1);
-  assertEquals(result[0].date, "2024-01-15");
-  assertEquals(result[0].totalEvents, 2);
-  assertEquals(result[0].uniqueUsers, 2);
-  assertEquals(result[0].riskSafe, 1);
-  assertEquals(result[0].riskWarning, 1);
-  assertEquals(result[0].phiAlerts, 1);
-  assertEquals(result[0].tierMatsu, 1);
-  assertEquals(result[0].tierTake, 1);
-  assertEquals(result[0].avgProcessingMs, 150);
+  const firstSummary = result[0];
+  assertExists(firstSummary);
+  assertEquals(firstSummary.date, "2024-01-15");
+  assertEquals(firstSummary.totalEvents, 2);
+  assertEquals(firstSummary.uniqueUsers, 2);
+  assertEquals(firstSummary.riskSafe, 1);
+  assertEquals(firstSummary.riskWarning, 1);
+  assertEquals(firstSummary.phiAlerts, 1);
+  assertEquals(firstSummary.tierMatsu, 1);
+  assertEquals(firstSummary.tierTake, 1);
+  assertEquals(firstSummary.avgProcessingMs, 150);
 });
 
 Deno.test("buildDailySummary groups by date correctly", () => {
@@ -212,8 +214,11 @@ Deno.test("buildDailySummary groups by date correctly", () => {
   const result = buildDailySummary(events);
 
   assertEquals(result.length, 2);
-  assertEquals(result[0].date, "2024-01-15");
-  assertEquals(result[1].date, "2024-01-16");
+  const [firstSummary, secondSummary] = result;
+  assertExists(firstSummary);
+  assertExists(secondSummary);
+  assertEquals(firstSummary.date, "2024-01-15");
+  assertEquals(secondSummary.date, "2024-01-16");
 });
 
 Deno.test("buildDailySummary counts unique users correctly", () => {
@@ -273,6 +278,8 @@ Deno.test("buildDailySummary counts unique users correctly", () => {
 
   const result = buildDailySummary(events);
 
-  assertEquals(result[0].totalEvents, 3);
-  assertEquals(result[0].uniqueUsers, 2);
+  const firstSummary = result[0];
+  assertExists(firstSummary);
+  assertEquals(firstSummary.totalEvents, 3);
+  assertEquals(firstSummary.uniqueUsers, 2);
 });

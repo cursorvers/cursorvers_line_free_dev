@@ -2,7 +2,7 @@
  * logger.ts のユニットテスト
  * 構造化ロガーモジュールのテスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
 import { anonymizeUserId, createLogger, errorToContext } from "./logger.ts";
 
 // ========================================
@@ -42,9 +42,9 @@ Deno.test("errorToContext extracts Error properties", () => {
   const error = new Error("Something went wrong");
   const context = errorToContext(error);
 
-  assertEquals(context.errorName, "Error");
-  assertEquals(context.errorMessage, "Something went wrong");
-  assertEquals(typeof context.errorStack, "string");
+  assertEquals(context["errorName"], "Error");
+  assertEquals(context["errorMessage"], "Something went wrong");
+  assertEquals(typeof context["errorStack"], "string");
 });
 
 Deno.test("errorToContext handles custom Error types", () => {
@@ -58,17 +58,18 @@ Deno.test("errorToContext handles custom Error types", () => {
   const error = new CustomError("Custom error message");
   const context = errorToContext(error);
 
-  assertEquals(context.errorName, "CustomError");
-  assertEquals(context.errorMessage, "Custom error message");
+  assertEquals(context["errorName"], "CustomError");
+  assertEquals(context["errorMessage"], "Custom error message");
 });
 
 Deno.test("errorToContext truncates stack to 3 lines", () => {
   const error = new Error("Test error");
   const context = errorToContext(error);
 
-  if (context.errorStack && typeof context.errorStack === "string") {
+  const errorStack = context["errorStack"];
+  if (errorStack && typeof errorStack === "string") {
     // スタックは " | " で区切られた3行以下
-    const pipeCount = (context.errorStack.match(/\|/g) || []).length;
+    const pipeCount = (errorStack.match(/\|/g) || []).length;
     assertEquals(pipeCount <= 2, true); // 3行なら最大2つの "|"
   }
 });
@@ -110,7 +111,9 @@ Deno.test("createLogger logs include function name", () => {
 
     assertEquals(logs.length, 1);
 
-    const parsed = JSON.parse(logs[0]);
+    const logEntry = logs[0];
+    assertExists(logEntry);
+    const parsed = JSON.parse(logEntry);
     assertEquals(parsed.message, "Test message");
     assertEquals(parsed.context?.function, "my-function");
     assertEquals(parsed.level, "info");
@@ -135,7 +138,9 @@ Deno.test("createLogger logs include additional context", () => {
       durationMs: 150,
     });
 
-    const parsed = JSON.parse(logs[0]);
+    const logEntry = logs[0];
+    assertExists(logEntry);
+    const parsed = JSON.parse(logEntry);
     assertEquals(parsed.context?.userId, "...1234");
     assertEquals(parsed.context?.durationMs, 150);
   } finally {
@@ -210,7 +215,9 @@ Deno.test("createLogger produces valid JSON output", () => {
     logger.info("Test");
 
     // JSONとしてパースできることを確認
-    const parsed = JSON.parse(logs[0]);
+    const logEntry = logs[0];
+    assertExists(logEntry);
+    const parsed = JSON.parse(logEntry);
     assertEquals(typeof parsed, "object");
     assertEquals(Object.keys(parsed).sort(), [
       "context",

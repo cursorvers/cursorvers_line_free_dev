@@ -2,7 +2,7 @@
  * Stripe Webhook 冪等性テスト
  * イベント重複処理防止ロジックのテスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
 import { determineStatus } from "./tier-utils.ts";
 
 Deno.test("idempotency - Event ID format", async (t) => {
@@ -199,9 +199,13 @@ Deno.test("idempotency - Orphan record handling", async (t) => {
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
-    assertEquals(sorted[0].id, "2"); // oldest first
-    assertEquals(sorted[1].id, "1");
-    assertEquals(sorted[2].id, "3");
+    const [firstRecord, secondRecord, thirdRecord] = sorted;
+    assertExists(firstRecord);
+    assertExists(secondRecord);
+    assertExists(thirdRecord);
+    assertEquals(firstRecord.id, "2"); // oldest first
+    assertEquals(secondRecord.id, "1");
+    assertEquals(thirdRecord.id, "3");
   });
 
   await t.step("limit 1 selects only one record", () => {

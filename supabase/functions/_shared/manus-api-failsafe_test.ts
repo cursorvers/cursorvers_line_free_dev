@@ -204,7 +204,7 @@ function simulateDiagnosis(config: SimulationConfig): SimulationResult {
 
   // 不正なレスポンス形式
   const body = response.body as Record<string, unknown> | undefined;
-  if (!body || !body.task_id) {
+  if (!body || !body["task_id"]) {
     return {
       success: true,
       diagnosis: mockFallbackDiagnosis,

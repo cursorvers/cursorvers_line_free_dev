@@ -2,7 +2,7 @@
  * retry.ts のユニットテスト
  * 指数バックオフ付きリトライロジックのテスト
  */
-import { assertEquals, assertRejects } from "std-assert";
+import { assertEquals, assertExists, assertRejects } from "std-assert";
 import { isRetryableError, isRetryableStatus, withRetry } from "./retry.ts";
 
 // ========================================
@@ -64,7 +64,7 @@ Deno.test("withRetry succeeds on first attempt", async () => {
   let attempts = 0;
   const result = await withRetry(() => {
     attempts++;
-    return "success";
+    return Promise.resolve("success");
   });
 
   assertEquals(result, "success");
@@ -77,9 +77,9 @@ Deno.test("withRetry retries on failure and eventually succeeds", async () => {
     () => {
       attempts++;
       if (attempts < 3) {
-        throw new Error("temporary failure");
+        return Promise.reject(new Error("temporary failure"));
       }
-      return "success after retries";
+      return Promise.resolve("success after retries");
     },
     {
       maxRetries: 3,
@@ -100,7 +100,7 @@ Deno.test("withRetry throws after max retries exceeded", async () => {
       withRetry(
         () => {
           attempts++;
-          throw new Error("persistent failure");
+          return Promise.reject(new Error("persistent failure"));
         },
         {
           maxRetries: 2,
@@ -123,7 +123,7 @@ Deno.test("withRetry respects shouldRetry option", async () => {
       withRetry(
         () => {
           attempts++;
-          throw new Error("NON_RETRYABLE: client error");
+          return Promise.reject(new Error("NON_RETRYABLE: client error"));
         },
         {
           maxRetries: 3,
@@ -154,9 +154,9 @@ Deno.test("withRetry calls onRetry callback", async () => {
     () => {
       attempts++;
       if (attempts < 3) {
-        throw new Error("retry me");
+        return Promise.reject(new Error("retry me"));
       }
-      return "done";
+      return Promise.resolve("done");
     },
     {
       maxRetries: 3,
@@ -169,10 +169,14 @@ Deno.test("withRetry calls onRetry callback", async () => {
   );
 
   assertEquals(retryLogs.length, 2);
-  assertEquals(retryLogs[0].attempt, 1);
-  assertEquals(retryLogs[0].delay, 100); // 100 * 2^0
-  assertEquals(retryLogs[1].attempt, 2);
-  assertEquals(retryLogs[1].delay, 200); // 100 * 2^1
+  const firstLog = retryLogs[0];
+  const secondLog = retryLogs[1];
+  assertExists(firstLog);
+  assertExists(secondLog);
+  assertEquals(firstLog.attempt, 1);
+  assertEquals(firstLog.delay, 100); // 100 * 2^0
+  assertEquals(secondLog.attempt, 2);
+  assertEquals(secondLog.delay, 200); // 100 * 2^1
 });
 
 Deno.test("withRetry respects maxDelay", async () => {
@@ -183,9 +187,9 @@ Deno.test("withRetry respects maxDelay", async () => {
     () => {
       attempts++;
       if (attempts < 5) {
-        throw new Error("keep retrying");
+        return Promise.reject(new Error("keep retrying"));
       }
-      return "done";
+      return Promise.resolve("done");
     },
     {
       maxRetries: 5,
@@ -198,8 +202,14 @@ Deno.test("withRetry respects maxDelay", async () => {
   );
 
   // 100, 200, 200, 200 (maxDelayでキャップ)
-  assertEquals(retryDelays[0], 100);
-  assertEquals(retryDelays[1], 200);
-  assertEquals(retryDelays[2], 200); // maxDelayでキャップ
-  assertEquals(retryDelays[3], 200); // maxDelayでキャップ
+  assertEquals(retryDelays.length, 4);
+  const [firstDelay, secondDelay, thirdDelay, fourthDelay] = retryDelays;
+  assertExists(firstDelay);
+  assertExists(secondDelay);
+  assertExists(thirdDelay);
+  assertExists(fourthDelay);
+  assertEquals(firstDelay, 100);
+  assertEquals(secondDelay, 200);
+  assertEquals(thirdDelay, 200); // maxDelayでキャップ
+  assertEquals(fourthDelay, 200); // maxDelayでキャップ
 });

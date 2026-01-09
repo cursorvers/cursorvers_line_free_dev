@@ -5,7 +5,7 @@ import { extractErrorMessage } from "../../_shared/error-utils.ts";
 import { createLogger } from "../../_shared/logger.ts";
 
 const log = createLogger("prompt-polisher");
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+const getOpenAiApiKey = () => Deno.env.get("OPENAI_API_KEY") ?? "";
 
 // System Prompt: 医療従事者向けプロンプト整形の専門家
 const SYSTEM_PROMPT =
@@ -105,7 +105,8 @@ interface PromptPolisherResult {
 export async function runPromptPolisher(
   rawInput: string,
 ): Promise<PromptPolisherResult> {
-  if (!OPENAI_API_KEY) {
+  const openAiApiKey = getOpenAiApiKey();
+  if (!openAiApiKey) {
     return {
       success: false,
       error: "OpenAI API キーが設定されていません。管理者に連絡してください。",
@@ -117,7 +118,7 @@ export async function runPromptPolisher(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openAiApiKey}`,
       },
       body: JSON.stringify({
         model: "gpt-4o",

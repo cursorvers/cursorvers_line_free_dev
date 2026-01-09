@@ -2,7 +2,7 @@
  * LINE API ヘルパー テスト
  * 署名検証・API呼び出しロジックのテスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
 
 // 署名生成ヘルパー（テスト用）
 async function generateSignature(
@@ -156,7 +156,9 @@ Deno.test("line-api - Message structure", async (t) => {
       },
     };
     assertEquals(message.quickReply.items.length, 1);
-    assertEquals(message.quickReply.items[0].type, "action");
+    const firstItem = message.quickReply.items[0];
+    assertExists(firstItem);
+    assertEquals(firstItem.type, "action");
   });
 });
 
