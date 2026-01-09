@@ -125,9 +125,12 @@ Deno.serve(async (req) => {
   }
 
   for (const event of events) {
-    if (event.type !== "message" || event.message.type !== "text") continue;
+    if (event.type !== "message") continue;
 
-    const text = event.message.text;
+    const message = event.message;
+    if (!message || message.type !== "text") continue;
+
+    const text = message.text;
     const directUserId = event.source?.userId ?? null;
     const lineUserId = directUserId ?? event.source?.groupId ??
       event.source?.roomId ??
@@ -387,7 +390,6 @@ function buildReply(text: string, containsPhi: boolean): ReplyContext {
           text:
             "こんにちは、Cursorversです。\n以下のキーワードを送ってみてください。\n\n・「診断」→ AIリスク診断を開始\n・「プロンプト」→ 安全テンプレを表示\n・決済に使ったメールアドレス → 会員ステータスを照合（患者情報は送らないでください）\n\n医療×AIの最新ノウハウはこちら 👉 https://note.com/nice_wren7963\nFree Community（安全プロンプト集つき） 👉 https://lin.ee/fbhW5eQ",
         }],
-        logStatus: undefined,
         normalizedKeyword,
         riskLevel: "info",
         templateId: "default",
@@ -672,7 +674,7 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let result = 0;
   for (let i = 0; i < a.length; i++) {
-    result |= a[i] ^ b[i];
+    result |= (a[i] ?? 0) ^ (b[i] ?? 0);
   }
   return result === 0;
 }

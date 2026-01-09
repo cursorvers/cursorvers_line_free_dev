@@ -148,11 +148,11 @@ async function dispatchFixWorkflow(
   };
 
   if (files.length > 0) {
-    inputs.files = files.join(",");
+    inputs["files"] = files.join(",");
   }
 
   if (request.commitSha) {
-    inputs.commit_sha = request.commitSha;
+    inputs["commit_sha"] = request.commitSha;
   }
 
   const endpoint =
@@ -251,7 +251,8 @@ async function createManualIssue(
   }
 
   const data = await response.json() as { html_url?: string };
-  return { ok: true, url: data.html_url };
+  const issueUrl = data.html_url;
+  return issueUrl ? { ok: true, url: issueUrl } : { ok: true };
 }
 
 async function processFixes(request: FixRequest): Promise<FixResult> {
