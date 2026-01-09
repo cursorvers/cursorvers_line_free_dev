@@ -15,7 +15,72 @@ env:
   DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
 
 jobs:
+  line-bot-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Smoke test signed POST
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DISCORD_WEBHOOK_URL: https://example.com
+          DISCORD_SYSTEM_WEBHOOK: https://example.com
+        run: |
+          set -euo pipefail
+          : "${LINE_CHANNEL_ACCESS_TOKEN:?LINE_CHANNEL_ACCESS_TOKEN missing}"
+          : "${LINE_CHANNEL_SECRET:?LINE_CHANNEL_SECRET missing}"
+          : "${SUPABASE_URL:?SUPABASE_URL missing}"
+          : "${SUPABASE_SERVICE_ROLE_KEY:?SUPABASE_SERVICE_ROLE_KEY missing}"
+
+          body='{"events":[]}'
+          signature=$(printf "%s" "$body" | openssl dgst -sha256 -hmac "$LINE_CHANNEL_SECRET" -binary | openssl base64 -A)
+
+          deno run --allow-env --allow-net supabase/functions/line-bot/index.ts >/tmp/line-bot.log 2>&1 &
+          pid=$!
+          cleanup() { kill "$pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+
+          status=000
+          for i in 1 2 3 4 5; do
+            sleep 1
+            status=$(curl -s -o /tmp/line-bot-body.txt -w "%{http_code}" \
+              -H "x-line-signature: $signature" \
+              -H "content-type: application/json" \
+              -d "$body" \
+              http://localhost:8000/ || true)
+            if [ "$status" != "000" ]; then
+              break
+            fi
+          done
+
+          if [ "$status" != "200" ]; then
+            echo "Unexpected status: $status"
+            echo "Response:"
+            cat /tmp/line-bot-body.txt || true
+            echo "Log:"
+            tail -n 50 /tmp/line-bot.log || true
+            exit 1
+          fi
+
+          response_body=$(cat /tmp/line-bot-body.txt || true)
+          if [ "$response_body" != "OK" ]; then
+            echo "Unexpected body: $response_body"
+            exit 1
+          fi
+
   deploy:
+    needs: [line-bot-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -92,6 +157,19 @@ jobs:
             echo "result=failed" >> $GITHUB_OUTPUT
           fi
 
+      - name: Deploy stripe-consistency-check
+        id: deploy_stripe_consistency_check
+        run: |
+          echo "=== Deploy stripe-consistency-check ===" | tee -a "$DEPLOY_LOG"
+          if supabase functions deploy stripe-consistency-check --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+            echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
+            echo "result=success" >> $GITHUB_OUTPUT
+          else
+            echo "DEPLOY_FAILED=$((DEPLOY_FAILED + 1))" >> $GITHUB_ENV
+            echo "FAILED_FUNCTIONS=${FAILED_FUNCTIONS}stripe-consistency-check," >> $GITHUB_ENV
+            echo "result=failed" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy manus-audit-line-daily-brief
         id: deploy_manus_audit
         run: |
@@ -124,6 +202,7 @@ jobs:
       # セキュリティ: 各関数内で独自の認証・署名検証を実装
       #   - stripe-webhook: Stripe署名検証 (constructEventAsync)
       #   - line-register: LIFF経由のリクエスト
+      #   - line-bot: LINE署名検証
       #   - discord-bot: Discord署名検証
       #   - create-checkout-session: フロントエンドからのリクエスト
       #   - ingest-hij: API Key認証
@@ -194,6 +273,19 @@ jobs:
             echo "result=failed" >> $GITHUB_OUTPUT
           fi
 
+      - name: Deploy line-bot
+        id: deploy_line_bot
+        run: |
+          echo "=== Deploy line-bot (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
+          if supabase functions deploy line-bot --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+            echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
+            echo "result=success" >> $GITHUB_OUTPUT
+          else
+            echo "DEPLOY_FAILED=$((DEPLOY_FAILED + 1))" >> $GITHUB_ENV
+            echo "FAILED_FUNCTIONS=${FAILED_FUNCTIONS}line-bot," >> $GITHUB_ENV
+            echo "result=failed" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy manus-code-fixer
         id: deploy_manus_code_fixer
         run: |
@@ -237,6 +329,7 @@ jobs:
           [ "${{ steps.deploy_line_daily_brief.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}line-daily-brief, "; }
           [ "${{ steps.deploy_stats_exporter.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}stats-exporter, "; }
           [ "${{ steps.deploy_health_check.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}health-check, "; }
+          [ "${{ steps.deploy_stripe_consistency_check.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}stripe-consistency-check, "; }
           [ "${{ steps.deploy_manus_audit.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}manus-audit, "; }
           [ "${{ steps.deploy_relay.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}relay, "; }
           [ "${{ steps.deploy_stripe_webhook.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}stripe-webhook, "; }
@@ -244,6 +337,7 @@ jobs:
           [ "${{ steps.deploy_ingest_hij.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}ingest-hij, "; }
           [ "${{ steps.deploy_sec_brief.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}sec-brief, "; }
           [ "${{ steps.deploy_line_register.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}line-register, "; }
+          [ "${{ steps.deploy_line_bot.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}line-bot, "; }
           [ "${{ steps.deploy_discord_bot.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}discord-bot, "; }
 
           # 末尾のカンマとスペースを削除
@@ -257,8 +351,8 @@ jobs:
           echo "=========================================="
           echo "デプロイ結果サマリー"
           echo "=========================================="
-          echo "成功: ${SUCCESS_COUNT}/12"
-          echo "失敗: ${FAILED_COUNT}/12"
+          echo "成功: ${SUCCESS_COUNT}/14"
+          echo "失敗: ${FAILED_COUNT}/14"
           if [ -n "$FAILED_LIST" ]; then
             echo "失敗した関数: ${FAILED_LIST}"
           fi
@@ -276,7 +370,7 @@ jobs:
             EMOJI="✅"
             COLOR="5763719"
             TITLE="Edge Functions Deploy 成功"
-            DESC="全12関数のデプロイが正常に完了しました"
+            DESC="全13関数のデプロイが正常に完了しました"
           else
             EMOJI="❌"
             COLOR="15158332"
@@ -286,9 +380,9 @@ jobs:
 
           # 失敗した関数がある場合、fieldsに追加
           if [ -n "$FAILED_LIST" ]; then
-            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/12\", \"inline\": true}, {\"name\": \"失敗\", \"value\": \"${FAILED_COUNT}/12\", \"inline\": true}, {\"name\": \"失敗した関数\", \"value\": \"${FAILED_LIST}\", \"inline\": false}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
+            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/13\", \"inline\": true}, {\"name\": \"失敗\", \"value\": \"${FAILED_COUNT}/13\", \"inline\": true}, {\"name\": \"失敗した関数\", \"value\": \"${FAILED_LIST}\", \"inline\": false}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
           else
-            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/12\", \"inline\": true}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
+            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/13\", \"inline\": true}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
           fi
 
           curl -X POST "$DISCORD_SYSTEM_WEBHOOK" \
