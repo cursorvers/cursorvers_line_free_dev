@@ -119,7 +119,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (!SHEET_ID || !GOOGLE_SA_JSON) {
     log.error("Missing Google Sheets configuration");
     return new Response(
-      JSON.stringify({ ok: false, error: "Missing Google Sheets configuration" }),
+      JSON.stringify({
+        ok: false,
+        error: "Missing Google Sheets configuration",
+      }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
