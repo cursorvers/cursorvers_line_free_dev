@@ -125,7 +125,7 @@ export async function createManusTask(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "API_KEY": MANUS_API_KEY,
+            "Authorization": `Bearer ${MANUS_API_KEY}`,
           },
           body: JSON.stringify({
             prompt: request.prompt,
@@ -564,7 +564,7 @@ export async function diagnoseWithManusAI(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "API_KEY": MANUS_API_KEY,
+        "Authorization": `Bearer ${MANUS_API_KEY}`,
       },
       body: JSON.stringify({
         prompt: diagnosisPrompt,

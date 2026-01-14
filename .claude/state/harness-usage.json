@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "updatedAt": "2026-01-14T15:29:22.745Z",
+  "skills": {},
+  "commands": {},
+  "agents": {},
+  "hooks": {
+    "pretooluse-guard": {
+      "triggered": 1,
+      "blocked": 1,
+      "lastTriggered": "2026-01-14T15:29:22.744Z"
+    }
+  }
+}
