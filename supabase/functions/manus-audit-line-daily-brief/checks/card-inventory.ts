@@ -22,6 +22,41 @@ const THEMES: CardTheme[] = [
 ];
 const MIN_READY_CARDS = 50;
 
+/** RPC応答の行の型定義 */
+interface RpcInventoryRow {
+  theme: string;
+  ready_count: number | bigint | null;
+  used_count: number | bigint | null;
+  archived_count: number | bigint | null;
+  total_count: number | bigint | null;
+}
+
+/**
+ * RPC応答の形式を検証する型ガード
+ */
+function isValidRpcRow(row: unknown): row is RpcInventoryRow {
+  if (!row || typeof row !== "object") return false;
+  const r = row as Record<string, unknown>;
+  return (
+    typeof r.theme === "string" &&
+    (r.ready_count === null || typeof r.ready_count === "number" ||
+      typeof r.ready_count === "bigint") &&
+    (r.used_count === null || typeof r.used_count === "number" ||
+      typeof r.used_count === "bigint") &&
+    (r.archived_count === null || typeof r.archived_count === "number" ||
+      typeof r.archived_count === "bigint") &&
+    (r.total_count === null || typeof r.total_count === "number" ||
+      typeof r.total_count === "bigint")
+  );
+}
+
+/**
+ * テーマが有効かどうかを検証
+ */
+function isValidTheme(theme: string): theme is CardTheme {
+  return THEMES.includes(theme as CardTheme);
+}
+
 export async function checkCardInventory(
   client: SupabaseClient,
 ): Promise<CardInventoryCheckResult> {
@@ -53,14 +88,25 @@ export async function checkCardInventory(
     general: { ready: 0, used: 0, archived: 0, total: 0 },
   };
 
+  // RPC応答のバリデーションと処理
   for (const row of data || []) {
-    const theme = row.theme as CardTheme;
-    if (inventory[theme]) {
-      inventory[theme].ready = Number(row.ready_count) || 0;
-      inventory[theme].used = Number(row.used_count) || 0;
-      inventory[theme].archived = Number(row.archived_count) || 0;
-      inventory[theme].total = Number(row.total_count) || 0;
+    // 型ガードでRPC応答の形式を検証
+    if (!isValidRpcRow(row)) {
+      log.warn("Invalid RPC row format, skipping", { row });
+      continue;
     }
+
+    // テーマが有効か検証
+    if (!isValidTheme(row.theme)) {
+      log.warn("Unknown theme in RPC response, skipping", { theme: row.theme });
+      continue;
+    }
+
+    // 安全に数値変換（nullish coalescingで0をフォールバック）
+    inventory[row.theme].ready = Number(row.ready_count ?? 0);
+    inventory[row.theme].used = Number(row.used_count ?? 0);
+    inventory[row.theme].archived = Number(row.archived_count ?? 0);
+    inventory[row.theme].total = Number(row.total_count ?? 0);
   }
 
   const details: CardInventory[] = THEMES.map((theme) => ({

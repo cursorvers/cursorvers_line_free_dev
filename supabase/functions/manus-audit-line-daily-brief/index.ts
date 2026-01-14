@@ -56,7 +56,7 @@ const DISCORD_ADMIN_WEBHOOK_URL = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
 const DISCORD_MAINT_WEBHOOK_URL = Deno.env.get("DISCORD_MAINT_WEBHOOK_URL");
 const MANUS_WEBHOOK_URL = Deno.env.get("MANUS_WEBHOOK_URL");
 const LANDING_PAGE_URL = Deno.env.get("LANDING_PAGE_URL") ?? "";
-const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
+// LINE_CHANNEL_ACCESS_TOKEN は checkLineBotHealth() 内で直接取得
 // Google Sheets連携（任意）
 const GOOGLE_SA_JSON = Deno.env.get("GOOGLE_SA_JSON");
 const MEMBERS_SHEET_ID = Deno.env.get("MEMBERS_SHEET_ID");
@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
       {
         supabaseUrl: SUPABASE_URL!,
         landingPageUrl: LANDING_PAGE_URL,
-        lineChannelAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
+        // lineChannelAccessToken は checkLineBotHealth() 内で環境変数から直接取得
         googleSaJson: GOOGLE_SA_JSON,
         membersSheetId: MEMBERS_SHEET_ID,
       },

@@ -1,14 +1,24 @@
 {
   "version": "1.0",
-  "updatedAt": "2026-01-14T16:01:14.057Z",
-  "skills": {},
+  "updatedAt": "2026-01-14T16:09:26.770Z",
+  "skills": {
+    "review": {
+      "count": 1,
+      "lastUsed": "2026-01-14T16:02:13.306Z"
+    }
+  },
   "commands": {},
-  "agents": {},
+  "agents": {
+    "claude-code-harness:code-reviewer": {
+      "count": 3,
+      "lastUsed": "2026-01-14T16:04:24.740Z"
+    }
+  },
   "hooks": {
     "pretooluse-guard": {
-      "triggered": 3,
-      "blocked": 3,
-      "lastTriggered": "2026-01-14T16:01:14.055Z"
+      "triggered": 4,
+      "blocked": 4,
+      "lastTriggered": "2026-01-14T16:09:26.768Z"
     }
   }
 }

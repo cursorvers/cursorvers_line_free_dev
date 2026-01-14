@@ -32,7 +32,7 @@ const MEMBERS_SHEET_TAB = "members";
 interface CheckConfig {
   supabaseUrl: string;
   landingPageUrl: string;
-  lineChannelAccessToken?: string | undefined;
+  // lineChannelAccessToken は環境変数から直接取得するため削除
   googleSaJson?: string | undefined;
   membersSheetId?: string | undefined;
 }
@@ -89,7 +89,7 @@ export async function checkLineRegistrationSystem(
     checkApiHealth(config.supabaseUrl),
     checkGoogleSheetsSync(config.googleSaJson, config.membersSheetId),
     checkLandingPageAccess(config.landingPageUrl),
-    checkLineBotHealth(config.lineChannelAccessToken),
+    checkLineBotHealth(), // 環境変数から直接取得
     checkRecentInteractions(client),
   ]);
 
@@ -355,10 +355,11 @@ async function checkLandingPageAccess(
 
 /**
  * LINE Bot API の認証確認（Bot情報取得）
+ * 環境変数から直接トークンを取得（セキュリティ向上）
  */
-async function checkLineBotHealth(
-  accessToken?: string,
-): Promise<LineBotHealthResult> {
+async function checkLineBotHealth(): Promise<LineBotHealthResult> {
+  const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
+
   if (!accessToken) {
     return {
       passed: false,
