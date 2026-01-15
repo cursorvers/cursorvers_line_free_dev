@@ -1,0 +1,205 @@
+{
+  "test_cases": {
+    "success_proceed": {
+      "description": "正常終了 - proceed",
+      "event": {
+        "event_type": "task_completed",
+        "task_id": "test-task-success-001",
+        "status": "complete",
+        "plan_delta": {
+          "decision": "proceed",
+          "reasons": ["正常に完了しました"],
+          "actions": [],
+          "amended_plan": null,
+          "evidence": null
+        }
+      },
+      "expected_workflow_behavior": {
+        "manus_retry": false,
+        "plan_delta_saved": true,
+        "supabase_upsert": true,
+        "log_committed": true
+      }
+    },
+    "retry_required": {
+      "description": "再試行が必要 - retry",
+      "event": {
+        "event_type": "step_failed",
+        "task_id": "test-task-retry-001",
+        "step_id": "s1",
+        "status": "failed",
+        "plan_delta": {
+          "decision": "retry",
+          "reasons": ["Supabase一時的な503エラー"],
+          "actions": [
+            {
+              "type": "retry",
+              "step_id": "s1",
+              "backoff_ms": 5000,
+              "max_retries": 2
+            }
+          ],
+          "amended_plan": null,
+          "evidence": {
+            "error_code": "503",
+            "error_message": "Service temporarily unavailable"
+          }
+        }
+      },
+      "expected_workflow_behavior": {
+        "manus_retry": true,
+        "plan_delta_saved": true,
+        "supabase_upsert": true,
+        "log_committed": true,
+        "retry_count": 1
+      }
+    },
+    "amend_required": {
+      "description": "Plan修正が必要 - amended",
+      "event": {
+        "event_type": "step_failed",
+        "task_id": "test-task-amend-001",
+        "step_id": "s2",
+        "status": "failed",
+        "plan_delta": {
+          "decision": "amended",
+          "reasons": ["ステップs2のペイロードに誤りがある"],
+          "actions": [
+            {
+              "type": "amend",
+              "step_id": "s2",
+              "payload_corrections": {
+                "table": "line_members",
+                "data": {
+                  "line_user_id": "{{LINE_USER_ID}}",
+                  "registered_at": "{{NOW}}"
+                }
+              }
+            }
+          ],
+          "amended_plan": {
+            "title": "友だち登録時のウェルカムメッセージ送信（修正版）",
+            "steps": [
+              {
+                "id": "s2",
+                "action": "supabase.upsert",
+                "connector": "supabase",
+                "payload": {
+                  "table": "line_members",
+                  "data": {
+                    "line_user_id": "{{LINE_USER_ID}}",
+                    "registered_at": "{{NOW}}"
+                  }
+                }
+              }
+            ]
+          },
+          "evidence": {
+            "error_code": "validation_error",
+            "error_message": "Missing required field: registered_at"
+          }
+        }
+      },
+      "expected_workflow_behavior": {
+        "manus_retry": true,
+        "plan_delta_saved": true,
+        "supabase_upsert": true,
+        "log_committed": true,
+        "amended_plan_used": true
+      }
+    },
+    "abort_required": {
+      "description": "中止が必要 - abort",
+      "event": {
+        "event_type": "task_failed",
+        "task_id": "test-task-abort-001",
+        "status": "failed",
+        "plan_delta": {
+          "decision": "abort",
+          "reasons": ["致命的なエラーが発生しました"],
+          "actions": [],
+          "amended_plan": null,
+          "evidence": {
+            "error_code": "critical_failure",
+            "error_message": "Unable to proceed due to system error"
+          }
+        }
+      },
+      "expected_workflow_behavior": {
+        "manus_retry": false,
+        "plan_delta_saved": true,
+        "supabase_upsert": true,
+        "log_committed": true,
+        "workflow_aborted": true
+      }
+    },
+    "failure_no_retry": {
+      "description": "失敗 - 再試行なし",
+      "event": {
+        "event_type": "task_failed",
+        "task_id": "test-task-failure-001",
+        "status": "failed",
+        "plan_delta": {
+          "decision": "abort",
+          "reasons": ["最大再試行回数に達しました"],
+          "actions": [],
+          "amended_plan": null,
+          "evidence": {
+            "retry_count": 3,
+            "max_retries": 3,
+            "error_message": "Max retries exceeded"
+          }
+        }
+      },
+      "expected_workflow_behavior": {
+        "manus_retry": false,
+        "plan_delta_saved": true,
+        "supabase_upsert": true,
+        "log_committed": true,
+        "workflow_aborted": true
+      }
+    }
+  },
+  "test_matrix": {
+    "decision_types": ["proceed", "retry", "amended", "abort"],
+    "status_types": ["complete", "failed", "running", "queued"],
+    "event_types": [
+      "task_completed",
+      "task_failed",
+      "step_completed",
+      "step_failed",
+      "step_started",
+      "step_running"
+    ],
+    "test_combinations": [
+      {
+        "decision": "proceed",
+        "status": "complete",
+        "event_type": "task_completed",
+        "manus_retry": false
+      },
+      {
+        "decision": "retry",
+        "status": "failed",
+        "event_type": "step_failed",
+        "manus_retry": true,
+        "retry_count": 1
+      },
+      {
+        "decision": "amended",
+        "status": "failed",
+        "event_type": "step_failed",
+        "manus_retry": true,
+        "amended_plan_used": true
+      },
+      {
+        "decision": "abort",
+        "status": "failed",
+        "event_type": "task_failed",
+        "manus_retry": false,
+        "workflow_aborted": true
+      }
+    ]
+  }
+}
+

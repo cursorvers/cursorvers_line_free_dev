@@ -1,0 +1,6 @@
+# actシナリオ: line-event.yml 縮退系テスト
+# 使用方法: act workflow_dispatch -W .github/workflows/line-event.yml --eventpath .github/workflows/.act/line-event-degraded.yml
+
+name: line_event_degraded
+type: workflow_dispatch
+

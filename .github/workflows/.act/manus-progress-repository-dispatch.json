@@ -1,0 +1,16 @@
+{
+  "action": "manus_progress",
+  "client_payload": {
+    "event_type": "task_completed",
+    "task_id": "test-task-act-001",
+    "status": "complete",
+    "plan_delta": {
+      "decision": "proceed",
+      "reasons": ["正常に完了しました"],
+      "actions": [],
+      "amended_plan": null,
+      "evidence": null
+    }
+  }
+}
+

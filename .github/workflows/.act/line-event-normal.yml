@@ -1,0 +1,6 @@
+# actシナリオ: line-event.yml 正常系テスト
+# 使用方法: act workflow_dispatch -W .github/workflows/line-event.yml --eventpath .github/workflows/.act/line-event-normal.yml
+
+name: line_event_normal
+type: workflow_dispatch
+

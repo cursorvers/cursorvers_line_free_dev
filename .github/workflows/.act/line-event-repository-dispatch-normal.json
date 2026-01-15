@@ -1,0 +1,21 @@
+{
+  "action": "line_event",
+  "client_payload": {
+    "events": [
+      {
+        "type": "follow",
+        "source": {
+          "type": "user",
+          "userId": "test-user-12345"
+        },
+        "timestamp": 1730700000000,
+        "mode": "active",
+        "webhookEventId": "test-webhook-id-001",
+        "deliveryContext": {
+          "isRedelivery": false
+        }
+      }
+    ]
+  }
+}
+

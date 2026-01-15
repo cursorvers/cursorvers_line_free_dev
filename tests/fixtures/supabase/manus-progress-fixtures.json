@@ -1,0 +1,134 @@
+{
+  "fixtures": {
+    "progress_event_success": {
+      "source": "manus",
+      "user_hash": "test-user-hash-12345",
+      "plan_id": "test-plan-001",
+      "plan_version": "1.0.0",
+      "event_type": "task_completed",
+      "payload": {
+        "event_type": "task_completed",
+        "task_id": "test-task-success-001",
+        "status": "complete"
+      },
+      "decision": "proceed",
+      "status": "complete",
+      "dedupe_key": "test-dedupe-key-001",
+      "manus_run_id": "test-manus-run-001"
+    },
+    "progress_event_retry": {
+      "source": "manus",
+      "user_hash": "test-user-hash-12345",
+      "plan_id": "test-plan-001",
+      "plan_version": "1.0.0",
+      "event_type": "step_failed",
+      "payload": {
+        "event_type": "step_failed",
+        "task_id": "test-task-retry-001",
+        "step_id": "s1",
+        "status": "failed",
+        "plan_delta": {
+          "decision": "retry",
+          "reasons": ["Supabase一時的な503エラー"],
+          "actions": [
+            {
+              "type": "retry",
+              "step_id": "s1",
+              "backoff_ms": 5000,
+              "max_retries": 2
+            }
+          ]
+        }
+      },
+      "decision": "retry",
+      "status": "failed",
+      "dedupe_key": "test-dedupe-key-retry-001",
+      "manus_run_id": "test-manus-run-retry-001",
+      "evidence": {
+        "error_code": "503",
+        "error_message": "Service temporarily unavailable"
+      }
+    },
+    "progress_event_amended": {
+      "source": "manus",
+      "user_hash": "test-user-hash-12345",
+      "plan_id": "test-plan-001",
+      "plan_version": "1.1.0",
+      "event_type": "step_failed",
+      "payload": {
+        "event_type": "step_failed",
+        "task_id": "test-task-amend-001",
+        "step_id": "s2",
+        "status": "failed",
+        "plan_delta": {
+          "decision": "amended",
+          "reasons": ["ステップs2のペイロードに誤りがある"],
+          "actions": [
+            {
+              "type": "amend",
+              "step_id": "s2",
+              "payload_corrections": {
+                "table": "line_members",
+                "data": {
+                  "line_user_id": "{{LINE_USER_ID}}",
+                  "registered_at": "{{NOW}}"
+                }
+              }
+            }
+          ],
+          "amended_plan": {
+            "title": "友だち登録時のウェルカムメッセージ送信（修正版）",
+            "steps": [
+              {
+                "id": "s2",
+                "action": "supabase.upsert",
+                "connector": "supabase",
+                "payload": {
+                  "table": "line_members",
+                  "data": {
+                    "line_user_id": "{{LINE_USER_ID}}",
+                    "registered_at": "{{NOW}}"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "decision": "amended",
+      "status": "failed",
+      "dedupe_key": "test-dedupe-key-amend-001",
+      "manus_run_id": "test-manus-run-amend-001",
+      "evidence": {
+        "error_code": "validation_error",
+        "error_message": "Missing required field: registered_at"
+      }
+    },
+    "progress_event_abort": {
+      "source": "manus",
+      "user_hash": "test-user-hash-12345",
+      "plan_id": "test-plan-001",
+      "plan_version": "1.0.0",
+      "event_type": "task_failed",
+      "payload": {
+        "event_type": "task_failed",
+        "task_id": "test-task-abort-001",
+        "status": "failed",
+        "plan_delta": {
+          "decision": "abort",
+          "reasons": ["致命的なエラーが発生しました"],
+          "actions": []
+        }
+      },
+      "decision": "abort",
+      "status": "failed",
+      "dedupe_key": "test-dedupe-key-abort-001",
+      "manus_run_id": "test-manus-run-abort-001",
+      "evidence": {
+        "error_code": "critical_failure",
+        "error_message": "Unable to proceed due to system error"
+      }
+    }
+  }
+}
+
