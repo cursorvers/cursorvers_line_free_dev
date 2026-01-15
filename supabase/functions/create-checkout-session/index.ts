@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     });
 
     // Parse request body
-    const { email, opt_in_email, agree_terms } = await req.json();
+    const { email, opt_in_email, agree_terms, line_user_id } = await req.json();
 
     // Validate input
     if (!email) {
@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
         email: email,
         source: "cursorvers_library",
         opt_in_email: opt_in_email ? "true" : "false",
+        line_user_id: line_user_id || "",
       },
     });
 

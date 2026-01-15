@@ -518,6 +518,9 @@ Deno.serve(async (req) => {
             (session.metadata?.opt_in_email ?? "").toString().toLowerCase() ===
               "true";
 
+          // metadata から line_user_id を取得（Checkout時に紐付け済みの場合）
+          const metadataLineUserId = session.metadata?.line_user_id?.trim() || null;
+
           // 顧客名を取得
           const customerName = session.customer_details?.name || null;
 
@@ -598,7 +601,10 @@ Deno.serve(async (req) => {
           }
 
           // 既存メンバーの場合は discord_invite_sent をリセットしない
-          const basePayload = {
+          // line_user_id: 既存があればそれを維持、なければmetadataから取得
+          const resolvedLineUserId = existingMember?.line_user_id || metadataLineUserId;
+
+          const basePayload: Record<string, unknown> = {
             email: customerEmail,
             name: customerName,
             stripe_customer_id: session.customer as string | null,
@@ -610,6 +616,16 @@ Deno.serve(async (req) => {
             opt_in_email: optInEmail,
             updated_at: new Date().toISOString(),
           };
+
+          // line_user_id が確定している場合のみ追加（誤紐付け防止）
+          if (resolvedLineUserId) {
+            basePayload["line_user_id"] = resolvedLineUserId;
+            log.info("LINE user ID resolved for payment", {
+              email: maskEmail(customerEmail),
+              lineUserId: maskLineUserId(resolvedLineUserId),
+              source: existingMember?.line_user_id ? "existing" : "metadata",
+            });
+          }
 
           let error;
           if (existingMember) {

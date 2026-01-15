@@ -17,6 +17,7 @@
             'brand-bg': '#050202',
             'brand-surface': '#0F0505',
             'brand-flame': '#FF4500',
+            'line-green': '#06C755',
           },
           fontFamily: {
             sans: ['"Noto Sans JP"', 'system-ui', 'sans-serif'],
@@ -27,74 +28,114 @@
   </script>
 </head>
 <body class="bg-[#0c0c0c] text-white min-h-screen">
-  <main class="max-w-xl mx-auto px-6 py-10 space-y-6">
-    <div class="space-y-2">
+  <main class="max-w-xl mx-auto px-6 py-8 space-y-6">
+    <!-- ヘッダー -->
+    <div class="space-y-2 text-center">
       <p class="text-xs uppercase tracking-[0.4em] text-brand-flame font-bold">Free Community</p>
-      <h1 class="text-3xl font-bold">参加フォーム</h1>
-      <p class="text-sm text-white/80">LINEで友だち追加し、最新のSafety &amp; Literacyアップデートを受け取ります。<span class="text-brand-flame font-semibold">メール登録は任意（OFFでスキップ可）。登録すると「Safetyスタートパック」（最新AI副業トレンド＋安全プロンプトLite）を配布</span>。メール送信後にQRがポップアップします。</p>
+      <h1 class="text-2xl font-bold">LINE友だち追加</h1>
     </div>
 
-    <div id="status" class="text-sm"></div>
-
-    <form id="community-form" class="space-y-4 bg-[#141414] border border-white/10 rounded-2xl p-6 shadow-lg">
-      <label class="flex items-start gap-3 text-sm text-white/80">
-        <input id="email-opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" checked>
-        <span>メールアドレスを登録して特典を受け取る（初期ON）</span>
-      </label>
-
-      <div id="email-input-section" class="space-y-2">
-        <label for="email" class="text-sm font-semibold">メールアドレス</label>
-        <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-flame focus:border-brand-flame">
-        <p class="text-xs text-white/50">メール登録で「Safetyスタートパック」を配布します。</p>
+    <!-- 進捗バー -->
+    <div class="flex items-center justify-center gap-2">
+      <div id="step1-indicator" class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-full bg-brand-flame text-white flex items-center justify-center font-bold text-sm">1</div>
+        <span class="text-sm font-medium text-white">情報入力</span>
       </div>
+      <div class="w-8 h-0.5 bg-white/20"></div>
+      <div id="step2-indicator" class="flex items-center gap-2 opacity-40">
+        <div class="w-8 h-8 rounded-full bg-white/20 text-white/60 flex items-center justify-center font-bold text-sm">2</div>
+        <span class="text-sm font-medium text-white/60">友だち追加</span>
+      </div>
+    </div>
 
-      <div class="bg-gradient-to-r from-brand-flame/10 to-transparent border border-brand-flame/30 rounded-xl p-4 space-y-2">
-        <label class="flex items-start gap-3 text-sm text-white">
-          <input id="opt-in" type="checkbox" class="mt-1 w-5 h-5 rounded border-brand-flame/50 bg-black/30 text-brand-flame focus:ring-brand-flame" checked>
-          <div class="space-y-1">
-            <span class="font-semibold">週1回のメルマガで最新情報を受け取る</span>
-            <ul class="text-xs text-white/70 space-y-0.5 ml-1">
-              <li>🔥 AI副業の最新トレンド・稼ぎ方</li>
-              <li>🛡️ 詐欺・リスク回避の実例レポート</li>
-              <li>🎁 メルマガ限定の無料コンテンツ</li>
-            </ul>
-            <p class="text-xs text-white/50">※ いつでも配信停止可能です</p>
-          </div>
+    <div id="status" class="text-sm text-center"></div>
+
+    <!-- STEP 1: 情報入力 -->
+    <div id="step1-section">
+      <form id="community-form" class="space-y-4 bg-[#141414] border border-brand-flame/30 rounded-2xl p-6 shadow-lg">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="bg-brand-flame text-white text-xs font-bold px-2 py-1 rounded">STEP 1</span>
+          <span class="text-sm font-semibold">情報を入力してください</span>
+        </div>
+
+        <label class="flex items-start gap-3 text-sm text-white/80">
+          <input id="email-opt-in" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" checked>
+          <span>メールで特典を受け取る（任意）</span>
         </label>
-      </div>
 
-      <label class="flex items-start gap-3 text-sm text-white/80">
-        <input id="agree" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" required>
-        <span><a href="terms.html" class="underline hover:text-brand-flame" target="_blank" rel="noopener">利用規約</a>・<a href="privacy.html" class="underline hover:text-brand-flame" target="_blank" rel="noopener">プライバシーポリシー</a>に同意する</span>
-      </label>
+        <div id="email-input-section" class="space-y-2">
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="w-full rounded-lg border border-white/15 bg-black/30 px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-brand-flame focus:border-brand-flame">
+          <p class="text-xs text-white/50">登録で「Safetyスタートパック」を配布</p>
+        </div>
 
-      <button id="email-submit-btn" type="submit" class="w-full rounded-full bg-brand-flame text-white font-bold py-3 hover:bg-brand-flame/80 transition focus:outline-none focus:ring-2 focus:ring-brand-flame focus:ring-offset-2 focus:ring-offset-brand-bg">
-        LINE登録に進む
-      </button>
+        <div id="newsletter-section" class="bg-brand-flame/10 border border-brand-flame/20 rounded-xl p-3">
+          <label class="flex items-start gap-3 text-sm text-white">
+            <input id="opt-in" type="checkbox" class="mt-0.5 w-4 h-4 rounded border-brand-flame/50 bg-black/30 text-brand-flame focus:ring-brand-flame" checked>
+            <span class="text-white/80">週1回のメルマガを受け取る</span>
+          </label>
+        </div>
 
-    </form>
+        <label class="flex items-start gap-3 text-sm text-white/80">
+          <input id="agree" type="checkbox" class="mt-1 rounded border-white/25 bg-black/30 text-brand-flame focus:ring-brand-flame" required>
+          <span><a href="terms.html" class="underline hover:text-brand-flame" target="_blank" rel="noopener">利用規約</a>に同意する</span>
+        </label>
 
-    <!-- QRインライン表示 -->
-    <div id="qr-section" class="hidden bg-[#141414] border border-white/10 rounded-2xl p-6 shadow-lg space-y-4">
-      <div class="space-y-3 text-left">
-        <p class="font-semibold text-white">STEP2: QRで友だち追加</p>
-        <div class="flex flex-col items-center gap-3">
+        <button id="email-submit-btn" type="submit" class="w-full rounded-full bg-brand-flame text-white font-bold py-3 hover:bg-brand-flame/80 transition focus:outline-none focus:ring-2 focus:ring-brand-flame focus:ring-offset-2 focus:ring-offset-brand-bg flex items-center justify-center gap-2">
+          <span>次へ進む</span>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- STEP 2: LINE友だち追加 -->
+    <div id="step2-section" class="hidden">
+      <div class="bg-[#141414] border border-line-green/30 rounded-2xl p-6 shadow-lg space-y-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="bg-line-green text-white text-xs font-bold px-2 py-1 rounded">STEP 2</span>
+          <span class="text-sm font-semibold">LINEで友だち追加</span>
+        </div>
+
+        <div class="flex flex-col items-center gap-4">
           <img
             src="https://quickchart.io/qr?text=https://line.me/R/ti/p/@529ybhfo&size=320"
             alt="LINE友だち追加QR"
-            class="w-52 h-52 bg-white rounded-xl p-2 shadow object-contain"
+            class="w-48 h-48 bg-white rounded-xl p-2 shadow object-contain"
             loading="lazy"
             referrerpolicy="no-referrer"
             onerror="if(!this.dataset.fallback){this.dataset.fallback='chart';this.src='https://chart.googleapis.com/chart?chs=320x320&cht=qr&chl=https://line.me/R/ti/p/@529ybhfo&choe=UTF-8';}else{this.onerror=null;this.src='https://qr-official.line.me/gs/M_%40529ybhfo.png';}"
           >
+
+          <!-- LINEで開くボタン -->
+          <a href="https://line.me/R/ti/p/@529ybhfo"
+             class="w-full rounded-full bg-line-green text-white font-bold py-3 hover:bg-line-green/80 transition flex items-center justify-center gap-2"
+             target="_blank" rel="noopener">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+            </svg>
+            <span>LINEで友だち追加</span>
+          </a>
         </div>
-        <div class="text-xs text-white/70 space-y-1">
-          <p class="font-semibold">iPhoneでの手順</p>
-          <p>1) メール送信 → 下のQRを長押しして「写真に追加」</p>
-          <p>2) LINEの友だち追加 ＞ QRコード ＞ アルバム から保存画像を選ぶ</p>
-          <p>3) 友だち追加で完了（自動遷移なし）</p>
-          <p class="text-white/50 mt-2">PC: スマホでこのQRを読み取れば追加できます。</p>
+
+        <div class="text-xs text-white/60 space-y-1 bg-white/5 rounded-lg p-3">
+          <p class="font-semibold text-white/80">QRで追加する場合</p>
+          <p>1. QRを長押し → 「写真に保存」</p>
+          <p>2. LINE → 友だち追加 → QR → ライブラリから選択</p>
         </div>
+
+        <div class="text-center pt-2">
+          <button id="back-btn" class="text-sm text-white/50 hover:text-white/80 underline">
+            戻る
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 完了メッセージ -->
+    <div id="complete-section" class="hidden text-center space-y-4">
+      <div class="bg-line-green/20 border border-line-green/30 rounded-2xl p-6">
+        <div class="text-4xl mb-2">✅</div>
+        <p class="font-bold text-lg">友だち追加が完了しました！</p>
+        <p class="text-sm text-white/70 mt-2">LINEでメッセージをお届けします</p>
       </div>
     </div>
   </main>
@@ -106,19 +147,56 @@
     const emailSubmitBtn = document.getElementById("email-submit-btn");
     const emailOptIn = document.getElementById("email-opt-in");
     const emailInputSection = document.getElementById("email-input-section");
-    const qrSection = document.getElementById("qr-section");
+    const newsletterSection = document.getElementById("newsletter-section");
+    const step1Section = document.getElementById("step1-section");
+    const step2Section = document.getElementById("step2-section");
+    const step1Indicator = document.getElementById("step1-indicator");
+    const step2Indicator = document.getElementById("step2-indicator");
+    const backBtn = document.getElementById("back-btn");
 
     let savedEmail = "";
     let savedOptIn = true;
-    const showQr = () => qrSection.classList.remove("hidden");
 
+    // ステップ切り替え
+    function goToStep2() {
+      step1Section.classList.add("hidden");
+      step2Section.classList.remove("hidden");
+      step1Indicator.classList.add("opacity-40");
+      step1Indicator.querySelector("div").classList.remove("bg-brand-flame");
+      step1Indicator.querySelector("div").classList.add("bg-white/20", "text-white/60");
+      step2Indicator.classList.remove("opacity-40");
+      step2Indicator.querySelector("div").classList.remove("bg-white/20", "text-white/60");
+      step2Indicator.querySelector("div").classList.add("bg-line-green");
+      step2Indicator.querySelector("span").classList.remove("text-white/60");
+      step2Indicator.querySelector("span").classList.add("text-white");
+    }
+
+    function goToStep1() {
+      step2Section.classList.add("hidden");
+      step1Section.classList.remove("hidden");
+      step1Indicator.classList.remove("opacity-40");
+      step1Indicator.querySelector("div").classList.add("bg-brand-flame");
+      step1Indicator.querySelector("div").classList.remove("bg-white/20", "text-white/60");
+      step2Indicator.classList.add("opacity-40");
+      step2Indicator.querySelector("div").classList.add("bg-white/20", "text-white/60");
+      step2Indicator.querySelector("div").classList.remove("bg-line-green");
+      step2Indicator.querySelector("span").classList.add("text-white/60");
+      step2Indicator.querySelector("span").classList.remove("text-white");
+    }
+
+    // メールオプトイン切り替え
     emailOptIn.addEventListener("change", (e) => {
-      emailInputSection.style.display = e.target.checked ? "block" : "none";
+      const show = e.target.checked;
+      emailInputSection.style.display = show ? "block" : "none";
+      newsletterSection.style.display = show ? "block" : "none";
     });
+
+    // 戻るボタン
+    backBtn.addEventListener("click", goToStep1);
 
     const setStatus = (msg, isError = true) => {
       statusEl.textContent = msg;
-      statusEl.className = isError ? "text-sm text-brand-flame" : "text-sm text-gray-200";
+      statusEl.className = isError ? "text-sm text-center text-brand-flame" : "text-sm text-center text-gray-200";
     };
 
     async function handleEmailSubmit() {
@@ -128,12 +206,12 @@
       const agree = document.getElementById("agree").checked;
 
       if (!agree) {
-        setStatus("利用規約・プライバシーポリシーへの同意が必要です。");
+        setStatus("利用規約への同意が必要です。");
         return;
       }
 
       emailSubmitBtn.disabled = true;
-      emailSubmitBtn.textContent = "処理中...";
+      emailSubmitBtn.innerHTML = '<span>処理中...</span>';
       setStatus("");
 
       try {
@@ -149,24 +227,22 @@
 
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
-            throw new Error(data.error || "メールアドレスの登録に失敗しました");
+            throw new Error(data.error || "登録に失敗しました");
           }
           savedEmail = email;
           savedOptIn = optIn;
-          setStatus("メールアドレスを登録しました。QRから友だち追加してください。", false);
-        } else {
-          savedEmail = "";
-          savedOptIn = optIn;
-          setStatus("QRから友だち追加してください。", false);
         }
-        showQr();
+
+        // STEP2へ遷移
+        goToStep2();
+        setStatus("");
 
       } catch (err) {
         console.error(err);
         setStatus(err.message || "処理に失敗しました");
       } finally {
         emailSubmitBtn.disabled = false;
-        emailSubmitBtn.textContent = "LINE登録に進む";
+        emailSubmitBtn.innerHTML = '<span>次へ進む</span><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>';
       }
     }
 

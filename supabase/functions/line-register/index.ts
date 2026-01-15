@@ -20,6 +20,12 @@ import { notifyLineEvent } from "../_shared/n8n-notify.ts";
 
 const log = createLogger("line-register");
 
+// ボット対策: 登録レート制限（1時間あたりの登録上限）
+const RATE_LIMIT = {
+  MAX_REGISTRATIONS_PER_HOUR: 5,
+  ACTION: "line_register",
+} as const;
+
 // 日本時間（JST, UTC+9）を返すヘルパー関数
 function getJSTTimestamp(): string {
   const now = new Date();
@@ -60,6 +66,61 @@ function normalizeEmail(email?: string | null): string | null {
   const trimmed = email.trim();
   if (!trimmed) return null;
   return trimmed.toLowerCase();
+}
+
+// IPアドレス取得（Cloudflare/プロキシ対応）
+function getClientIP(req: Request): string {
+  return (
+    req.headers.get("cf-connecting-ip") ??
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      req.headers.get("x-real-ip") ??
+      "unknown"
+  );
+}
+
+// レート制限チェック（ボット対策）
+async function checkRegistrationRateLimit(
+  identifier: string,
+): Promise<{ allowed: boolean; count: number }> {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+  const { count, error } = await supabase
+    .from("rate_limits")
+    .select("*", { count: "exact", head: true })
+    .eq("identifier", identifier)
+    .eq("action", RATE_LIMIT.ACTION)
+    .gte("attempted_at", oneHourAgo);
+
+  if (error) {
+    log.warn("Rate limit check failed, allowing request", {
+      errorMessage: error.message,
+    });
+    return { allowed: true, count: 0 };
+  }
+
+  const attempts = count ?? 0;
+  return {
+    allowed: attempts < RATE_LIMIT.MAX_REGISTRATIONS_PER_HOUR,
+    count: attempts,
+  };
+}
+
+// レート制限記録
+async function recordRegistrationAttempt(
+  identifier: string,
+  success: boolean,
+): Promise<void> {
+  try {
+    await supabase.from("rate_limits").insert({
+      identifier,
+      action: RATE_LIMIT.ACTION,
+      success,
+    });
+  } catch (err) {
+    log.warn("Failed to record rate limit", {
+      errorMessage: extractErrorMessage(err),
+    });
+  }
 }
 
 async function appendMemberRow(row: unknown[]) {
@@ -104,6 +165,27 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") {
       log.warn("Method not allowed", { method: req.method });
       return badRequest("Method not allowed", 405);
+    }
+
+    // ボット対策: IPベースのレート制限チェック
+    const clientIP = getClientIP(req);
+    const rateCheck = await checkRegistrationRateLimit(clientIP);
+    if (!rateCheck.allowed) {
+      log.warn("Registration rate limit exceeded", {
+        clientIP,
+        attempts: rateCheck.count,
+        limit: RATE_LIMIT.MAX_REGISTRATIONS_PER_HOUR,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "Too many registration attempts. Please try again later.",
+          retryAfter: 3600,
+        }),
+        {
+          status: 429,
+          headers: { ...currentCorsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const smokeMode = Deno.env.get("LINE_REGISTER_SMOKE_MODE") === "true";
@@ -367,6 +449,9 @@ Deno.serve(async (req) => {
       optInEmail: optInEmail,
       isUpdate: !!existingRecord,
     });
+
+    // レート制限記録（成功）
+    await recordRegistrationAttempt(clientIP, true);
 
     // 新規登録時のみn8n経由でDiscord通知（非同期・失敗しても続行）
     if (!existingRecord && lineUserId) {
