@@ -471,7 +471,7 @@ Deno.serve(async (req) => {
       try {
         const { count } = await supabase
           .from("members")
-          .select("*", { count: "exact", head: true });
+          .select("id", { count: "estimated", head: true });
         totalMembers = count ?? undefined;
       } catch (countErr) {
         log.warn("Failed to get total members count", {

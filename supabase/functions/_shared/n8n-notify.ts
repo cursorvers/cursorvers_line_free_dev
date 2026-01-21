@@ -5,6 +5,7 @@
 
 import { createLogger } from "./logger.ts";
 import { extractErrorMessage } from "./error-utils.ts";
+import { maskEmail } from "./masking-utils.ts";
 
 const log = createLogger("discord-event-notify");
 
@@ -97,7 +98,7 @@ export function notifyStripeEvent(
  * LINE登録イベントをDiscordに通知 → #system-monitor
  */
 export function notifyLineEvent(
-  eventType: string,
+  _eventType: string,
   lineUserId: string,
   displayName?: string,
   pictureUrl?: string,
@@ -111,7 +112,6 @@ export function notifyLineEvent(
     color: number;
     fields: Array<{ name: string; value: string; inline?: boolean }>;
     thumbnail?: { url: string };
-    footer?: { text: string };
     timestamp: string;
   } = {
     title: "👋 LINE 新規登録",
@@ -127,11 +127,11 @@ export function notifyLineEvent(
     timestamp: new Date().toISOString(),
   };
 
-  // メールアドレスがあれば追加
+  // メールアドレスがあれば追加（マスキング済み）
   if (options?.email) {
     embed.fields.push({
       name: "📧 メール",
-      value: options.email,
+      value: maskEmail(options.email) ?? "N/A",
       inline: true,
     });
   }
