@@ -101,27 +101,49 @@ export function notifyLineEvent(
   lineUserId: string,
   displayName?: string,
   pictureUrl?: string,
+  options?: {
+    totalMembers?: number;
+    email?: string;
+  },
 ): Promise<NotifyResult> {
   const embed: {
     title: string;
     color: number;
     fields: Array<{ name: string; value: string; inline?: boolean }>;
     thumbnail?: { url: string };
+    footer?: { text: string };
     timestamp: string;
   } = {
     title: "👋 LINE 新規登録",
     color: 0x00FF00, // 緑
     fields: [
-      { name: "👤 表示名", value: displayName ?? "N/A", inline: true },
+      { name: "👤 表示名", value: displayName ?? "未取得", inline: true },
       {
         name: "📱 LINE ID",
         value: lineUserId.slice(0, 8) + "...",
         inline: true,
       },
-      { name: "🎯 イベント", value: eventType, inline: true },
     ],
     timestamp: new Date().toISOString(),
   };
+
+  // メールアドレスがあれば追加
+  if (options?.email) {
+    embed.fields.push({
+      name: "📧 メール",
+      value: options.email,
+      inline: true,
+    });
+  }
+
+  // 累計登録者数があれば追加
+  if (options?.totalMembers !== undefined) {
+    embed.fields.push({
+      name: "📊 累計登録者数",
+      value: `${options.totalMembers} 人`,
+      inline: true,
+    });
+  }
 
   if (pictureUrl) {
     embed.thumbnail = { url: pictureUrl };

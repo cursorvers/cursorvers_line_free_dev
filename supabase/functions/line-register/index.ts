@@ -234,9 +234,12 @@ Deno.serve(async (req) => {
       return badRequest("line_user_id or email is required");
     }
 
-    // line_user_idがある場合は検証（オプション）
+    // LINE Profile情報を保存する変数
+    let lineDisplayName: string | undefined;
+    let linePictureUrl: string | undefined;
+
+    // line_user_idがある場合は検証 + プロフィール取得
     if (lineUserId && LINE_CHANNEL_ACCESS_TOKEN) {
-      // Verify line_user_id by calling LINE profile API (optional)
       try {
         const res = await fetch(
           `https://api.line.me/v2/bot/profile/${lineUserId}`,
@@ -256,8 +259,13 @@ Deno.serve(async (req) => {
             return badRequest("LINE verification failed", res.status);
           }
         } else {
+          // プロフィール情報を取得
+          const profile = await res.json();
+          lineDisplayName = profile.displayName;
+          linePictureUrl = profile.pictureUrl;
           log.info("LINE profile verified", {
             lineUserId: maskLineUserId(lineUserId) ?? "null",
+            displayName: lineDisplayName,
           });
         }
       } catch (err) {
@@ -458,11 +466,28 @@ Deno.serve(async (req) => {
 
     // 新規登録時のみn8n経由でDiscord通知（非同期・失敗しても続行）
     if (!existingRecord && lineUserId) {
+      // 累計登録者数を取得
+      let totalMembers: number | undefined;
+      try {
+        const { count } = await supabase
+          .from("members")
+          .select("*", { count: "exact", head: true });
+        totalMembers = count ?? undefined;
+      } catch (countErr) {
+        log.warn("Failed to get total members count", {
+          error: extractErrorMessage(countErr),
+        });
+      }
+
       notifyLineEvent(
         "new_registration",
         lineUserId,
-        undefined, // displayNameはLIFF側で取得していないためundefined
-        undefined, // pictureUrl
+        lineDisplayName,
+        linePictureUrl,
+        {
+          totalMembers,
+          email: email ?? undefined,
+        },
       ).catch((err) => {
         log.warn("n8n notification failed", {
           error: extractErrorMessage(err),
