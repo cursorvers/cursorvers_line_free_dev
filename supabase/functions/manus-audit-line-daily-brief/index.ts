@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
 /**
  * チェックモジュールのエクスポート
  */
-export { checkCardInventory } from "./card-inventory.ts";
-export { checkBroadcastSuccess } from "./broadcast-success.ts";
-export { checkDatabaseHealth } from "./database-health.ts";
-export { checkLineRegistrationSystem } from "./line-registration.ts";
+export { checkCardInventory } from "./checks/card-inventory.ts";
+export { checkBroadcastSuccess } from "./checks/broadcast-success.ts";
+export { checkDatabaseHealth } from "./checks/database-health.ts";
+export { checkLineRegistrationSystem } from "./checks/line-registration.ts";
