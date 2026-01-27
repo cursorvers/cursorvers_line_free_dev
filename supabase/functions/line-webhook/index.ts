@@ -963,7 +963,11 @@ async function handleEvent(event: LineEvent): Promise<void> {
       // メニューコマンドは診断中でも優先処理（Discord導線を維持）
       const menuCommandInDiagnosis = matchMenuCommand(trimmed);
       if (menuCommandInDiagnosis) {
-        await dispatchMenuCommand(menuCommandInDiagnosis, lineUserId, replyToken);
+        await dispatchMenuCommand(
+          menuCommandInDiagnosis,
+          lineUserId,
+          replyToken,
+        );
         return;
       }
       await handleDiagnosisAnswer(
