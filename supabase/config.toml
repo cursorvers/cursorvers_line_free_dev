@@ -9,3 +9,6 @@ import_map = "functions/deno.json"
 
 [functions.stripe-webhook]
 import_map = "functions/deno.json"
+
+[functions.line-webhook]
+import_map = "functions/deno.json"

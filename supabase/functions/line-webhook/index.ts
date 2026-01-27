@@ -960,6 +960,12 @@ async function handleEvent(event: LineEvent): Promise<void> {
         await handleDiagnosisCancel(lineUserId, replyToken);
         return;
       }
+      // メニューコマンドは診断中でも優先処理（Discord導線を維持）
+      const menuCommandInDiagnosis = matchMenuCommand(trimmed);
+      if (menuCommandInDiagnosis) {
+        await dispatchMenuCommand(menuCommandInDiagnosis, lineUserId, replyToken);
+        return;
+      }
       await handleDiagnosisAnswer(
         lineUserId,
         userId,
