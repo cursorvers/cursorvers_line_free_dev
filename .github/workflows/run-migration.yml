@@ -1,0 +1,125 @@
+name: Run Database Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      migration_name:
+        description: 'Migration name (optional, runs all pending if not specified)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run mode (preview changes without applying)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Supabase CLI
+        run: npm install -g supabase
+
+      - name: Verify Supabase CLI
+        run: npx supabase --version
+
+      - name: Run migration (Dry Run)
+        if: ${{ inputs.dry_run == true }}
+        run: |
+          echo "🔍 Dry run mode - previewing changes..."
+          echo "Migration files:"
+          ls -la supabase/migrations/
+          echo ""
+          echo "Latest migration:"
+          ls -t supabase/migrations/ | head -1
+          echo ""
+          echo "⚠️ Dry run complete. No changes applied."
+
+      - name: Run migration (Apply)
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          echo "🚀 Running database migration..."
+          npx supabase db push --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+          echo "✅ Migration completed successfully"
+
+      - name: Get migration status
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          echo "📊 Checking migration status..."
+          npx supabase migration list --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+
+      - name: Notify success (Discord)
+        if: ${{ success() && inputs.dry_run != true && secrets.DISCORD_SYSTEM_WEBHOOK != '' }}
+        run: |
+          curl -X POST "${{ secrets.DISCORD_SYSTEM_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "✅ Database Migration Successful",
+                "description": "Migration completed successfully",
+                "color": 3066993,
+                "fields": [
+                  {
+                    "name": "Repository",
+                    "value": "${{ github.repository }}",
+                    "inline": true
+                  },
+                  {
+                    "name": "Triggered by",
+                    "value": "${{ github.actor }}",
+                    "inline": true
+                  },
+                  {
+                    "name": "Workflow",
+                    "value": "[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})",
+                    "inline": false
+                  }
+                ],
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+              }]
+            }'
+
+      - name: Notify failure (Discord)
+        if: ${{ failure() && secrets.DISCORD_SYSTEM_WEBHOOK != '' }}
+        run: |
+          curl -X POST "${{ secrets.DISCORD_SYSTEM_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "❌ Database Migration Failed",
+                "description": "Migration execution failed. Please check the logs.",
+                "color": 15158332,
+                "fields": [
+                  {
+                    "name": "Repository",
+                    "value": "${{ github.repository }}",
+                    "inline": true
+                  },
+                  {
+                    "name": "Triggered by",
+                    "value": "${{ github.actor }}",
+                    "inline": true
+                  },
+                  {
+                    "name": "Workflow",
+                    "value": "[View Logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})",
+                    "inline": false
+                  }
+                ],
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+              }]
+            }'
