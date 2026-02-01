@@ -1,0 +1,170 @@
+# .github/workflows/manus-audit-monthly.yml
+# 月次盺柹: DBメンテナンス(アーカイブ等)
+
+name: Manus Audit (Monthly)
+
+on:
+  schedule:
+    # 毎月1日 03:00 JST (18:00 UTC 前日)
+    - cron: '0 18 1 * *'
+  workflow_dispatch:
+    # 手動実行も可能
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run monthly audit and maintenance
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MANUS_AUDIT_API_KEY: ${{ secrets.MANUS_AUDIT_API_KEY }}
+        run: |
+          echo "🔐 Checking required secrets..."
+
+          MISSING=()
+          if [ -z "$SUPABASE_URL" ]; then
+            MISSING+=("SUPABASE_URL")
+          fi
+
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && [ -z "$MANUS_AUDIT_API_KEY" ]; then
+            MISSING+=("SUPABASE_SERVICE_ROLE_KEY or MANUS_AUDIT_API_KEY")
+          fi
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "❌ Missing required secrets: ${MISSING[*]}"
+            echo "   → GitHub Secrets に必要な値を設定してください"
+            exit 1
+          fi
+
+          if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            AUTH_TOKEN="$SUPABASE_SERVICE_ROLE_KEY"
+            AUTH_SOURCE="SUPABASE_SERVICE_ROLE_KEY"
+          else
+            AUTH_TOKEN="$MANUS_AUDIT_API_KEY"
+            AUTH_SOURCE="MANUS_AUDIT_API_KEY"
+          fi
+
+          echo "✅ Auth token source: $AUTH_SOURCE"
+          echo "ℹ️ X-API-Key header: $(if [ -n "$MANUS_AUDIT_API_KEY" ]; then echo enabled; else echo disabled; fi)"
+
+          HEADER_ARGS=(
+            -H "Content-Type: application/json"
+            -H "Authorization: Bearer ${AUTH_TOKEN}"
+          )
+
+          if [ -n "$MANUS_AUDIT_API_KEY" ]; then
+            HEADER_ARGS+=( -H "X-API-Key: ${MANUS_AUDIT_API_KEY}" )
+          fi
+
+          echo "🔍 月次監査・メンテナンスを実行中..."
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${SUPABASE_URL}/functions/v1/manus-audit-line-daily-brief?mode=monthly" \
+            "${HEADER_ARGS[@]}")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          AUDIT_FAILED=false
+          mkdir -p tmp
+          AUDIT_BODY_PATH="tmp/audit_body.json"
+          printf '%s' "$BODY" > "$AUDIT_BODY_PATH"
+
+          echo "AUDIT_MODE=monthly" >> $GITHUB_ENV
+          echo "AUDIT_HTTP_CODE=$HTTP_CODE" >> $GITHUB_ENV
+          echo "AUDIT_BODY_PATH=$AUDIT_BODY_PATH" >> $GITHUB_ENV
+          echo "AUDIT_BODY<<EOF" >> $GITHUB_ENV
+          echo "$BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          echo "Response: $BODY"
+          echo "HTTP Code: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            if [ "$HTTP_CODE" -eq 401 ] || [ "$HTTP_CODE" -eq 403 ]; then
+              echo "❌ 認証に失敗しました。GitHub SecretsのSUPABASE_SERVICE_ROLE_KEY/MANUS_AUDIT_API_KEYを確認してください。"
+            fi
+            echo "❌ 監査が失敗しました (HTTP $HTTP_CODE)"
+            AUDIT_FAILED=true
+          else
+            ALL_PASSED=$(echo "$BODY" | jq -r '.summary.allPassed // false')
+            WARNING_COUNT=$(echo "$BODY" | jq -r '.summary.warningCount // 0')
+            ERROR_COUNT=$(echo "$BODY" | jq -r '.summary.errorCount // 0')
+            
+            if [ "$ALL_PASSED" = "true" ]; then
+              echo "✅ 監査完了: 全て正常"
+            else
+              echo "⚠️ 監査完了: ${WARNING_COUNT}件の警告、${ERROR_COUNT}件のエラー"
+              if [ "$ERROR_COUNT" -gt 0 ]; then
+                AUDIT_FAILED=true
+              fi
+            fi
+          fi
+
+          echo "AUDIT_FAILED=$AUDIT_FAILED" >> $GITHUB_ENV
+
+      - name: Auto-fix audit failures with Manus fallback
+        if: env.AUDIT_FAILED == 'true'
+        id: auto_fix
+        env:
+          MANUS_API_KEY: ${{ secrets.MANUS_API_KEY }}
+          MANUS_BASE_URL: ${{ vars.MANUS_BASE_URL }}
+        run: |
+          bash scripts/auto-fix/auto-fix-or-manus.sh "$AUDIT_BODY_PATH" "$AUDIT_MODE" "$AUDIT_HTTP_CODE"
+
+      - name: Commit auto-fix artifacts
+        if: env.AUDIT_FAILED == 'true'
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "Manus Automation"
+          git config user.email "automation@manus.im"
+          git add -A
+          git commit -m "chore: auto-fix audit ${AUDIT_MODE} $(date -u +%Y%m%d%H%M%S)" || exit 0
+          git push
+
+      - name: Notify on failure
+        if: env.AUDIT_FAILED == 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          AUTO_FIX_APPLIED: ${{ steps.auto_fix.outputs.auto_fix_applied }}
+          MANUS_TASK_URL: ${{ steps.auto_fix.outputs.manus_task_url }}
+        run: |
+          AUTO_FIX_STATUS="auto-fix not applied"
+          if [ "$AUTO_FIX_APPLIED" = "true" ]; then
+            AUTO_FIX_STATUS="auto-fix applied"
+          elif [ -n "$MANUS_TASK_URL" ]; then
+            AUTO_FIX_STATUS="manus task created"
+          fi
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d '{"content": "🚨 **Manus月次監査が失敗しました**\n対応: '"$AUTO_FIX_STATUS"'\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          fi
+
+      - name: Finalize audit status
+        if: always()
+        run: |
+          if [ "${AUDIT_FAILED:-false}" != "true" ]; then
+            exit 0
+          fi
+          if [ "${{ steps.auto_fix.outputs.auto_fix_applied }}" = "true" ]; then
+            exit 0
+          fi
+          exit 1
