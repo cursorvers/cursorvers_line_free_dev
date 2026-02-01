@@ -1,0 +1,240 @@
+# Unified Auto-Fix Workflow
+# Combines auto-fix.yml + manus-code-fixer.yml
+# Strategy: Single workflow + separate jobs for push vs dispatch
+
+name: Auto-Fix (Unified)
+
+on:
+  # Auto-fix on push (existing behavior)
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**/*.ts'
+      - 'scripts/**/*.ts'
+
+  # Manus API manual trigger
+  workflow_dispatch:
+    inputs:
+      fix_types:
+        description: 'Comma-separated fix types (format,lint)'
+        required: true
+        type: string
+      path:
+        description: 'Target path (default: repo root)'
+        required: false
+        default: ''
+        type: string
+      files:
+        description: 'Comma-separated file list (optional)'
+        required: false
+        default: ''
+        type: string
+      commit_sha:
+        description: 'Original commit SHA (optional)'
+        required: false
+        default: ''
+        type: string
+
+  # Manus API programmatic trigger
+  repository_dispatch:
+    types: [manus_code_fix]
+
+# Concurrency control
+concurrency:
+  group: auto-fix-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  # Job 1: Auto-fix on push (format only)
+  auto-fix-push:
+    name: Auto-Fix on Push
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: |
+      github.event_name == 'push' &&
+      !contains(github.event.head_commit.message, '[auto-fix]') &&
+      !contains(github.event.head_commit.message, '[skip ci]')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Check Format
+        id: format-check
+        continue-on-error: true
+        run: |
+          cd supabase/functions
+          find . -name "*.ts" -type f | xargs deno fmt --check
+
+      - name: Run Formatter
+        if: steps.format-check.outcome == 'failure'
+        run: |
+          cd supabase/functions
+          find . -name "*.ts" -type f | xargs deno fmt
+
+      - name: Check for Changes
+        id: check-changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and Push
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git commit -m "🤖 [auto-fix] Format code with deno fmt"
+          git push
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🤖 Auto-Fix Summary (Push)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.format-check.outcome }}" == "success" ]; then
+            echo "✅ No format issues detected" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.check-changes.outputs.has_changes }}" == "true" ]; then
+            echo "🔧 Format issues fixed and committed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️ Format check ran" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Job 2: Manus API trigger (format + lint)
+  manus-fix:
+    name: Manus Code Fix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'repository_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
+
+      - name: Resolve inputs
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            FIX_TYPES=$(jq -r '.client_payload.fix_types // ""' "$GITHUB_EVENT_PATH")
+            TARGET_PATH=$(jq -r '.client_payload.path // ""' "$GITHUB_EVENT_PATH")
+            FILES=$(jq -r '.client_payload.files // ""' "$GITHUB_EVENT_PATH")
+            COMMIT_SHA=$(jq -r '.client_payload.commit_sha // ""' "$GITHUB_EVENT_PATH")
+          else
+            FIX_TYPES="${{ inputs.fix_types }}"
+            TARGET_PATH="${{ inputs.path }}"
+            FILES="${{ inputs.files }}"
+            COMMIT_SHA="${{ inputs.commit_sha }}"
+          fi
+
+          echo "fix_types=$FIX_TYPES" >> $GITHUB_OUTPUT
+          echo "path=$TARGET_PATH" >> $GITHUB_OUTPUT
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Run auto-fix
+        env:
+          FIX_TYPES: ${{ steps.resolve.outputs.fix_types }}
+          TARGET_PATH: ${{ steps.resolve.outputs.path }}
+          FILES: ${{ steps.resolve.outputs.files }}
+        run: |
+          if [ -z "$FIX_TYPES" ]; then
+            echo "No fix types provided" >&2
+            exit 1
+          fi
+
+          if [ -z "$TARGET_PATH" ]; then
+            TARGET_PATH="."
+          fi
+
+          IFS=',' read -r -a FILE_ARRAY <<< "$FILES"
+          TARGET_FILES=()
+
+          if [ "${#FILE_ARRAY[@]}" -gt 0 ] && [ -n "$FILES" ]; then
+            for file in "${FILE_ARRAY[@]}"; do
+              CLEAN_FILE=$(echo "$file" | xargs)
+              if [ -z "$CLEAN_FILE" ]; then
+                continue
+              fi
+              if [ "$TARGET_PATH" = "." ]; then
+                TARGET_FILES+=("$CLEAN_FILE")
+              else
+                TARGET_FILES+=("$TARGET_PATH/$CLEAN_FILE")
+              fi
+            done
+          else
+            TARGET_FILES+=("$TARGET_PATH")
+          fi
+
+          echo "Fix types: $FIX_TYPES"
+          echo "Target path: $TARGET_PATH"
+          echo "Target files: ${TARGET_FILES[*]}"
+
+          if echo "$FIX_TYPES" | grep -q "format"; then
+            deno fmt "${TARGET_FILES[@]}"
+          fi
+
+          if echo "$FIX_TYPES" | grep -q "lint"; then
+            deno lint --fix "${TARGET_FILES[@]}"
+          fi
+
+      - name: Commit and push
+        id: commit
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            echo "committed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          git config user.name "Manus Auto Fix"
+          git config user.email "automation@manus.im"
+          git add -A
+
+          FIX_TYPES="${{ steps.resolve.outputs.fix_types }}"
+          COMMIT_SHA="${{ steps.resolve.outputs.commit_sha }}"
+
+          MESSAGE="chore: manus code fix (${FIX_TYPES})"
+          if [ -n "$COMMIT_SHA" ]; then
+            MESSAGE+=" for ${COMMIT_SHA}"
+          fi
+          MESSAGE+=" [skip ci]"
+
+          git commit -m "$MESSAGE"
+          git push
+          echo "committed=true" >> $GITHUB_OUTPUT
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🤖 Manus Code Fixer" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Fix types: ${{ steps.resolve.outputs.fix_types }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Path: ${{ steps.resolve.outputs.path }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Files: ${{ steps.resolve.outputs.files }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.commit.outputs.committed }}" = "true" ]; then
+            echo "- Result: ✅ Changes committed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Result: ℹ️ No changes" >> $GITHUB_STEP_SUMMARY
+          fi
