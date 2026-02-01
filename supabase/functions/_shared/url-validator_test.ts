@@ -5,10 +5,10 @@
 
 import { assertEquals } from "std-assert";
 import {
+  checkRedirect,
+  expandShortUrl,
   isXUrl,
   normalizeUrl,
-  expandShortUrl,
-  checkRedirect,
 } from "./url-validator.ts";
 
 Deno.test("normalizeUrl: twitter.com URL", () => {
