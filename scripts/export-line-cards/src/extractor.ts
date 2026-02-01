@@ -13,6 +13,7 @@ import {
   THEME_TAG_MAP,
   EXTRACTION_TAG,
 } from "./types.ts";
+import { isXUrl } from "../../../supabase/functions/_shared/url-validator.ts";
 
 /**
  * Calculate SHA-256 hash for content deduplication
@@ -128,6 +129,15 @@ function isContinuationLine(line: string): boolean {
 }
 
 /**
+ * Extract URLs from text
+ */
+function extractUrls(text: string): string[] {
+  const urlPattern = /https?:\/\/[^\s]+/g;
+  const matches = text.match(urlPattern);
+  return matches || [];
+}
+
+/**
  * Extract cards from a single markdown file
  */
 export async function extractCardsFromFile(
@@ -164,6 +174,20 @@ export async function extractCardsFromFile(
         // Skip if body is too short
         if (body.length < 10) {
           errors.push(`Line ${i + 1}: Body too short after cleaning`);
+          continue;
+        }
+
+        // Check for X/Twitter URLs
+        const urls = extractUrls(body);
+        let hasXUrl = false;
+        for (const url of urls) {
+          if (await isXUrl(url)) {
+            hasXUrl = true;
+            break;
+          }
+        }
+        if (hasXUrl) {
+          errors.push(`Line ${i + 1}: Contains X/Twitter URL (rejected)`);
           continue;
         }
 

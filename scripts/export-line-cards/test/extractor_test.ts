@@ -166,3 +166,54 @@ Deno.test({
   },
 });
 
+Deno.test({
+  name: "extractCardsFromFile - rejects cards containing X/Twitter URLs",
+  async fn() {
+    const fixturesDir = TEST_VAULT;
+    try {
+      await Deno.mkdir(fixturesDir, { recursive: true });
+    } catch {
+      // Directory might already exist
+    }
+
+    // Create test file with X URLs
+    const contentWithXUrl = `# Test Note
+
+- This line contains X URL #cv_line https://twitter.com/user/status/123
+- Another line with x.com URL #cv_line https://x.com/user/status/456
+- Normal line without X URL #cv_line This is a safe content
+`;
+
+    await Deno.writeTextFile(join(fixturesDir, "x-url-test.md"), contentWithXUrl);
+
+    try {
+      const result = await extractCardsFromFile(
+        join(TEST_VAULT, "x-url-test.md"),
+        TEST_VAULT
+      );
+
+      // X URLを含む行はエラーとして記録され、カードは抽出されない
+      assertEquals(
+        result.errors.length >= 2,
+        true,
+        "Should have errors for X URL lines"
+      );
+
+      // X URLを含まない行のみカードとして抽出される
+      assertEquals(
+        result.cards.length,
+        1,
+        "Should only extract card without X URL"
+      );
+
+      assertEquals(
+        result.cards[0].body.includes("safe content"),
+        true,
+        "Should extract the safe content card"
+      );
+    } finally {
+      await cleanupTestFixtures();
+    }
+  },
+});
+
