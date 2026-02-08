@@ -57,6 +57,7 @@ jobs:
           echo "Checking Line Cards Sync workflow..."
 
           RESULT=$(gh run list \
+            --repo ${{ github.repository }} \
             --workflow "Sync Line Cards from Obsidian" \
             --limit 1 \
             --json status,conclusion,createdAt)
