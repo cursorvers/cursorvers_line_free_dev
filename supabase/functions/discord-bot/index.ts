@@ -140,8 +140,7 @@ async function handleJoin(
     return jsonResponse({
       type: 4,
       data: {
-        content:
-          "⛔ **エラー**: このサーバーではコマンドを使用できません。",
+        content: "⛔ **エラー**: このサーバーではコマンドを使用できません。",
         flags: 64,
       },
     });

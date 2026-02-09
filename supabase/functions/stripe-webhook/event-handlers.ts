@@ -510,9 +510,7 @@ export async function handleSubscriptionDeleted(
       memberData?.tier ?? "unknown"
     }\n**LINE**: ${
       memberData?.line_user_id ? "通知済" : "未登録"
-    }\n**Discord**: ${
-      memberData?.discord_user_id ? "Role削除済" : "未登録"
-    }`,
+    }\n**Discord**: ${memberData?.discord_user_id ? "Role削除済" : "未登録"}`,
     severity: "warning",
   });
 }

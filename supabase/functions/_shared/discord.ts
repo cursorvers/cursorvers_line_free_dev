@@ -84,7 +84,9 @@ export async function createDiscordInvite(
   maxUses: number = 1,
 ): Promise<{ success: boolean; inviteUrl?: string; error?: string }> {
   if (!DISCORD_BOT_TOKEN || !DISCORD_INVITE_CHANNEL_ID) {
-    log.warn("Discord credentials not configured (BOT_TOKEN or INVITE_CHANNEL_ID missing)");
+    log.warn(
+      "Discord credentials not configured (BOT_TOKEN or INVITE_CHANNEL_ID missing)",
+    );
     return { success: false, error: "Discord credentials not configured" };
   }
 
@@ -141,7 +143,11 @@ export async function addDiscordRole(
 
   try {
     const response = await fetchWithRateLimit(
-      DISCORD_ENDPOINTS.memberRole.build(DISCORD_GUILD_ID, discordUserId, targetRoleId),
+      DISCORD_ENDPOINTS.memberRole.build(
+        DISCORD_GUILD_ID,
+        discordUserId,
+        targetRoleId,
+      ),
       {
         method: DISCORD_ENDPOINTS.memberRole.method,
         headers: {
@@ -186,7 +192,11 @@ export async function removeDiscordRole(
 
   try {
     const response = await fetchWithRateLimit(
-      DISCORD_ENDPOINTS.memberRoleRemove.build(DISCORD_GUILD_ID, discordUserId, targetRoleId),
+      DISCORD_ENDPOINTS.memberRoleRemove.build(
+        DISCORD_GUILD_ID,
+        discordUserId,
+        targetRoleId,
+      ),
       {
         method: DISCORD_ENDPOINTS.memberRoleRemove.method,
         headers: {

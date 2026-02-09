@@ -19,11 +19,7 @@ import {
   markFailed,
   markSucceeded,
 } from "../_shared/idempotency.ts";
-import {
-  checkRateLimit,
-  getClientIP,
-  recordRequest,
-} from "./webhook-utils.ts";
+import { checkRateLimit, getClientIP, recordRequest } from "./webhook-utils.ts";
 import {
   handleChargeEvent,
   handleCheckoutCompleted,
@@ -208,7 +204,8 @@ Deno.serve(async (req) => {
       });
       await notifyDiscord({
         title: "MANUS ALERT: Stripe webhook processing failed",
-        message: `Event ${event.id} (${event.type}) failed: ${processingErrorMessage}`,
+        message:
+          `Event ${event.id} (${event.type}) failed: ${processingErrorMessage}`,
         severity: "error",
         context: { eventId: event.id, eventType: event.type },
       });

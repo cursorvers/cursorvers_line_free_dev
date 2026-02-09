@@ -8,10 +8,7 @@
  */
 
 import { assertEquals } from "std-assert";
-import {
-  createAuditEntry,
-  decideMerge,
-} from "./identity-resolver.ts";
+import { createAuditEntry, decideMerge } from "./identity-resolver.ts";
 import type { OrphanCandidate } from "./identity-resolver.ts";
 
 // ============================================
@@ -102,7 +99,9 @@ Deno.test("decideMerge - orphan with email (not null) is excluded from weak cand
     email: "someone@test.com", // has email → not a weak candidate
     tier: "free",
   };
-  const result = decideMerge("paid-1", "paid@test.com", null, [orphanWithEmail]);
+  const result = decideMerge("paid-1", "paid@test.com", null, [
+    orphanWithEmail,
+  ]);
   assertEquals(result.action, "NO_CANDIDATES");
 });
 
@@ -111,7 +110,9 @@ Deno.test("decideMerge - orphan with email (not null) is excluded from weak cand
 // ============================================
 
 Deno.test("createAuditEntry - captures all fields", () => {
-  const decision = decideMerge("paid-1", "paid@test.com", "U_LINE_123", [orphanWithLineId]);
+  const decision = decideMerge("paid-1", "paid@test.com", "U_LINE_123", [
+    orphanWithLineId,
+  ]);
   const entry = createAuditEntry(decision, "paid-1", "paid@test.com");
 
   assertEquals(entry.action, "AUTO_MERGE");
@@ -126,5 +127,8 @@ Deno.test("createAuditEntry - masks email in audit", () => {
   const entry = createAuditEntry(decision, "paid-1", "paid@test.com");
 
   // maskEmail should truncate/mask the email
-  assertEquals(entry.paidEmail !== "paid@test.com" || entry.paidEmail.includes("*"), true);
+  assertEquals(
+    entry.paidEmail !== "paid@test.com" || entry.paidEmail.includes("*"),
+    true,
+  );
 });

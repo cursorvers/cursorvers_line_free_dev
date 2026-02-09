@@ -28,7 +28,9 @@ const BASE_URL = "https://discord.com/api/v10" as const;
 
 function requireParam(value: string | undefined, name: string): string {
   if (!value || value.trim() === "") {
-    throw new Error(`Discord API: required parameter '${name}' is empty or missing`);
+    throw new Error(
+      `Discord API: required parameter '${name}' is empty or missing`,
+    );
   }
   return value;
 }

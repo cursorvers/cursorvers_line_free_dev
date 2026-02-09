@@ -14,7 +14,14 @@ import type { PolicyMember } from "./policy.ts";
 // ============================================
 
 const TIERS = ["free", "library", "master", null] as const;
-const STATUSES = ["free", "active", "trialing", "inactive", "canceled", null] as const;
+const STATUSES = [
+  "free",
+  "active",
+  "trialing",
+  "inactive",
+  "canceled",
+  null,
+] as const;
 
 interface TestCase {
   readonly tier: string | null;
@@ -54,8 +61,12 @@ for (const tier of TIERS) {
 // ============================================
 
 Deno.test("canAccessDiscord - exhaustive decision table (tier x status)", async (t) => {
-  for (const { tier, status, expectedAllowed, expectedCode } of DECISION_TABLE) {
-    const label = `tier=${tier ?? "null"}, status=${status ?? "null"} → ${expectedAllowed ? "ALLOW" : "DENY"}`;
+  for (
+    const { tier, status, expectedAllowed, expectedCode } of DECISION_TABLE
+  ) {
+    const label = `tier=${tier ?? "null"}, status=${status ?? "null"} → ${
+      expectedAllowed ? "ALLOW" : "DENY"
+    }`;
     await t.step(label, () => {
       const member: PolicyMember = {
         id: "test-id",
@@ -69,7 +80,11 @@ Deno.test("canAccessDiscord - exhaustive decision table (tier x status)", async 
       };
 
       const result = canAccessDiscord(member);
-      assertEquals(result.allowed, expectedAllowed, `${label}: allowed mismatch`);
+      assertEquals(
+        result.allowed,
+        expectedAllowed,
+        `${label}: allowed mismatch`,
+      );
       assertEquals(result.code, expectedCode, `${label}: code mismatch`);
     });
   }

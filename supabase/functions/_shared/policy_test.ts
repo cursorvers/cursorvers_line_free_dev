@@ -39,25 +39,33 @@ function makeMember(
 // ============================================
 
 Deno.test("canAccessDiscord - paid active member is allowed", () => {
-  const result = canAccessDiscord(makeMember({ tier: "library", status: "active" }));
+  const result = canAccessDiscord(
+    makeMember({ tier: "library", status: "active" }),
+  );
   assertEquals(result.allowed, true);
   assertEquals(result.code, "ALLOWED");
 });
 
 Deno.test("canAccessDiscord - paid trialing member is allowed", () => {
-  const result = canAccessDiscord(makeMember({ tier: "library", status: "trialing" }));
+  const result = canAccessDiscord(
+    makeMember({ tier: "library", status: "trialing" }),
+  );
   assertEquals(result.allowed, true);
   assertEquals(result.code, "ALLOWED");
 });
 
 Deno.test("canAccessDiscord - master active member is allowed", () => {
-  const result = canAccessDiscord(makeMember({ tier: "master", status: "active" }));
+  const result = canAccessDiscord(
+    makeMember({ tier: "master", status: "active" }),
+  );
   assertEquals(result.allowed, true);
   assertEquals(result.code, "ALLOWED");
 });
 
 Deno.test("canAccessDiscord - master trialing member is allowed", () => {
-  const result = canAccessDiscord(makeMember({ tier: "master", status: "trialing" }));
+  const result = canAccessDiscord(
+    makeMember({ tier: "master", status: "trialing" }),
+  );
   assertEquals(result.allowed, true);
   assertEquals(result.code, "ALLOWED");
 });
@@ -65,19 +73,25 @@ Deno.test("canAccessDiscord - master trialing member is allowed", () => {
 // --- CRITICAL: Free users must NEVER get access ---
 
 Deno.test("canAccessDiscord - free active member is DENIED (privilege escalation prevention)", () => {
-  const result = canAccessDiscord(makeMember({ tier: "free", status: "active" }));
+  const result = canAccessDiscord(
+    makeMember({ tier: "free", status: "active" }),
+  );
   assertEquals(result.allowed, false);
   assertEquals(result.code, "NO_PAID_TIER");
 });
 
 Deno.test("canAccessDiscord - free trialing member is DENIED", () => {
-  const result = canAccessDiscord(makeMember({ tier: "free", status: "trialing" }));
+  const result = canAccessDiscord(
+    makeMember({ tier: "free", status: "trialing" }),
+  );
   assertEquals(result.allowed, false);
   assertEquals(result.code, "NO_PAID_TIER");
 });
 
 Deno.test("canAccessDiscord - free inactive member is DENIED", () => {
-  const result = canAccessDiscord(makeMember({ tier: "free", status: "inactive" }));
+  const result = canAccessDiscord(
+    makeMember({ tier: "free", status: "inactive" }),
+  );
   assertEquals(result.allowed, false);
   assertEquals(result.code, "NO_PAID_TIER");
 });
@@ -91,13 +105,17 @@ Deno.test("canAccessDiscord - null tier is DENIED", () => {
 // --- Inactive paid members ---
 
 Deno.test("canAccessDiscord - library inactive is DENIED", () => {
-  const result = canAccessDiscord(makeMember({ tier: "library", status: "inactive" }));
+  const result = canAccessDiscord(
+    makeMember({ tier: "library", status: "inactive" }),
+  );
   assertEquals(result.allowed, false);
   assertEquals(result.code, "INACTIVE_SUBSCRIPTION");
 });
 
 Deno.test("canAccessDiscord - library canceled is DENIED", () => {
-  const result = canAccessDiscord(makeMember({ tier: "library", status: "canceled" }));
+  const result = canAccessDiscord(
+    makeMember({ tier: "library", status: "canceled" }),
+  );
   assertEquals(result.allowed, false);
   assertEquals(result.code, "INACTIVE_SUBSCRIPTION");
 });
@@ -158,11 +176,19 @@ Deno.test("isValidGuild - empty expected guild allows all (graceful degradation)
 // ============================================
 
 Deno.test("getDenyMessage - NO_PAID_TIER returns upgrade message", () => {
-  const msg = getDenyMessage({ allowed: false, reason: "", code: "NO_PAID_TIER" });
+  const msg = getDenyMessage({
+    allowed: false,
+    reason: "",
+    code: "NO_PAID_TIER",
+  });
   assertEquals(msg.includes("有料プラン"), true);
 });
 
 Deno.test("getDenyMessage - INACTIVE_SUBSCRIPTION returns reactivation message", () => {
-  const msg = getDenyMessage({ allowed: false, reason: "", code: "INACTIVE_SUBSCRIPTION" });
+  const msg = getDenyMessage({
+    allowed: false,
+    reason: "",
+    code: "INACTIVE_SUBSCRIPTION",
+  });
   assertEquals(msg.includes("サブスクリプション"), true);
 });

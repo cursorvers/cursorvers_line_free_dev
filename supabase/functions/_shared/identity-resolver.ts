@@ -29,7 +29,10 @@ export interface OrphanCandidate {
   readonly created_at?: string;
 }
 
-export type MergeEvidence = "CHECKOUT_METADATA" | "SAME_LINE_USER_ID" | "WEAK_EMAIL_NULL";
+export type MergeEvidence =
+  | "CHECKOUT_METADATA"
+  | "SAME_LINE_USER_ID"
+  | "WEAK_EMAIL_NULL";
 
 export interface MergeDecision {
   readonly action: "AUTO_MERGE" | "HOLD_FOR_REVIEW" | "NO_CANDIDATES";
@@ -95,12 +98,15 @@ export function decideMerge(
     (c) => c.email === null && c.line_user_id !== null,
   );
   if (weakCandidates.length > 0) {
-    log.warn("Orphan candidates found but only weak evidence - holding for review", {
-      paidMemberId,
-      paidEmail: maskEmail(paidEmail),
-      candidateCount: weakCandidates.length,
-      candidateIds: weakCandidates.map((c) => c.id),
-    });
+    log.warn(
+      "Orphan candidates found but only weak evidence - holding for review",
+      {
+        paidMemberId,
+        paidEmail: maskEmail(paidEmail),
+        candidateCount: weakCandidates.length,
+        candidateIds: weakCandidates.map((c) => c.id),
+      },
+    );
     return {
       action: "HOLD_FOR_REVIEW",
       evidence: "WEAK_EMAIL_NULL",

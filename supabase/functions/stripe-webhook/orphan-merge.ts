@@ -8,10 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { notifyDiscord } from "../_shared/alert.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { maskEmail, maskLineUserId } from "../_shared/masking-utils.ts";
-import {
-  createAuditEntry,
-  decideMerge,
-} from "../_shared/identity-resolver.ts";
+import { createAuditEntry, decideMerge } from "../_shared/identity-resolver.ts";
 import type { OrphanCandidate } from "../_shared/identity-resolver.ts";
 
 const log = createLogger("stripe-webhook");
@@ -132,7 +129,9 @@ export async function mergeOrphanLineRecord(
       await notifyDiscord({
         title: "⚠️ 孤児LINEレコード検出（手動確認必要）",
         message:
-          `有料会員 ${maskEmail(paidEmail)} に紐付け可能な孤児LINEレコードが見つかりました。\n` +
+          `有料会員 ${
+            maskEmail(paidEmail)
+          } に紐付け可能な孤児LINEレコードが見つかりました。\n` +
           `証拠が弱いため自動マージは保留。管理者が確認してください。\n` +
           `理由: ${decision.reason}`,
         severity: "warning",

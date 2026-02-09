@@ -111,8 +111,14 @@ Deno.test("memberRole - expects 204 (No Content)", () => {
 });
 
 Deno.test("memberRoleRemove - expects 204 or 404 (already removed)", () => {
-  assertEquals(DISCORD_ENDPOINTS.memberRoleRemove.okStatuses.includes(204), true);
-  assertEquals(DISCORD_ENDPOINTS.memberRoleRemove.okStatuses.includes(404), true);
+  assertEquals(
+    DISCORD_ENDPOINTS.memberRoleRemove.okStatuses.includes(204),
+    true,
+  );
+  assertEquals(
+    DISCORD_ENDPOINTS.memberRoleRemove.okStatuses.includes(404),
+    true,
+  );
 });
 
 Deno.test("dmChannel - expects 200", () => {
