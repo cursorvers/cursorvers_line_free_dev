@@ -282,7 +282,7 @@ async function handleEmailRegistration(
       email: normalizedEmail,
       line_user_id: lineUserId,
       tier: existingRecord?.tier ?? "free",
-      status: "active",
+      status: existingRecord?.status ?? "free",
       opt_in_email: optInEmail,
       updated_at: now,
     };

@@ -130,6 +130,23 @@ async function handleJoin(
     });
   }
 
+  // guild_id 検証: 正規サーバーからのリクエストのみ受け付け
+  const expectedGuildId = Deno.env.get("DISCORD_GUILD_ID") ?? "";
+  if (expectedGuildId && guildId !== expectedGuildId) {
+    log.warn("Invalid guild_id in /join command", {
+      guildId,
+      expectedGuildId,
+    });
+    return jsonResponse({
+      type: 4,
+      data: {
+        content:
+          "⛔ **エラー**: このサーバーではコマンドを使用できません。",
+        flags: 64,
+      },
+    });
+  }
+
   const isAllowed = await checkRateLimit(supabase, userId);
   if (!isAllowed) {
     return jsonResponse({
@@ -163,14 +180,14 @@ async function handleJoin(
     });
   }
 
-  // メールアドレスで検索（members テーブル。支払いメール = email）
+  // メールアドレスで検索（members テーブル。有料tier で判定）
   const { data: member, error } = await supabase
     .from("members")
     .select(
       "id,email,discord_user_id,tier,status,stripe_customer_id,stripe_subscription_id",
     )
     .eq("email", email)
-    .in("status", ["active", "trialing"])
+    .in("tier", ["library", "master"])
     .maybeSingle();
 
   if (error || !member) {
@@ -181,7 +198,7 @@ async function handleJoin(
       type: 4,
       data: {
         content:
-          `⛔ **エラー**: そのメールアドレス (${email}) の決済情報が見つかりません。\nStripeで決済したメールアドレスを正確に入力してください。`,
+          `⛔ **エラー**: そのメールアドレス (${email}) の有料プラン情報が見つかりません。\n有料プランへの加入が必要です。Stripeで決済したメールアドレスを正確に入力してください。`,
         flags: 64,
       },
     });
@@ -435,9 +452,22 @@ async function handleSecBriefLatest(
 // ドラフトを#sec-briefに公開してstatusをpublishedに変更
 // ============================================
 async function handleSecBriefPublish(
-  _interaction: DiscordInteraction,
+  interaction: DiscordInteraction,
   supabase: SupabaseClient,
 ): Promise<Response> {
+  // 管理者ロールチェック
+  const adminRoleId = Deno.env.get("DISCORD_ADMIN_ROLE_ID") ?? "";
+  const memberRoles = interaction.member?.roles ?? [];
+  if (adminRoleId && !memberRoles.includes(adminRoleId)) {
+    return jsonResponse({
+      type: 4,
+      data: {
+        content: "⛔ **エラー**: このコマンドは管理者のみが実行できます。",
+        flags: 64,
+      },
+    });
+  }
+
   // 最新のドラフトを取得
   const { data, error } = await supabase
     .from("sec_brief")
