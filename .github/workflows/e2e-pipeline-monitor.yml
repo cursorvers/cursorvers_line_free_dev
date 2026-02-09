@@ -10,6 +10,10 @@ on:
     - cron: '0 23 * * *'
   workflow_dispatch:
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
@@ -57,7 +61,7 @@ jobs:
           echo "Checking Line Cards Sync workflow..."
 
           RESULT=$(gh run list \
-            --repo ${{ github.repository }} \
+            --repo "${{ github.repository }}" \
             --workflow "Sync Line Cards from Obsidian" \
             --limit 1 \
             --json status,conclusion,createdAt)
