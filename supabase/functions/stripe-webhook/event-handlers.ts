@@ -7,7 +7,12 @@
 import Stripe from "stripe";
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { notifyDiscord } from "../_shared/alert.ts";
-import { removeDiscordRole } from "../_shared/discord.ts";
+import {
+  getDiscordFreeRoleId,
+  getDiscordPaidRoleId,
+  removeDiscordRole,
+  swapDiscordRole,
+} from "../_shared/discord.ts";
 import { sendPaidMemberWelcomeEmail } from "../_shared/email.ts";
 import { createLogger } from "../_shared/logger.ts";
 import { extractErrorMessage } from "../_shared/error-utils.ts";
@@ -235,7 +240,7 @@ export async function handleCheckoutCompleted(
   // upsert後のレコードを取得
   const { data: memberData } = await supabase
     .from("members")
-    .select("id, line_user_id")
+    .select("id, line_user_id, discord_user_id")
     .eq("email", customerEmail)
     .maybeSingle();
 
@@ -269,6 +274,30 @@ export async function handleCheckoutCompleted(
     lineUserId ?? "",
     new Date().toISOString(),
   ]);
+
+  // Discord自動ロール昇格: 既にdiscord_user_idがあるユーザーはFree→Paidへ昇格
+  if (memberData?.discord_user_id) {
+    const freeRoleId = getDiscordFreeRoleId();
+    const paidRoleId = getDiscordPaidRoleId();
+
+    if (freeRoleId && paidRoleId) {
+      const swapResult = await swapDiscordRole(
+        memberData.discord_user_id,
+        freeRoleId,
+        paidRoleId,
+      );
+      if (swapResult.success) {
+        log.info("Discord role upgraded (Free -> Paid) on checkout", {
+          email: maskEmail(customerEmail),
+        });
+      } else {
+        log.warn("Discord role upgrade failed", {
+          email: maskEmail(customerEmail),
+          error: swapResult.error,
+        });
+      }
+    }
+  }
 
   // discord_invite_sent 状況を確認
   const { data: currentMember } = await supabase
@@ -459,15 +488,39 @@ export async function handleSubscriptionDeleted(
     email: maskEmail(customerEmail),
   });
 
-  // Discord Role削除
+  // Discord Role降格: Paidロール削除 + Freeロール再付与
   if (memberData?.discord_user_id) {
-    const roleResult = await removeDiscordRole(memberData.discord_user_id);
-    if (roleResult.success) {
-      log.info("Discord role removed on cancellation", {
-        email: maskEmail(customerEmail),
-      });
+    const freeRoleId = getDiscordFreeRoleId();
+    const paidRoleId = getDiscordPaidRoleId();
+
+    if (freeRoleId && paidRoleId) {
+      const swapResult = await swapDiscordRole(
+        memberData.discord_user_id,
+        paidRoleId,
+        freeRoleId,
+      );
+      if (swapResult.success) {
+        log.info("Discord role downgraded (Paid -> Free) on cancellation", {
+          email: maskEmail(customerEmail),
+        });
+      } else {
+        log.warn("Discord role downgrade failed", {
+          email: maskEmail(customerEmail),
+          error: swapResult.error,
+        });
+      }
     } else {
-      log.warn("Failed to remove Discord role", { error: roleResult.error });
+      // fallback: Freeロール未設定の場合はPaidロール削除のみ
+      const roleResult = await removeDiscordRole(memberData.discord_user_id);
+      if (roleResult.success) {
+        log.info("Discord role removed on cancellation", {
+          email: maskEmail(customerEmail),
+        });
+      } else {
+        log.warn("Failed to remove Discord role", {
+          error: roleResult.error,
+        });
+      }
     }
   }
 

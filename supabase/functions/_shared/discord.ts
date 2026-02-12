@@ -17,6 +17,7 @@ const log = createLogger("discord");
 const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
 const DISCORD_GUILD_ID = Deno.env.get("DISCORD_GUILD_ID") ?? "";
 const DISCORD_ROLE_ID = Deno.env.get("DISCORD_ROLE_ID") ?? "";
+const DISCORD_FREE_ROLE_ID = Deno.env.get("DISCORD_FREE_ROLE_ID") ?? "";
 const DISCORD_INVITE_CHANNEL_ID = Deno.env.get("DISCORD_INVITE_CHANNEL_ID") ??
   "";
 
@@ -299,4 +300,44 @@ export async function sendDiscordDM(
     log.error("Discord DM error", { errorMessage });
     return { success: false, error: errorMessage };
   }
+}
+
+/**
+ * Discord Roleを入れ替え（旧ロール削除 + 新ロール付与）
+ * いずれかが失敗しても、もう一方は試行する
+ */
+export async function swapDiscordRole(
+  discordUserId: string,
+  oldRoleId: string,
+  newRoleId: string,
+): Promise<DiscordResult> {
+  const removeResult = await removeDiscordRole(discordUserId, oldRoleId);
+  const addResult = await addDiscordRole(discordUserId, newRoleId);
+
+  if (!removeResult.success && !addResult.success) {
+    return {
+      success: false,
+      error: `Remove: ${removeResult.error}, Add: ${addResult.error}`,
+    };
+  }
+
+  if (!addResult.success) {
+    return { success: false, error: `Add failed: ${addResult.error}` };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Free Role IDを取得するヘルパー
+ */
+export function getDiscordFreeRoleId(): string {
+  return DISCORD_FREE_ROLE_ID;
+}
+
+/**
+ * Paid Role IDを取得するヘルパー
+ */
+export function getDiscordPaidRoleId(): string {
+  return DISCORD_ROLE_ID;
 }
