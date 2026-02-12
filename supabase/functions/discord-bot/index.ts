@@ -363,7 +363,8 @@ async function handleJoin(
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            content: `🎉 <@${userId}>さん、**Cursorvers ${tierLabel}**へようこそ！`,
+            content:
+              `🎉 <@${userId}>さん、**Cursorvers ${tierLabel}**へようこそ！`,
           }),
         },
       );
