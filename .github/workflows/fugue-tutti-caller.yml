@@ -17,6 +17,4 @@ jobs:
     uses: cursorvers/fugue-orchestrator/.github/workflows/fugue-tutti-router.yml@v2
     with:
       issue_number: "${{ format('{0}', github.event.issue.number) }}"
-    secrets:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+    secrets: inherit
