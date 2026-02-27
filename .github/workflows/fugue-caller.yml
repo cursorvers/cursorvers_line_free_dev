@@ -19,7 +19,7 @@ permissions:
 jobs:
   route:
     if: ${{ github.event_name != 'issue_comment' || github.actor != 'github-actions[bot]' }}
-    uses: cursorvers/fugue-orchestrator/.github/workflows/fugue-task-router.yml@v2
+    uses: cursorvers/fugue-orchestrator/.github/workflows/fugue-task-router.yml@7cf653f09aad9af23102bf672b1a893abd0ec511
     with:
       issue_number: "${{ format('{0}', github.event.issue.number || github.event.inputs.issue_number) }}"
     secrets: inherit
