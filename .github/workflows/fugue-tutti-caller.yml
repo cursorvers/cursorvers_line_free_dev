@@ -23,7 +23,7 @@ permissions:
 jobs:
   tutti:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.label.name == 'tutti' }}
-    uses: cursorvers/fugue-orchestrator/.github/workflows/fugue-tutti-router.yml@v3
+    uses: cursorvers/fugue-orchestrator/.github/workflows/fugue-tutti-router.yml@v4
     with:
       issue_number: "${{ format('{0}', github.event.issue.number || github.event.inputs.issue_number) }}"
     secrets: inherit
