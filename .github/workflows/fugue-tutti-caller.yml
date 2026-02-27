@@ -11,10 +11,10 @@ permissions:
 jobs:
   tutti:
     if: >-
-      github.actor \!= 'github-actions[bot]' &&
+      github.actor != 'github-actions[bot]' &&
       contains(github.event.issue.labels.*.name, 'fugue-task') &&
       contains(github.event.issue.labels.*.name, 'tutti')
-    uses: cursorvers/fugue-orchestrator/.github/workflows/fugue-tutti-router.yml@v1
+    uses: cursorvers/fugue-orchestrator/.github/workflows/fugue-tutti-router.yml@v2
     with:
       issue_number: "${{ format('{0}', github.event.issue.number) }}"
     secrets:
