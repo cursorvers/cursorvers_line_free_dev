@@ -7,6 +7,7 @@ on:
 permissions:
   issues: write
   contents: read
+  actions: read
 
 jobs:
   tutti:
@@ -14,7 +15,7 @@ jobs:
       github.actor != 'github-actions[bot]' &&
       contains(github.event.issue.labels.*.name, 'fugue-task') &&
       contains(github.event.issue.labels.*.name, 'tutti')
-    uses: cursorvers/fugue-orchestrator/.github/workflows/fugue-tutti-router.yml@7cf653f09aad9af23102bf672b1a893abd0ec511
+    uses: cursorvers/fugue-orchestrator/.github/workflows/fugue-tutti-router.yml@v3
     with:
       issue_number: "${{ format('{0}', github.event.issue.number) }}"
     secrets: inherit
