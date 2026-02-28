@@ -161,7 +161,7 @@ jobs:
 
             eval "$(
               DISCORD_BODY="$discord_body" DISCORD_TIMESTAMP="$timestamp" \
-                deno eval --quiet --allow-env --allow-net -c supabase/functions/deno.json '
+                deno eval --quiet -c supabase/functions/deno.json '
               import nacl from "tweetnacl";
               const body = Deno.env.get("DISCORD_BODY") ?? "";
               const timestamp = Deno.env.get("DISCORD_TIMESTAMP") ?? "";
