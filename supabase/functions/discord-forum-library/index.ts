@@ -513,7 +513,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       action = queryAction as Action;
     }
     if (queryLimit) {
-      importLimit = Math.max(1, Math.min(20, parseInt(queryLimit, 10) || DEFAULT_IMPORT_LIMIT));
+      importLimit = Math.max(
+        1,
+        Math.min(20, parseInt(queryLimit, 10) || DEFAULT_IMPORT_LIMIT),
+      );
     }
 
     if (req.method === "POST") {
@@ -523,7 +526,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
           action = body.action as Action;
         }
         if (body.limit) {
-          importLimit = Math.max(1, Math.min(20, Number(body.limit) || DEFAULT_IMPORT_LIMIT));
+          importLimit = Math.max(
+            1,
+            Math.min(20, Number(body.limit) || DEFAULT_IMPORT_LIMIT),
+          );
         }
       } catch {
         // No body or invalid JSON — use defaults
