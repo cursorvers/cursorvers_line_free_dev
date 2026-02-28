@@ -58,8 +58,7 @@ const MAX_RETRIES = 3;
 const DEFAULT_RETRY_DELAY_MS = 1_000;
 
 /** note.com public API base URL */
-const NOTE_API_BASE =
-  "https://note.com/api/v2/creators/nice_wren7963/contents";
+const NOTE_API_BASE = "https://note.com/api/v2/creators/nice_wren7963/contents";
 
 /** note.com API items per page */
 const NOTE_PAGE_SIZE = 6;

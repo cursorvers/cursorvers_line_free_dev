@@ -9,7 +9,7 @@
  * - Data integrity (seed coverage)
  */
 
-import { assertEquals, assertArrayIncludes, assertThrows } from "std-assert";
+import { assertArrayIncludes, assertEquals, assertThrows } from "std-assert";
 import { DISCORD_ENDPOINTS } from "../_shared/discord-endpoints.ts";
 import {
   COURSE_RECOMMENDATIONS,
