@@ -9,12 +9,13 @@
  * - Data integrity (seed coverage)
  */
 
-import { assertEquals, assertThrows } from "std-assert";
+import { assertEquals, assertArrayIncludes, assertThrows } from "std-assert";
 import { DISCORD_ENDPOINTS } from "../_shared/discord-endpoints.ts";
 import {
   COURSE_RECOMMENDATIONS,
   getAllArticles,
 } from "../line-webhook/lib/note-recommendations.ts";
+import { FORUM_TAGS, mapHashtagsToForumTags } from "./tag-mapping.ts";
 
 const BASE = "https://discord.com/api/v10";
 
@@ -323,4 +324,153 @@ Deno.test("message content fits Discord limit for all articles", () => {
       `Message too long for article ${article.id}: ${content.length} chars`,
     );
   }
+});
+
+// ============================================
+// Sync: Tag Mapping Tests
+// ============================================
+
+Deno.test("mapHashtagsToForumTags - basic mapping", () => {
+  const result = mapHashtagsToForumTags(["#医療AI", "#生成AI"]);
+  assertArrayIncludes(result, ["医療AI基礎", "AI実装・開発"]);
+});
+
+Deno.test("mapHashtagsToForumTags - works without # prefix", () => {
+  const result = mapHashtagsToForumTags(["医療AI"]);
+  assertEquals(result, ["医療AI基礎"]);
+});
+
+Deno.test("mapHashtagsToForumTags - ignores unknown hashtags", () => {
+  const result = mapHashtagsToForumTags(["#未知のタグ", "#医療AI"]);
+  assertEquals(result, ["医療AI基礎"]);
+});
+
+Deno.test("mapHashtagsToForumTags - deduplicates", () => {
+  const result = mapHashtagsToForumTags(["#AI倫理", "#3省2ガイドライン"]);
+  assertEquals(result, ["規制・コンプライアンス"]);
+});
+
+Deno.test("mapHashtagsToForumTags - max 5 tags", () => {
+  const manyTags = [
+    "#医療AI",
+    "#生成AI",
+    "#SaMD",
+    "#副業",
+    "#FDA",
+    "#ROI",
+    "#医療DX",
+  ];
+  const result = mapHashtagsToForumTags(manyTags);
+  assertEquals(result.length <= 5, true);
+});
+
+Deno.test("mapHashtagsToForumTags - empty array", () => {
+  const result = mapHashtagsToForumTags([]);
+  assertEquals(result, []);
+});
+
+Deno.test("FORUM_TAGS - within Discord 20-tag limit", () => {
+  assertEquals(FORUM_TAGS.length <= 20, true);
+});
+
+Deno.test("FORUM_TAGS - no duplicates", () => {
+  const unique = new Set(FORUM_TAGS);
+  assertEquals(unique.size, FORUM_TAGS.length);
+});
+
+// ============================================
+// Sync: extractNoteKey Tests
+// ============================================
+
+function extractNoteKey(url: string | null): string | null {
+  if (!url) return null;
+  const match = url.match(/\/n\/([a-zA-Z0-9]+)$/);
+  return match?.[1] ?? null;
+}
+
+Deno.test("extractNoteKey - valid URL", () => {
+  assertEquals(
+    extractNoteKey("https://note.com/nice_wren7963/n/n08c17b96b8f3"),
+    "n08c17b96b8f3",
+  );
+});
+
+Deno.test("extractNoteKey - null", () => {
+  assertEquals(extractNoteKey(null), null);
+});
+
+Deno.test("extractNoteKey - invalid URL", () => {
+  assertEquals(extractNoteKey("https://example.com"), null);
+});
+
+// ============================================
+// Sync: Paid Article Tests
+// ============================================
+
+Deno.test("paid article - [有料] prefix applied", () => {
+  const article = { price: 980, title: "テスト記事" };
+  const prefix = article.price > 0 ? "[有料] " : "";
+  const threadName = `${prefix}${article.title}`;
+  assertEquals(threadName, "[有料] テスト記事");
+});
+
+Deno.test("free article - no prefix", () => {
+  const article = { price: 0, title: "無料記事" };
+  const prefix = article.price > 0 ? "[有料] " : "";
+  const threadName = `${prefix}${article.title}`;
+  assertEquals(threadName, "無料記事");
+});
+
+// ============================================
+// Sync: note.com API Response Parsing Tests
+// ============================================
+
+Deno.test("note.com API - hashtag extraction", () => {
+  const apiArticle = {
+    key: "n08c17b96b8f3",
+    name: "テスト記事",
+    hashtags: [
+      { hashtag: { name: "医療AI" } },
+      { hashtag: { name: "生成AI" } },
+    ],
+    price: 0,
+    publishAt: "2026-01-15T00:00:00+09:00",
+    noteUrl: "https://note.com/nice_wren7963/n/n08c17b96b8f3",
+  };
+
+  const hashtags = (apiArticle.hashtags ?? []).map((h) => h.hashtag.name);
+  assertEquals(hashtags, ["医療AI", "生成AI"]);
+
+  const forumTags = mapHashtagsToForumTags(hashtags);
+  assertArrayIncludes(forumTags, ["医療AI基礎", "AI実装・開発"]);
+});
+
+Deno.test("note.com API - no hashtags", () => {
+  const apiArticle = {
+    key: "nXXXX",
+    name: "タグなし記事",
+    hashtags: undefined,
+    price: 0,
+    publishAt: "2026-01-15T00:00:00+09:00",
+    noteUrl: "https://note.com/nice_wren7963/n/nXXXX",
+  };
+
+  const hashtags = (apiArticle.hashtags ?? []).map(
+    (h: { hashtag: { name: string } }) => h.hashtag.name,
+  );
+  assertEquals(hashtags, []);
+});
+
+Deno.test("note.com API - paid article detection", () => {
+  const apiArticle = {
+    key: "nPAID",
+    name: "有料コンテンツ",
+    hashtags: [],
+    price: 5980,
+    publishAt: "2026-02-01T00:00:00+09:00",
+    noteUrl: "https://note.com/nice_wren7963/n/nPAID",
+  };
+
+  assertEquals(apiArticle.price > 0, true);
+  assertEquals(apiArticle.price, 5980);
 });

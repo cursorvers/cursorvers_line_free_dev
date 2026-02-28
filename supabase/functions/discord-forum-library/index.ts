@@ -6,6 +6,7 @@
  * Actions:
  * - setup:  Forum チャンネル作成 + タグ設定（初回1回）
  * - seed:   note-recommendations.ts から note_articles テーブルへ初期データ投入
+ * - sync:   note.com API から全記事を取得して DB に同期
  * - import: 未投稿記事を Forum スレッドとして投稿
  * - status: 投稿状況（total / posted / pending）を返す
  */
@@ -17,6 +18,7 @@ import {
   COURSE_RECOMMENDATIONS,
   getAllArticles,
 } from "../line-webhook/lib/note-recommendations.ts";
+import { mapHashtagsToForumTags } from "./tag-mapping.ts";
 
 // ============================================
 // Constants
@@ -55,11 +57,21 @@ const MAX_RETRIES = 3;
 
 const DEFAULT_RETRY_DELAY_MS = 1_000;
 
+/** note.com public API base URL */
+const NOTE_API_BASE =
+  "https://note.com/api/v2/creators/nice_wren7963/contents";
+
+/** note.com API items per page */
+const NOTE_PAGE_SIZE = 6;
+
+/** Delay between note.com API requests (ms) */
+const NOTE_API_DELAY_MS = 500;
+
 // ============================================
 // Types
 // ============================================
 
-type Action = "setup" | "seed" | "import" | "status";
+type Action = "setup" | "seed" | "sync" | "import" | "status";
 
 interface NoteArticleRow {
   id: string;
@@ -70,6 +82,25 @@ interface NoteArticleRow {
   course_keyword: string | null;
   discord_thread_id: string | null;
   posted_at: string | null;
+  note_key: string | null;
+  hashtags: string[];
+  price: number;
+}
+
+interface NoteApiArticle {
+  key: string;
+  name: string;
+  hashtags?: Array<{ hashtag: { name: string } }>;
+  price: number;
+  publishAt: string;
+  noteUrl: string;
+}
+
+interface NoteApiResponse {
+  data: {
+    contents: NoteApiArticle[];
+    isLastPage: boolean;
+  };
 }
 
 interface ForumTag {
@@ -97,14 +128,28 @@ interface ImportResult {
   skipped: number;
 }
 
+interface SyncResult {
+  action: "sync";
+  fetched: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+}
+
 interface StatusResult {
   action: "status";
   total: number;
   posted: number;
   pending: number;
+  paid: number;
 }
 
-type ActionResult = SetupResult | SeedResult | ImportResult | StatusResult;
+type ActionResult =
+  | SetupResult
+  | SeedResult
+  | SyncResult
+  | ImportResult
+  | StatusResult;
 
 // ============================================
 // Discord API helpers (internal rate-limit control)
@@ -295,6 +340,122 @@ async function handleSeed(supabase: SupabaseClient): Promise<SeedResult> {
 }
 
 // ============================================
+// Action: sync (note.com API → DB)
+// ============================================
+
+async function fetchAllNoteArticles(): Promise<NoteApiArticle[]> {
+  const allArticles: NoteApiArticle[] = [];
+  let page = 1;
+
+  while (true) {
+    const apiUrl = `${NOTE_API_BASE}?kind=note&page=${page}`;
+    log.debug("Fetching note.com API", { page });
+
+    const res = await fetch(apiUrl);
+    if (!res.ok) {
+      throw new Error(`note.com API error: ${res.status} on page ${page}`);
+    }
+
+    const json: NoteApiResponse = await res.json();
+    const { contents, isLastPage } = json.data;
+
+    allArticles.push(...contents);
+
+    if (isLastPage || contents.length < NOTE_PAGE_SIZE) {
+      break;
+    }
+
+    page++;
+    await delay(NOTE_API_DELAY_MS);
+  }
+
+  return allArticles;
+}
+
+export function extractNoteKey(url: string | null): string | null {
+  if (!url) return null;
+  const match = url.match(/\/n\/([a-zA-Z0-9]+)$/);
+  return match?.[1] ?? null;
+}
+
+async function handleSync(supabase: SupabaseClient): Promise<SyncResult> {
+  const allArticles = await fetchAllNoteArticles();
+  log.info("Fetched articles from note.com", { count: allArticles.length });
+
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const article of allArticles) {
+    const hashtags = (article.hashtags ?? []).map((h) => h.hashtag.name);
+    const forumTags = mapHashtagsToForumTags(hashtags);
+
+    // note_key で既存レコードを検索
+    const { data: existing } = await supabase
+      .from("note_articles")
+      .select("id, tags, course_keyword")
+      .eq("note_key", article.key)
+      .maybeSingle();
+
+    if (existing) {
+      // 既存: title, hashtags, price のみ更新（tags, course_keyword は保持）
+      const { error } = await supabase
+        .from("note_articles")
+        .update({
+          title: article.name,
+          hashtags,
+          price: article.price,
+          url: article.noteUrl,
+          publish_at: article.publishAt,
+        })
+        .eq("id", existing.id);
+
+      if (error) {
+        log.warn("Update failed", {
+          noteKey: article.key,
+          error: error.message,
+        });
+        skipped++;
+      } else {
+        updated++;
+      }
+    } else {
+      // 新規: article_id = note_key, tags = マッピング結果
+      const { error } = await supabase
+        .from("note_articles")
+        .insert({
+          article_id: article.key,
+          note_key: article.key,
+          title: article.name,
+          url: article.noteUrl,
+          tags: forumTags,
+          hashtags,
+          price: article.price,
+          publish_at: article.publishAt,
+        });
+
+      if (error) {
+        log.warn("Insert failed", {
+          noteKey: article.key,
+          error: error.message,
+        });
+        skipped++;
+      } else {
+        inserted++;
+      }
+    }
+  }
+
+  return {
+    action: "sync",
+    fetched: allArticles.length,
+    inserted,
+    updated,
+    skipped,
+  };
+}
+
+// ============================================
 // Action: import
 // ============================================
 
@@ -383,11 +544,21 @@ async function handleImport(
       const courseInfo = article.course_keyword
         ? `\n**コース:** ${article.course_keyword}`
         : "";
+      const priceInfo = article.price > 0
+        ? `\n**価格:** ¥${article.price.toLocaleString()}`
+        : "";
       const tagsInfo = article.tags.length > 0
         ? `\n**タグ:** ${article.tags.join(", ")}`
         : "";
 
-      const messageContent = `${article.url}${courseInfo}${tagsInfo}`;
+      const messageContent =
+        `${article.url}${courseInfo}${priceInfo}${tagsInfo}`;
+
+      // Paid article prefix
+      const titlePrefix = article.price > 0 ? "[有料] " : "";
+      const threadTitle = truncateTitle(
+        `${titlePrefix}${article.title}`,
+      );
 
       // Create Forum thread
       const threadUrl = DISCORD_ENDPOINTS.forumThread.build(
@@ -397,7 +568,7 @@ async function handleImport(
         method: DISCORD_ENDPOINTS.forumThread.method,
         headers: discordHeaders(),
         body: JSON.stringify({
-          name: truncateTitle(article.title),
+          name: threadTitle,
           message: {
             content: messageContent,
           },
@@ -477,6 +648,15 @@ async function handleStatus(supabase: SupabaseClient): Promise<StatusResult> {
     throw new Error(`Failed to count posted: ${postedError.message}`);
   }
 
+  const { count: paidCount, error: paidError } = await supabase
+    .from("note_articles")
+    .select("*", { count: "exact", head: true })
+    .gt("price", 0);
+
+  if (paidError) {
+    throw new Error(`Failed to count paid: ${paidError.message}`);
+  }
+
   const total = totalCount ?? 0;
   const posted = postedCount ?? 0;
 
@@ -485,6 +665,7 @@ async function handleStatus(supabase: SupabaseClient): Promise<StatusResult> {
     total,
     posted,
     pending: total - posted,
+    paid: paidCount ?? 0,
   };
 }
 
@@ -536,7 +717,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
     }
 
-    const validActions: Action[] = ["setup", "seed", "import", "status"];
+    const validActions: Action[] = [
+      "setup",
+      "seed",
+      "sync",
+      "import",
+      "status",
+    ];
     if (!validActions.includes(action)) {
       return new Response(
         JSON.stringify({
@@ -557,6 +744,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         break;
       case "seed":
         result = await handleSeed(supabase);
+        break;
+      case "sync":
+        result = await handleSync(supabase);
         break;
       case "import":
         result = await handleImport(supabase, importLimit);
