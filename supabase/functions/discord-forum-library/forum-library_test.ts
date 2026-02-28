@@ -88,6 +88,48 @@ Deno.test("channelTags - expects 200", () => {
   assertEquals(DISCORD_ENDPOINTS.channelTags.okStatuses.includes(200), true);
 });
 
+Deno.test("channelMessages - builds correct URL", () => {
+  const url = DISCORD_ENDPOINTS.channelMessages.build("ch_msg_1");
+  assertEquals(url, `${BASE}/channels/ch_msg_1/messages`);
+});
+
+Deno.test("channelMessages - throws on empty channelId", () => {
+  assertThrows(
+    () => DISCORD_ENDPOINTS.channelMessages.build(""),
+    Error,
+    "channelId",
+  );
+});
+
+Deno.test("channelMessages - method is GET", () => {
+  assertEquals(DISCORD_ENDPOINTS.channelMessages.method, "GET");
+});
+
+Deno.test("editMessage - builds correct URL", () => {
+  const url = DISCORD_ENDPOINTS.editMessage.build("ch_1", "msg_1");
+  assertEquals(url, `${BASE}/channels/ch_1/messages/msg_1`);
+});
+
+Deno.test("editMessage - throws on empty channelId", () => {
+  assertThrows(
+    () => DISCORD_ENDPOINTS.editMessage.build("", "msg_1"),
+    Error,
+    "channelId",
+  );
+});
+
+Deno.test("editMessage - throws on empty messageId", () => {
+  assertThrows(
+    () => DISCORD_ENDPOINTS.editMessage.build("ch_1", ""),
+    Error,
+    "messageId",
+  );
+});
+
+Deno.test("editMessage - method is PATCH", () => {
+  assertEquals(DISCORD_ENDPOINTS.editMessage.method, "PATCH");
+});
+
 // ============================================
 // Tag Collection Tests
 // ============================================

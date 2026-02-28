@@ -128,6 +128,29 @@ export const DISCORD_ENDPOINTS = {
     okStatuses: [200],
     description: "Update channel settings",
   },
+
+  /** Get messages in a channel (supports ?limit=N) */
+  channelMessages: {
+    build: (channelId: string) => {
+      requireParam(channelId, "channelId");
+      return `${BASE_URL}/channels/${channelId}/messages`;
+    },
+    method: "GET",
+    okStatuses: [200],
+    description: "Get channel messages",
+  },
+
+  /** Edit a specific message */
+  editMessage: {
+    build: (channelId: string, messageId: string) => {
+      requireParam(channelId, "channelId");
+      requireParam(messageId, "messageId");
+      return `${BASE_URL}/channels/${channelId}/messages/${messageId}`;
+    },
+    method: "PATCH",
+    okStatuses: [200],
+    description: "Edit message",
+  },
 } as const satisfies Record<string, EndpointSpec>;
 
 export type EndpointName = keyof typeof DISCORD_ENDPOINTS;

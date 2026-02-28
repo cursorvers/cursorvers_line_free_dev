@@ -4,11 +4,12 @@
  * note.com 記事を Discord Forum チャンネルにスレッドとして投稿・管理する。
  *
  * Actions:
- * - setup:  Forum チャンネル作成 + タグ設定（初回1回）
- * - seed:   note-recommendations.ts から note_articles テーブルへ初期データ投入
- * - sync:   note.com API から全記事を取得して DB に同期
- * - import: 未投稿記事を Forum スレッドとして投稿
- * - status: 投稿状況（total / posted / pending）を返す
+ * - setup:      Forum チャンネル作成 + タグ設定（初回1回）
+ * - seed:       note-recommendations.ts から note_articles テーブルへ初期データ投入
+ * - sync:       note.com API から全記事を取得して DB に同期
+ * - import:     未投稿記事を Forum スレッドとして投稿
+ * - status:     投稿状況（total / posted / pending）を返す
+ * - fix-embeds: embed なしスレッドのメッセージを再編集して OGP 展開を再トリガー
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createLogger, errorToContext } from "../_shared/logger.ts";
@@ -70,7 +71,13 @@ const NOTE_API_DELAY_MS = 500;
 // Types
 // ============================================
 
-type Action = "setup" | "seed" | "sync" | "import" | "status";
+type Action =
+  | "setup"
+  | "seed"
+  | "sync"
+  | "import"
+  | "status"
+  | "fix-embeds";
 
 interface NoteArticleRow {
   id: string;
@@ -143,12 +150,21 @@ interface StatusResult {
   paid: number;
 }
 
+interface FixEmbedsResult {
+  action: "fix-embeds";
+  checked: number;
+  fixed: number;
+  alreadyOk: number;
+  failed: number;
+}
+
 type ActionResult =
   | SetupResult
   | SeedResult
   | SyncResult
   | ImportResult
-  | StatusResult;
+  | StatusResult
+  | FixEmbedsResult;
 
 // ============================================
 // Discord API helpers (internal rate-limit control)
@@ -669,6 +685,140 @@ async function handleStatus(supabase: SupabaseClient): Promise<StatusResult> {
 }
 
 // ============================================
+// Action: fix-embeds
+// ============================================
+
+/** Delay between embed fix edits (ms) — slower to let Discord unfurl */
+const EMBED_FIX_DELAY_MS = 5_000;
+
+/** Default batch size for fix-embeds (fits within Edge Function timeout) */
+const DEFAULT_FIX_EMBEDS_LIMIT = 20;
+
+async function handleFixEmbeds(
+  supabase: SupabaseClient,
+  limit: number = DEFAULT_FIX_EMBEDS_LIMIT,
+  offset: number = 0,
+): Promise<FixEmbedsResult> {
+  if (!DISCORD_BOT_TOKEN) {
+    throw new Error("DISCORD_BOT_TOKEN is required");
+  }
+
+  // 1. Get posted articles batch (those with discord_thread_id)
+  const { data: postedArticles, error: fetchError } = await supabase
+    .from("note_articles")
+    .select("article_id, title, discord_thread_id")
+    .not("discord_thread_id", "is", null)
+    .order("posted_at", { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch posted articles: ${fetchError.message}`);
+  }
+
+  const articles = (postedArticles ?? []) as Array<{
+    article_id: string;
+    title: string;
+    discord_thread_id: string;
+  }>;
+
+  if (articles.length === 0) {
+    return { action: "fix-embeds", checked: 0, fixed: 0, alreadyOk: 0, failed: 0 };
+  }
+
+  log.info("Checking embeds", { threadCount: articles.length });
+
+  let checked = 0;
+  let fixed = 0;
+  let alreadyOk = 0;
+  let failed = 0;
+
+  for (const article of articles) {
+    const threadId = article.discord_thread_id;
+
+    try {
+      // 2. Fetch the first message in the thread
+      const messagesUrl =
+        `${DISCORD_ENDPOINTS.channelMessages.build(threadId)}?limit=1`;
+      const messagesRes = await discordFetch(messagesUrl, {
+        method: DISCORD_ENDPOINTS.channelMessages.method,
+        headers: discordHeaders(false),
+      });
+
+      if (!messagesRes.ok) {
+        log.warn("Failed to fetch thread messages", {
+          threadId,
+          status: messagesRes.status,
+        });
+        failed++;
+        checked++;
+        continue;
+      }
+
+      const messages = await messagesRes.json();
+      if (!Array.isArray(messages) || messages.length === 0) {
+        log.warn("No messages in thread", { threadId });
+        failed++;
+        checked++;
+        continue;
+      }
+
+      const firstMessage = messages[0];
+      checked++;
+
+      // 3. Check if embeds are present
+      if (
+        Array.isArray(firstMessage.embeds) &&
+        firstMessage.embeds.length > 0
+      ) {
+        alreadyOk++;
+        continue;
+      }
+
+      // 4. Edit the message with same content to re-trigger unfurling
+      const editUrl = DISCORD_ENDPOINTS.editMessage.build(
+        threadId,
+        firstMessage.id,
+      );
+      const editRes = await discordFetch(editUrl, {
+        method: DISCORD_ENDPOINTS.editMessage.method,
+        headers: discordHeaders(),
+        body: JSON.stringify({ content: firstMessage.content }),
+      });
+
+      if (!editRes.ok) {
+        const errorBody = await editRes.text();
+        log.warn("Failed to edit message for embed fix", {
+          threadId,
+          messageId: firstMessage.id,
+          status: editRes.status,
+          error: errorBody,
+        });
+        failed++;
+      } else {
+        fixed++;
+        log.info("Embed fix triggered", {
+          threadId,
+          articleId: article.article_id,
+        });
+      }
+
+      // 5. Delay to avoid rate limiting
+      await delay(EMBED_FIX_DELAY_MS);
+    } catch (err) {
+      log.error("Error fixing embed", {
+        threadId,
+        ...errorToContext(err),
+      });
+      failed++;
+      checked++;
+    }
+  }
+
+  log.info("Fix-embeds completed", { checked, fixed, alreadyOk, failed });
+  return { action: "fix-embeds", checked, fixed, alreadyOk, failed };
+}
+
+// ============================================
 // Main handler
 // ============================================
 
@@ -682,12 +832,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Parse action and limit from query param or body
+    // Parse action, limit, offset from query param or body
     let action: Action = "status";
     let importLimit = DEFAULT_IMPORT_LIMIT;
+    let offset = 0;
     const url = new URL(req.url);
     const queryAction = url.searchParams.get("action");
     const queryLimit = url.searchParams.get("limit");
+    const queryOffset = url.searchParams.get("offset");
 
     if (queryAction) {
       action = queryAction as Action;
@@ -695,8 +847,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (queryLimit) {
       importLimit = Math.max(
         1,
-        Math.min(20, parseInt(queryLimit, 10) || DEFAULT_IMPORT_LIMIT),
+        Math.min(50, parseInt(queryLimit, 10) || DEFAULT_IMPORT_LIMIT),
       );
+    }
+    if (queryOffset) {
+      offset = Math.max(0, parseInt(queryOffset, 10) || 0);
     }
 
     if (req.method === "POST") {
@@ -708,8 +863,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (body.limit) {
           importLimit = Math.max(
             1,
-            Math.min(20, Number(body.limit) || DEFAULT_IMPORT_LIMIT),
+            Math.min(50, Number(body.limit) || DEFAULT_IMPORT_LIMIT),
           );
+        }
+        if (body.offset !== undefined) {
+          offset = Math.max(0, Number(body.offset) || 0);
         }
       } catch {
         // No body or invalid JSON — use defaults
@@ -722,6 +880,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       "sync",
       "import",
       "status",
+      "fix-embeds",
     ];
     if (!validActions.includes(action)) {
       return new Response(
@@ -752,6 +911,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         break;
       case "status":
         result = await handleStatus(supabase);
+        break;
+      case "fix-embeds":
+        result = await handleFixEmbeds(supabase, importLimit, offset);
         break;
     }
 
