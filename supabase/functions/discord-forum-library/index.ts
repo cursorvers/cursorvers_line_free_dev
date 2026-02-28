@@ -722,7 +722,13 @@ async function handleFixEmbeds(
   }>;
 
   if (articles.length === 0) {
-    return { action: "fix-embeds", checked: 0, fixed: 0, alreadyOk: 0, failed: 0 };
+    return {
+      action: "fix-embeds",
+      checked: 0,
+      fixed: 0,
+      alreadyOk: 0,
+      failed: 0,
+    };
   }
 
   log.info("Checking embeds", { threadCount: articles.length });
@@ -737,8 +743,9 @@ async function handleFixEmbeds(
 
     try {
       // 2. Fetch the first message in the thread
-      const messagesUrl =
-        `${DISCORD_ENDPOINTS.channelMessages.build(threadId)}?limit=1`;
+      const messagesUrl = `${
+        DISCORD_ENDPOINTS.channelMessages.build(threadId)
+      }?limit=1`;
       const messagesRes = await discordFetch(messagesUrl, {
         method: DISCORD_ENDPOINTS.channelMessages.method,
         headers: discordHeaders(false),
