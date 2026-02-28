@@ -1,15 +1,25 @@
 # .github/workflows/line-daily-brief-cron.yml
-# 週3回 LINE Daily Brief を配信するワークフロー（月・水・金）
+# 週2回 LINE Daily Brief を配信するワークフロー（月曜=Belief, 木曜=note記事）
 
 name: LINE Daily Brief
 
 on:
   schedule:
-    # 月・水・金 JST 07:00 (UTC 22:00 前日) に配信
-    # 無料プラン上限対策: 200通/月 ÷ 友だち数 ≒ 週3回が安全圏
-    - cron: '0 22 * * 1,3,5'
+    # 月曜 JST 07:00 (UTC 22:00 日曜) — Obsidian Beliefカード
+    - cron: '0 22 * * 0'
+    # 木曜 JST 07:00 (UTC 22:00 水曜) — note記事ガバナンスカード
+    - cron: '0 22 * * 3'
   workflow_dispatch:
-    # 手動実行も可能
+    inputs:
+      source_type:
+        description: 'Card source type (belief or note). Leave empty for auto.'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - belief
+          - note
 
 concurrency:
   group: line-daily-brief
@@ -26,23 +36,56 @@ jobs:
           mkdir -p workflow-logs
           echo "LOG_FILE=workflow-logs/line-daily-brief-$(date -u +%Y%m%d_%H%M%S).log" >> $GITHUB_ENV
 
+      - name: Determine source type
+        id: source
+        run: |
+          # Manual input takes priority
+          MANUAL_SOURCE="${{ github.event.inputs.source_type }}"
+          if [ -n "$MANUAL_SOURCE" ]; then
+            echo "type=$MANUAL_SOURCE" >> "$GITHUB_OUTPUT"
+            echo "📋 Manual source_type: $MANUAL_SOURCE"
+            exit 0
+          fi
+
+          # Schedule-based: Sunday 22:00 UTC (Mon JST) = belief, Wed 22:00 UTC (Thu JST) = note
+          DOW=$(date -u +%u)  # 1=Mon ... 7=Sun
+          if [ "$DOW" = "7" ]; then
+            echo "type=belief" >> "$GITHUB_OUTPUT"
+            echo "📋 Schedule source_type: belief (Monday JST)"
+          elif [ "$DOW" = "3" ]; then
+            echo "type=note" >> "$GITHUB_OUTPUT"
+            echo "📋 Schedule source_type: note (Thursday JST)"
+          else
+            echo "type=" >> "$GITHUB_OUTPUT"
+            echo "📋 No specific source_type (auto)"
+          fi
+
       - name: Trigger line-daily-brief Edge Function
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SOURCE_TYPE: ${{ steps.source.outputs.type }}
         run: |
           exec > >(tee -a "$LOG_FILE") 2>&1
-          echo "📤 LINE Daily Brief を配信中..."
+          echo "📤 LINE Daily Brief を配信中... (source_type: ${SOURCE_TYPE:-auto})"
+
+          # Build request body
+          if [ -n "$SOURCE_TYPE" ]; then
+            BODY="{\"source_type\": \"${SOURCE_TYPE}\"}"
+          else
+            BODY="{}"
+          fi
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "${SUPABASE_URL}/functions/v1/line-daily-brief" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -d "$BODY")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
+          RESP_BODY=$(echo "$RESPONSE" | sed '$d')
 
-          echo "Response: $BODY"
+          echo "Response: $RESP_BODY"
           echo "HTTP Code: $HTTP_CODE"
 
           if [ "$HTTP_CODE" -ne 200 ]; then
@@ -51,7 +94,7 @@ jobs:
           fi
 
           # no_card の場合もエラーにしない
-          STATUS=$(echo "$BODY" | jq -r '.status // empty')
+          STATUS=$(echo "$RESP_BODY" | jq -r '.status // empty')
           if [ "$STATUS" = "no_card" ]; then
             echo "📭 配信可能なカードがありませんでした（正常終了）"
           elif [ "$STATUS" = "success" ]; then

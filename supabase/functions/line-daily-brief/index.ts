@@ -199,11 +199,25 @@ function getCooldownDate(days: number): Date {
  * 1. Never select the same theme as the previous delivery
  * 2. Prefer different source type (belief vs note) from previous delivery
  * 3. Apply cooldown period to avoid recently used cards
+ * 4. When forcedSourceType is set, only select cards from that source
  */
-async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
+async function selectCard(
+  client: SupabaseClient,
+  forcedSourceType?: SourceType,
+): Promise<LineCard | null> {
   // Configuration
   const COOLDOWN_DAYS = 7;
   const CARD_LIMIT = 20;
+
+  // Source path prefix for forced source type filtering
+  const SOURCE_PATH_PREFIX: Record<string, string> = {
+    belief: "05_Beliefs/",
+    note: "note.com/",
+  };
+
+  if (forcedSourceType) {
+    log.info("Forced source type", { forcedSourceType });
+  }
 
   // Fetch last delivery info for diversity
   const [lastTheme, lastSourceType] = await Promise.all([
@@ -251,7 +265,11 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
 
   // Fetch cards with cooldown filter
   // Cards are eligible if: last_used_at is null OR last_used_at < cooldownDate
-  const { data: cards, error } = await client
+  const sourcePrefix = forcedSourceType
+    ? SOURCE_PATH_PREFIX[forcedSourceType]
+    : undefined;
+
+  let cardQuery = client
     .from("line_cards")
     .select("id,body,theme,source_path,times_used,status")
     .eq("theme", selectedTheme)
@@ -259,6 +277,12 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
     .or(`last_used_at.is.null,last_used_at.lt.${cooldownIso}`)
     .order("times_used", { ascending: true })
     .limit(CARD_LIMIT);
+
+  if (sourcePrefix) {
+    cardQuery = cardQuery.like("source_path", `${sourcePrefix}%`);
+  }
+
+  const { data: cards, error } = await cardQuery;
 
   if (error) {
     throw new Error(`Failed to fetch cards: ${error.message}`);
@@ -270,13 +294,19 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
       "No available cards after cooldown filter, trying without cooldown",
     );
     // Fallback: fetch without cooldown filter
-    const { data: fallbackCards, error: fallbackError } = await client
+    let fallbackQuery = client
       .from("line_cards")
       .select("id,body,theme,source_path,times_used,status")
       .eq("theme", selectedTheme)
       .in("status", ["ready", "used"])
       .order("times_used", { ascending: true })
       .limit(CARD_LIMIT);
+
+    if (sourcePrefix) {
+      fallbackQuery = fallbackQuery.like("source_path", `${sourcePrefix}%`);
+    }
+
+    const { data: fallbackCards, error: fallbackError } = await fallbackQuery;
 
     if (fallbackError || !fallbackCards || fallbackCards.length === 0) {
       log.warn("No available cards for selected theme", { selectedTheme });
@@ -294,9 +324,18 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
     return selectedCard;
   }
 
-  // Prefer different source type for diversity
+  // Prefer different source type for diversity (skip if forced)
   let selectedCard: LineCard;
-  if (lastSourceType) {
+  if (forcedSourceType) {
+    // Source type already filtered in query — pick randomly
+    const randomIndex = Math.floor(Math.random() * cards.length);
+    selectedCard = cards[randomIndex] as LineCard;
+    log.info("Selected card with forced source type", {
+      cardId: selectedCard.id,
+      sourceType: getSourceType(selectedCard.source_path),
+      forcedSourceType,
+    });
+  } else if (lastSourceType) {
     const preferredCards = cards.filter(
       (c) => getSourceType(c.source_path) !== lastSourceType,
     );
@@ -561,8 +600,20 @@ Deno.serve(async (req) => {
   }
 
   try {
-    log.info("Step 1: Selecting card");
-    const card = await selectCard(supabaseClient);
+    // Parse optional source_type from request body
+    let forcedSourceType: SourceType | undefined;
+    try {
+      const body = await req.json();
+      if (body.source_type && ["belief", "note"].includes(body.source_type)) {
+        forcedSourceType = body.source_type as SourceType;
+        log.info("Request specifies source_type", { forcedSourceType });
+      }
+    } catch {
+      // No body or invalid JSON — use default behavior
+    }
+
+    log.info("Step 1: Selecting card", { forcedSourceType: forcedSourceType ?? "auto" });
+    const card = await selectCard(supabaseClient, forcedSourceType);
 
     if (!card) {
       log.warn("No card available to send");
