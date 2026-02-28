@@ -42,13 +42,10 @@ const FORUM_MAX_TAGS = 20;
 const FORUM_TITLE_MAX_LENGTH = 100;
 
 /** Rate limit: delay between posts (ms) */
-const POST_DELAY_MS = 5_000;
+const POST_DELAY_MS = 3_000;
 
-/** Rate limit: pause every N posts */
-const BATCH_SIZE = 10;
-
-/** Rate limit: pause duration after batch (ms) */
-const BATCH_PAUSE_MS = 30_000;
+/** Default max articles per invocation (fit within Edge Function timeout) */
+const DEFAULT_IMPORT_LIMIT = 10;
 
 /** Discord API timeout (ms) */
 const DISCORD_TIMEOUT_MS = 10_000;
@@ -301,7 +298,10 @@ async function handleSeed(supabase: SupabaseClient): Promise<SeedResult> {
 // Action: import
 // ============================================
 
-async function handleImport(supabase: SupabaseClient): Promise<ImportResult> {
+async function handleImport(
+  supabase: SupabaseClient,
+  limit: number = DEFAULT_IMPORT_LIMIT,
+): Promise<ImportResult> {
   if (!DISCORD_BOT_TOKEN || !DISCORD_FORUM_CHANNEL_ID) {
     throw new Error(
       "DISCORD_BOT_TOKEN and DISCORD_FORUM_CHANNEL_ID are required",
@@ -337,7 +337,8 @@ async function handleImport(supabase: SupabaseClient): Promise<ImportResult> {
     .from("note_articles")
     .select("*")
     .is("discord_thread_id", null)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(limit);
 
   if (fetchError) {
     throw new Error(`Failed to fetch pending articles: ${fetchError.message}`);
@@ -366,12 +367,6 @@ async function handleImport(supabase: SupabaseClient): Promise<ImportResult> {
     // Rate limit: pause between posts
     if (i > 0) {
       await delay(POST_DELAY_MS);
-    }
-
-    // Rate limit: longer pause after batch
-    if (i > 0 && i % BATCH_SIZE === 0) {
-      log.info("Batch pause", { posted, remaining: articles.length - i });
-      await delay(BATCH_PAUSE_MS);
     }
 
     try {
@@ -507,21 +502,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Parse action from query param or body
+    // Parse action and limit from query param or body
     let action: Action = "status";
+    let importLimit = DEFAULT_IMPORT_LIMIT;
     const url = new URL(req.url);
     const queryAction = url.searchParams.get("action");
+    const queryLimit = url.searchParams.get("limit");
 
     if (queryAction) {
       action = queryAction as Action;
-    } else if (req.method === "POST") {
+    }
+    if (queryLimit) {
+      importLimit = Math.max(1, Math.min(20, parseInt(queryLimit, 10) || DEFAULT_IMPORT_LIMIT));
+    }
+
+    if (req.method === "POST") {
       try {
         const body = await req.json();
         if (body.action) {
           action = body.action as Action;
         }
+        if (body.limit) {
+          importLimit = Math.max(1, Math.min(20, Number(body.limit) || DEFAULT_IMPORT_LIMIT));
+        }
       } catch {
-        // No body or invalid JSON — default to status
+        // No body or invalid JSON — use defaults
       }
     }
 
@@ -548,7 +553,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         result = await handleSeed(supabase);
         break;
       case "import":
-        result = await handleImport(supabase);
+        result = await handleImport(supabase, importLimit);
         break;
       case "status":
         result = await handleStatus(supabase);
