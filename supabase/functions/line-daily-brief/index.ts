@@ -612,7 +612,9 @@ Deno.serve(async (req) => {
       // No body or invalid JSON — use default behavior
     }
 
-    log.info("Step 1: Selecting card", { forcedSourceType: forcedSourceType ?? "auto" });
+    log.info("Step 1: Selecting card", {
+      forcedSourceType: forcedSourceType ?? "auto",
+    });
     const card = await selectCard(supabaseClient, forcedSourceType);
 
     if (!card) {
