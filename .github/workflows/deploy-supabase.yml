@@ -28,6 +28,13 @@ jobs:
         with:
           deno-version: "2.1.x"
 
+      - name: Cache Deno dependencies
+        run: |
+          cd supabase/functions
+          for f in line-bot line-webhook stripe-webhook discord-bot create-checkout-session line-register stats-exporter health-check stripe-consistency-check line-daily-brief verification-reminder; do
+            deno cache --config deno.json "$f/index.ts" 2>/dev/null || true
+          done
+
       - name: Smoke test signed POST
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
