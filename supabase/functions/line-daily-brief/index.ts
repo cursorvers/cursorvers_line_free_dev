@@ -214,9 +214,12 @@ async function selectCard(
     belief: "05_Beliefs/",
     note: "note.com/",
   };
+  const sourcePrefix = forcedSourceType
+    ? SOURCE_PATH_PREFIX[forcedSourceType]
+    : undefined;
 
   if (forcedSourceType) {
-    log.info("Forced source type", { forcedSourceType });
+    log.info("Forced source type", { forcedSourceType, sourcePrefix });
   }
 
   // Fetch last delivery info for diversity
@@ -234,6 +237,26 @@ async function selectCard(
   let availableThemes = themeStats.filter((t) =>
     t.ready_count > 0 || t.total_times_used > 0
   );
+
+  // When source type is forced, only consider themes that have cards of that source
+  if (forcedSourceType && sourcePrefix) {
+    const { data: themesWithSource } = await client
+      .from("line_cards")
+      .select("theme")
+      .like("source_path", `${sourcePrefix}%`)
+      .in("status", ["ready", "used"])
+      .limit(1000);
+
+    const validThemes = new Set(
+      (themesWithSource ?? []).map((r) => r.theme as CardTheme),
+    );
+    availableThemes = availableThemes.filter((t) => validThemes.has(t.theme));
+    log.info("Filtered themes by source type", {
+      forcedSourceType,
+      validThemes: [...validThemes],
+      remainingThemes: availableThemes.length,
+    });
+  }
 
   // Exclude last theme to avoid repetition
   if (lastTheme && availableThemes.length > 1) {
@@ -265,10 +288,6 @@ async function selectCard(
 
   // Fetch cards with cooldown filter
   // Cards are eligible if: last_used_at is null OR last_used_at < cooldownDate
-  const sourcePrefix = forcedSourceType
-    ? SOURCE_PATH_PREFIX[forcedSourceType]
-    : undefined;
-
   let cardQuery = client
     .from("line_cards")
     .select("id,body,theme,source_path,times_used,status")
