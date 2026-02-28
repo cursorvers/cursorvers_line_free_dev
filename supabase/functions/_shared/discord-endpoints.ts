@@ -95,6 +95,39 @@ export const DISCORD_ENDPOINTS = {
     okStatuses: [200],
     description: "Send channel message",
   },
+
+  /** Create a guild channel (e.g. Forum) */
+  guildChannel: {
+    build: (guildId: string) => {
+      requireParam(guildId, "guildId");
+      return `${BASE_URL}/guilds/${guildId}/channels`;
+    },
+    method: "POST",
+    okStatuses: [200, 201],
+    description: "Create guild channel",
+  },
+
+  /** Create a Forum thread (start thread in forum channel) */
+  forumThread: {
+    build: (channelId: string) => {
+      requireParam(channelId, "channelId");
+      return `${BASE_URL}/channels/${channelId}/threads`;
+    },
+    method: "POST",
+    okStatuses: [200, 201],
+    description: "Create forum thread",
+  },
+
+  /** Update channel settings (e.g. available_tags for Forum) */
+  channelTags: {
+    build: (channelId: string) => {
+      requireParam(channelId, "channelId");
+      return `${BASE_URL}/channels/${channelId}`;
+    },
+    method: "PATCH",
+    okStatuses: [200],
+    description: "Update channel settings",
+  },
 } as const satisfies Record<string, EndpointSpec>;
 
 export type EndpointName = keyof typeof DISCORD_ENDPOINTS;
