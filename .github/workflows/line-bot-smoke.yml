@@ -14,9 +14,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Deno
-        uses: denoland/setup-deno@v1
+        uses: denoland/setup-deno@v2
         with:
-          deno-version: v1.x
+          deno-version: "2.5.6"
 
       - name: Smoke test signed POST
         env:
@@ -152,20 +152,20 @@ jobs:
             eval "$(
               DISCORD_BODY="$discord_body" DISCORD_TIMESTAMP="$timestamp" \
                 deno eval --quiet --allow-env --allow-net -c supabase/functions/deno.json '
-import nacl from "tweetnacl";
-const body = Deno.env.get("DISCORD_BODY") ?? "";
-const timestamp = Deno.env.get("DISCORD_TIMESTAMP") ?? "";
-const keyPair = nacl.sign.keyPair();
-const encoder = new TextEncoder();
-const signature = nacl.sign.detached(
-  encoder.encode(timestamp + body),
-  keyPair.secretKey,
-);
-const toHex = (bytes) =>
-  Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-console.log(`SMOKE_DISCORD_PUBLIC_KEY=${toHex(keyPair.publicKey)}`);
-console.log(`SMOKE_DISCORD_SIGNATURE=${toHex(signature)}`);
-')"
+                  import nacl from "tweetnacl";
+                  const body = Deno.env.get("DISCORD_BODY") ?? "";
+                  const timestamp = Deno.env.get("DISCORD_TIMESTAMP") ?? "";
+                  const keyPair = nacl.sign.keyPair();
+                  const encoder = new TextEncoder();
+                  const signature = nacl.sign.detached(
+                    encoder.encode(timestamp + body),
+                    keyPair.secretKey,
+                  );
+                  const toHex = (bytes) =>
+                    Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+                  console.log(`SMOKE_DISCORD_PUBLIC_KEY=${toHex(keyPair.publicKey)}`);
+                  console.log(`SMOKE_DISCORD_SIGNATURE=${toHex(signature)}`);
+                ')"
 
             if [ -z "${SMOKE_DISCORD_PUBLIC_KEY:-}" ] || [ -z "${SMOKE_DISCORD_SIGNATURE:-}" ]; then
               echo "${name}: Failed to generate Discord signature"
