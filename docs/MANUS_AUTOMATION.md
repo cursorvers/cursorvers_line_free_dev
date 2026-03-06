@@ -52,6 +52,10 @@ Layer 3: Manus完全介入（最終手段）
 - 監査失敗時に `scripts/auto-fix/auto-fix-or-manus.sh` を実行
 - 自動修正できない場合は Manus タスクを作成
 - 生成したタスクは `orchestration/MANUS_AUTO_FIX_BRIEF.md` を使用
+- `supabase/functions/manus-intelligent-repair` は `MANUS_GITHUB_TOKEN` を優先し、未設定時は GitHub 系修繕を `manual-required` の `skipped` として返す
+- 重要:
+  - GitHub 自動修繕が未接続でも、監査 API 自体は `500` に落とさず `partial` で継続する
+  - つまり「監査の健全性」と「GitHub 自動実行の可用性」を分離している
 
 ### 自動記録
 
@@ -208,6 +212,7 @@ git push origin main
 1. `scripts/auto-fix/`のスクリプトが存在するか確認
 2. スクリプトに実行権限があるか確認（`chmod +x`）
 3. `MANUS_GITHUB_TOKEN`に`workflow`スコープがあるか確認
+4. トークン未設定時は監査結果が `partial` で返ることを確認し、Discord 通知に `manual intervention required` が出ているか確認
 
 ### ログがGitHubにプッシュされない
 
