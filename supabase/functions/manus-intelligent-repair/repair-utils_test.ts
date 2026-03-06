@@ -6,7 +6,10 @@ import {
 } from "./repair-utils.ts";
 
 Deno.test("requireGitHubToken returns configured token", () => {
-  assertEquals(requireGitHubToken("generate_cards", "demo-token"), "demo-token");
+  assertEquals(
+    requireGitHubToken("generate_cards", "demo-token"),
+    "demo-token",
+  );
 });
 
 Deno.test("requireGitHubToken raises manual intervention error when token missing", () => {
