@@ -32,6 +32,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { createLogger } from "../_shared/logger.ts";
 import type { AuditResult } from "../manus-audit-line-daily-brief/types.ts";
+import {
+  classifyRepairOverallStatus,
+  ManualInterventionRequiredError,
+  requireGitHubToken,
+} from "./repair-utils.ts";
 
 const log = createLogger("manus-intelligent-repair");
 
@@ -41,7 +46,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
   "";
 const MANUS_REPAIR_API_KEY = Deno.env.get("MANUS_REPAIR_API_KEY");
 const DISCORD_ADMIN_WEBHOOK_URL = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
-const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN");
+const GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN") ??
+  Deno.env.get("GITHUB_TOKEN");
 const GITHUB_REPO = Deno.env.get("GITHUB_REPO") ??
   "mo666-med/cursorvers_line_free_dev";
 
@@ -555,6 +561,21 @@ async function executeRepairPlan(
         target: step.target,
       });
     } catch (error) {
+      if (error instanceof ManualInterventionRequiredError) {
+        results.push({
+          step,
+          status: "skipped",
+          output: error.message,
+          duration: Date.now() - startTime,
+        });
+        log.warn("Step requires manual intervention", {
+          action: step.action,
+          target: step.target,
+          error: error.message,
+        });
+        continue;
+      }
+
       const errorMessage = error instanceof Error
         ? error.message
         : String(error);
@@ -601,16 +622,14 @@ async function executeGenerateCards(step: RepairStep): Promise<string> {
   const { theme, count } = step.params as { theme: string; count: number };
 
   // GitHub Actions workflow_dispatchをトリガー
-  if (!GITHUB_TOKEN) {
-    throw new Error("GITHUB_TOKEN not configured");
-  }
+  const githubToken = requireGitHubToken("generate_cards", GITHUB_TOKEN);
 
   const response = await fetchWithTimeout(
     `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/generate-cards.yml/dispatches`,
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GITHUB_TOKEN}`,
+        "Authorization": `Bearer ${githubToken}`,
         "Accept": "application/vnd.github.v3+json",
         "Content-Type": "application/json",
       },
@@ -639,16 +658,14 @@ async function executeRedeployFunction(step: RepairStep): Promise<string> {
   const functionName = step.target;
 
   // GitHub Actions workflow_dispatchをトリガー
-  if (!GITHUB_TOKEN) {
-    throw new Error("GITHUB_TOKEN not configured");
-  }
+  const githubToken = requireGitHubToken("redeploy_function", GITHUB_TOKEN);
 
   const response = await fetchWithTimeout(
     `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/deploy-supabase.yml/dispatches`,
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GITHUB_TOKEN}`,
+        "Authorization": `Bearer ${githubToken}`,
         "Accept": "application/vnd.github.v3+json",
         "Content-Type": "application/json",
       },
@@ -672,6 +689,7 @@ async function executeRedeployFunction(step: RepairStep): Promise<string> {
 async function executeResetSecret(step: RepairStep): Promise<string> {
   // シークレットのリセットは人間の介入が必要
   // GitHub Issueを作成して通知
+  requireGitHubToken("reset_secret", GITHUB_TOKEN);
   return await executeEscalate({
     ...step,
     params: {
@@ -724,9 +742,7 @@ async function executeEscalate(step: RepairStep): Promise<string> {
     rootCause?: string;
   };
 
-  if (!GITHUB_TOKEN) {
-    throw new Error("GITHUB_TOKEN not configured");
-  }
+  const githubToken = requireGitHubToken("escalate_to_human", GITHUB_TOKEN);
 
   const issueBody = `## 問題
 ${issue ?? "不明な問題"}
@@ -745,7 +761,7 @@ ${rootCause ?? "調査が必要"}
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GITHUB_TOKEN}`,
+        "Authorization": `Bearer ${githubToken}`,
         "Accept": "application/vnd.github.v3+json",
         "Content-Type": "application/json",
       },
@@ -924,16 +940,12 @@ Deno.serve(async (req) => {
     const failedCount = executed.filter((e) => e.status === "failed").length;
     const skippedCount = executed.filter((e) => e.status === "skipped").length;
 
-    let overallStatus: RepairResponse["summary"]["overallStatus"];
-    if (dryRun) {
-      overallStatus = "dry_run";
-    } else if (failedCount === 0) {
-      overallStatus = "success";
-    } else if (successCount > 0) {
-      overallStatus = "partial";
-    } else {
-      overallStatus = "failed";
-    }
+    const overallStatus = classifyRepairOverallStatus(
+      dryRun,
+      successCount,
+      failedCount,
+      skippedCount,
+    );
 
     const response: RepairResponse = {
       diagnosis,
@@ -956,19 +968,29 @@ Deno.serve(async (req) => {
     // 6. 失敗時のエスカレーション
     if (autoEscalate && overallStatus === "failed") {
       log.info("Auto-escalating failed repair");
-      await executeEscalate({
-        action: "escalate_to_human",
-        target: "github_issue",
-        params: {
-          issue: "自動修繕が失敗しました",
-          rootCause: executed
-            .filter((e) => e.status === "failed")
-            .map((e) => e.error)
-            .join("\n"),
-        },
-        order: 999,
-        rollbackable: false,
-      });
+      try {
+        await executeEscalate({
+          action: "escalate_to_human",
+          target: "github_issue",
+          params: {
+            issue: "自動修繕が失敗しました",
+            rootCause: executed
+              .filter((e) => e.status === "failed")
+              .map((e) => e.error)
+              .join("\n"),
+          },
+          order: 999,
+          rollbackable: false,
+        });
+      } catch (error) {
+        if (error instanceof ManualInterventionRequiredError) {
+          log.warn("Auto escalation requires manual intervention", {
+            error: error.message,
+          });
+        } else {
+          throw error;
+        }
+      }
     }
 
     log.info("Intelligent repair completed", {

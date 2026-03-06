@@ -1,0 +1,40 @@
+export class ManualInterventionRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ManualInterventionRequiredError";
+  }
+}
+
+export function requireGitHubToken(
+  actionLabel: string,
+  token: string | undefined | null,
+): string {
+  if (token && token.trim().length > 0) {
+    return token;
+  }
+
+  throw new ManualInterventionRequiredError(
+    `${actionLabel}: manual intervention required (MANUS_GITHUB_TOKEN/GITHUB_TOKEN not configured)`,
+  );
+}
+
+export function classifyRepairOverallStatus(
+  dryRun: boolean,
+  successCount: number,
+  failedCount: number,
+  skippedCount: number,
+): "success" | "partial" | "failed" | "dry_run" {
+  if (dryRun) {
+    return "dry_run";
+  }
+
+  if (failedCount === 0 && skippedCount === 0) {
+    return "success";
+  }
+
+  if (successCount > 0 || skippedCount > 0) {
+    return "partial";
+  }
+
+  return "failed";
+}
