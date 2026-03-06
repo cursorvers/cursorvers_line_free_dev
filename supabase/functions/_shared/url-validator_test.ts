@@ -67,7 +67,7 @@ Deno.test("isXUrl: detects encoded x.com", async () => {
 });
 
 Deno.test("isXUrl: handles null", async () => {
-  const result = await isXUrl(null as any);
+  const result = await isXUrl(null as unknown as string);
   assertEquals(result, false);
 });
 
@@ -162,7 +162,7 @@ Deno.test("checkRedirect: handles empty string", async () => {
 });
 
 Deno.test("checkRedirect: handles null as empty string", async () => {
-  const url = null as any;
+  const url = null as unknown as string;
   const result = await checkRedirect(url);
   assertEquals(result, null);
 });

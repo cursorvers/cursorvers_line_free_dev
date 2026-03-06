@@ -131,8 +131,8 @@ Deno.test("claimEvent - new event is claimed successfully", async () => {
   assertEquals(result.claimed, true);
   assertEquals(result.reason, "CLAIMED");
   assertEquals(supabase.rows.length, 1);
-  assertEquals(supabase.rows[0].status, "processing");
-  assertEquals(supabase.rows[0].attempts, 1);
+  assertEquals(supabase.rows[0]!.status, "processing");
+  assertEquals(supabase.rows[0]!.attempts, 1);
 });
 
 Deno.test("claimEvent - succeeded event is skipped", async () => {
@@ -203,7 +203,7 @@ Deno.test("claimEvent - stale processing event is re-claimed", async () => {
   );
   assertEquals(result.claimed, true);
   assertEquals(result.reason, "CLAIMED");
-  assertEquals(supabase.rows[0].attempts, 2);
+  assertEquals(supabase.rows[0]!.attempts, 2);
 });
 
 Deno.test("claimEvent - failed event is re-claimed", async () => {
@@ -227,7 +227,7 @@ Deno.test("claimEvent - failed event is re-claimed", async () => {
   );
   assertEquals(result.claimed, true);
   assertEquals(result.reason, "CLAIMED");
-  assertEquals(supabase.rows[0].attempts, 3);
+  assertEquals(supabase.rows[0]!.attempts, 3);
 });
 
 Deno.test("claimEvent - max attempts exceeded is rejected", async () => {
@@ -271,8 +271,8 @@ Deno.test("markSucceeded - updates status to succeeded", async () => {
   }]);
 
   await markSucceeded(supabase, "evt_proc_ok");
-  assertEquals(supabase.rows[0].status, "succeeded");
-  assertEquals(supabase.rows[0].last_error, null);
+  assertEquals(supabase.rows[0]!.status, "succeeded");
+  assertEquals(supabase.rows[0]!.last_error, null);
 });
 
 // ============================================
@@ -293,9 +293,9 @@ Deno.test("markFailed - updates status to failed with error", async () => {
   }]);
 
   await markFailed(supabase, "evt_proc_fail", "DB connection timeout");
-  assertEquals(supabase.rows[0].status, "failed");
-  assertEquals(supabase.rows[0].last_error, "DB connection timeout");
-  assertEquals(typeof supabase.rows[0].next_retry_at, "string");
+  assertEquals(supabase.rows[0]!.status, "failed");
+  assertEquals(supabase.rows[0]!.last_error, "DB connection timeout");
+  assertEquals(typeof supabase.rows[0]!.next_retry_at, "string");
 });
 
 // ============================================
@@ -313,11 +313,11 @@ Deno.test("state transitions - received → processing → succeeded", async () 
     "test@example.com",
   );
   assertEquals(claim.claimed, true);
-  assertEquals(supabase.rows[0].status, "processing");
+  assertEquals(supabase.rows[0]!.status, "processing");
 
   // Step 2: Succeed (processing → succeeded)
   await markSucceeded(supabase, "evt_flow_ok");
-  assertEquals(supabase.rows[0].status, "succeeded");
+  assertEquals(supabase.rows[0]!.status, "succeeded");
 
   // Step 3: Re-claim should be skipped
   const reClaim = await claimEvent(
@@ -340,11 +340,11 @@ Deno.test("state transitions - received → processing → failed → re-claim �
     "checkout.session.completed",
     "test@example.com",
   );
-  assertEquals(supabase.rows[0].status, "processing");
+  assertEquals(supabase.rows[0]!.status, "processing");
 
   // Step 2: Fail
   await markFailed(supabase, "evt_flow_retry", "Temporary error");
-  assertEquals(supabase.rows[0].status, "failed");
+  assertEquals(supabase.rows[0]!.status, "failed");
 
   // Step 3: Re-claim
   const reClaim = await claimEvent(
@@ -354,10 +354,10 @@ Deno.test("state transitions - received → processing → failed → re-claim �
     "test@example.com",
   );
   assertEquals(reClaim.claimed, true);
-  assertEquals(supabase.rows[0].status, "processing");
-  assertEquals(supabase.rows[0].attempts, 2);
+  assertEquals(supabase.rows[0]!.status, "processing");
+  assertEquals(supabase.rows[0]!.attempts, 2);
 
   // Step 4: Succeed
   await markSucceeded(supabase, "evt_flow_retry");
-  assertEquals(supabase.rows[0].status, "succeeded");
+  assertEquals(supabase.rows[0]!.status, "succeeded");
 });

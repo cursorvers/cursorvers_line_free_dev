@@ -103,10 +103,7 @@ function createMockSupabase(responses: Record<string, MockQueryResult>) {
   const callLog: Array<{ method: string; args: unknown[] }> = [];
 
   function createChain(tableName: string): Record<string, unknown> {
-    const chain: Record<
-      string,
-      (...args: unknown[]) => Record<string, unknown>
-    > = {};
+    const chain: Record<string, unknown> = {};
     const methods = [
       "select",
       "insert",
@@ -147,9 +144,9 @@ function createMockSupabase(responses: Record<string, MockQueryResult>) {
     }
 
     // Allow direct await (non-terminal)
-    chain.then = ((resolve: (v: unknown) => void) => {
+    chain["then"] = ((resolve: (v: unknown) => void) => {
       resolve(responses[tableName] ?? { data: null, error: null });
-    }) as unknown as (...args: unknown[]) => Record<string, unknown>;
+    }) as unknown;
 
     return chain;
   }
@@ -286,7 +283,7 @@ Deno.test("fetchRetryableItems - returns items on success", async () => {
   const result = await fetchRetryableItems(client as never, 10);
 
   assertEquals(result.items.length, 1);
-  assertEquals(result.items[0].id, "q1");
+  assertEquals(result.items[0]!.id, "q1");
   assertEquals(result.error, undefined);
 });
 
@@ -355,9 +352,9 @@ Deno.test("markProcessing - sets processing_token and lease_expires_at", async (
   // Verify update args include processing fields
   if (updateCall) {
     const updateArg = updateCall.args[0] as Record<string, unknown>;
-    assertEquals(updateArg.status, "processing");
-    assertEquals(typeof updateArg.processing_token, "string");
-    assertEquals(typeof updateArg.lease_expires_at, "string");
+    assertEquals(updateArg["status"], "processing");
+    assertEquals(typeof updateArg["processing_token"], "string");
+    assertEquals(typeof updateArg["lease_expires_at"], "string");
   }
 });
 
@@ -524,7 +521,7 @@ Deno.test("markFailed - sanitizes PII in error messages", async () => {
   assertEquals(updateCall !== undefined, true);
   if (updateCall) {
     const updateArg = updateCall.args[0] as Record<string, unknown>;
-    const lastError = updateArg.last_error as string;
+    const lastError = updateArg["last_error"] as string;
     // Email should be masked
     assertEquals(lastError.includes("user@example.com"), false);
     assertEquals(lastError.includes("[EMAIL]"), true);

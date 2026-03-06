@@ -23,7 +23,7 @@ export async function mergeOrphanLineRecord(
   paidEmail: string,
   paidMemberId: string,
   metadataLineUserId: string | null = null,
-): Promise<{ merged: boolean; orphanLineUserId?: string }> {
+): Promise<{ merged: boolean; orphanLineUserId?: string | undefined }> {
   // まず新しい有料レコードにline_user_idがあるか確認
   const { data: paidMember } = await supabase
     .from("members")
@@ -118,10 +118,13 @@ export async function mergeOrphanLineRecord(
           orphanId: candidate.id,
           evidence: decision.evidence,
         });
-        return {
-          merged: true,
-          orphanLineUserId: candidate.line_user_id ?? undefined,
-        };
+        if (candidate.line_user_id) {
+          return {
+            merged: true,
+            orphanLineUserId: candidate.line_user_id,
+          };
+        }
+        return { merged: true };
       }
       return { merged: false };
     }

@@ -39,6 +39,9 @@ cd cursorvers_line_free_dev
 # テスト実行
 deno test supabase/functions/line-webhook/test/ --allow-env --allow-net
 
+# Edge Functions 全体
+deno task test:functions
+
 # フォーマット & Lint
 deno fmt supabase/functions/
 deno lint supabase/functions/
@@ -219,6 +222,9 @@ DISCORD_ADMIN_WEBHOOK_URL=...
 ```bash
 # 全テスト実行
 deno test supabase/functions/line-webhook/test/ --allow-env --allow-net
+
+# Edge Functions 全体
+deno task test:functions
 
 # 特定テスト実行
 deno test supabase/functions/line-webhook/test/risk-checker.test.ts --allow-env --allow-net

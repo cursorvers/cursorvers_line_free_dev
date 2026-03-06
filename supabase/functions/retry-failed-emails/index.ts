@@ -18,6 +18,7 @@ import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { maskEmail } from "../_shared/masking-utils.ts";
 import { notifyDiscord } from "../_shared/alert.ts";
 import {
+  type EmailResult,
   sendDirectDiscordInviteEmail,
   sendPaidMemberWelcomeEmail,
   sendReminderEmail,
@@ -40,7 +41,7 @@ async function sendByTemplate(
   template: string,
   email: string,
   params: Record<string, unknown>,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<EmailResult> {
   switch (template) {
     case "paid_member_welcome": {
       const code = params["verification_code_from_member"] as

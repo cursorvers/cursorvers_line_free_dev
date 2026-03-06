@@ -125,7 +125,10 @@ export async function enqueueEmail(
  */
 export function getNextRetryAt(attempts: number): Date {
   const delayIndex = Math.min(attempts, RETRY_DELAYS_SECONDS.length - 1);
-  const delaySec = RETRY_DELAYS_SECONDS[delayIndex];
+  const fallbackDelaySec =
+    RETRY_DELAYS_SECONDS[RETRY_DELAYS_SECONDS.length - 1] ??
+      43200;
+  const delaySec = RETRY_DELAYS_SECONDS[delayIndex] ?? fallbackDelaySec;
   return new Date(Date.now() + delaySec * 1000);
 }
 

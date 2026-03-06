@@ -110,7 +110,7 @@ export function decideMerge(
     return {
       action: "HOLD_FOR_REVIEW",
       evidence: "WEAK_EMAIL_NULL",
-      candidate: weakCandidates[0],
+      candidate: weakCandidates[0] ?? null,
       reason:
         `${weakCandidates.length} orphan(s) found but no causal link to paid member. Admin review required.`,
     };

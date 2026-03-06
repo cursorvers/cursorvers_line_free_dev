@@ -230,12 +230,13 @@ async function handleEmailRegistration(
       email: string | null;
       line_user_id: string | null;
       tier: string | null;
+      status: string | null;
     };
     let existingRecord: MemberRecord | null = null;
 
     const { data: emailRecord } = await supabase
       .from("members")
-      .select("id,email,line_user_id,tier")
+      .select("id,email,line_user_id,tier,status")
       .eq("email", normalizedEmail)
       .maybeSingle();
 
@@ -244,7 +245,7 @@ async function handleEmailRegistration(
     } else {
       const { data: lineRecord } = await supabase
         .from("members")
-        .select("id,email,line_user_id,tier")
+        .select("id,email,line_user_id,tier,status")
         .eq("line_user_id", lineUserId)
         .maybeSingle();
       existingRecord = lineRecord as MemberRecord | null;
