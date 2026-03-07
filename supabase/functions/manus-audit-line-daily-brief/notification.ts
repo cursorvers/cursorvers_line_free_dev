@@ -8,6 +8,13 @@ const log = createLogger("audit-notification");
 
 type NotificationAudience = "admin" | "maintenance" | "manus";
 
+function formatJstTimestamp(isoTimestamp: string): string {
+  return new Date(isoTimestamp).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour12: false,
+  }) + " JST";
+}
+
 export function buildNotificationMessage(
   result: AuditResult,
   audience: NotificationAudience,
@@ -27,7 +34,7 @@ export function buildNotificationMessage(
     : "正常";
 
   let message = `${emoji} **Manus監査レポート** (${result.mode})\n`;
-  message += `時刻: ${new Date(result.timestamp).toLocaleString("ja-JP")}\n`;
+  message += `時刻: ${formatJstTimestamp(result.timestamp)}\n`;
   message += `ステータス: **${statusText}**\n\n`;
 
   if (!isOk || audience !== "admin") {

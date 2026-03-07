@@ -20,7 +20,7 @@ const THEMES: CardTheme[] = [
   "asset",
   "general",
 ];
-const MIN_READY_CARDS = 50;
+const MIN_READY_CARDS = 30;
 
 /** RPC応答の行の型定義 */
 interface RpcInventoryRow {

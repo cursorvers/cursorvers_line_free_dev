@@ -260,7 +260,7 @@ function diagnoseIssues(auditResult: AuditResult): Diagnosis {
     const details = auditResult.checks.cardInventory.details;
 
     // 在庫不足のテーマを特定
-    const lowThemes = details.filter((d) => d.ready_cards < 50);
+    const lowThemes = details.filter((d) => d.ready_cards < 30);
 
     issues.push({
       type: "card_inventory_low",

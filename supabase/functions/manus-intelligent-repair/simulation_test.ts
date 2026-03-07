@@ -65,7 +65,7 @@ function diagnoseIssues(auditResult: AuditResult): Diagnosis {
   // カード在庫問題の診断
   if (!auditResult.checks.cardInventory.passed) {
     const details = auditResult.checks.cardInventory.details;
-    const lowThemes = details.filter((d) => d.ready_cards < 50);
+    const lowThemes = details.filter((d) => d.ready_cards < 30);
 
     issues.push({
       type: "card_inventory_low",
@@ -177,11 +177,11 @@ Deno.test("simulation - 正常時は問題なし", () => {
   console.log("  → アクション: なし\n");
 });
 
-Deno.test("simulation - カード在庫不足（軽度）", () => {
+Deno.test("simulation - カード在庫不足（警戒域）", () => {
   const result = createBaseResult();
   result.checks.cardInventory.passed = false;
   result.checks.cardInventory.details = [
-    { theme: "ai_gov", ready_cards: 45, used_cards: 50, total_cards: 95 },
+    { theme: "ai_gov", ready_cards: 29, used_cards: 50, total_cards: 79 },
     { theme: "tax", ready_cards: 80, used_cards: 20, total_cards: 100 },
   ];
 
@@ -192,9 +192,9 @@ Deno.test("simulation - カード在庫不足（軽度）", () => {
   assertExists(firstIssue);
   assertEquals(firstIssue.type, "card_inventory_low");
   assertEquals(firstIssue.suggestedActions, ["generate_cards"]);
-  assertEquals(diagnosis.severity, "low"); // 45枚は30以上なのでlow
+  assertEquals(diagnosis.severity, "high"); // 30枚未満なのでhigh
 
-  console.log("\n📊 シミュレーション結果（カード在庫不足・軽度）:");
+  console.log("\n📊 シミュレーション結果（カード在庫不足・警戒域）:");
   console.log(`  - 検出問題: ${diagnosis.issues.length}件`);
   console.log(`  - 問題: ${firstIssue.description}`);
   console.log(`  - 根本原因: ${firstIssue.rootCause}`);
