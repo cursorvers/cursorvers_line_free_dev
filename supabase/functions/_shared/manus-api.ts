@@ -418,6 +418,12 @@ interface IntelligentRepairResult {
   error?: string | undefined;
 }
 
+interface IntelligentRepairExecutionEntry {
+  status?: string | undefined;
+  output?: string | undefined;
+  error?: string | undefined;
+}
+
 /**
  * Manus Intelligent Repairを呼び出してAI判断・自動修繕を実行
  *
@@ -481,17 +487,32 @@ export async function triggerIntelligentRepair(
     }
 
     const data = await response.json();
+    const detailMessages = Array.isArray(data.executed)
+      ? Array.from(new Set(
+        (data.executed as IntelligentRepairExecutionEntry[])
+          .filter((entry) => entry.status === "failed" || entry.status === "skipped")
+          .map((entry) => entry.error ?? entry.output)
+          .filter((message): message is string =>
+            typeof message === "string" &&
+            message.length > 0 &&
+            !message.startsWith("[DRY RUN]")
+          ),
+      ))
+      : [];
+    const detailSummary = detailMessages.slice(0, 3).join(" | ");
 
     log.info("Intelligent repair completed", {
       overallStatus: data.summary?.overallStatus,
       successCount: data.summary?.successCount,
       failedCount: data.summary?.failedCount,
+      skippedCount: data.summary?.skippedCount,
     });
 
     return {
       success: data.summary?.overallStatus !== "failed",
       diagnosis: data.diagnosis,
       summary: data.summary,
+      error: detailSummary || undefined,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
