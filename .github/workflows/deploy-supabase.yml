@@ -473,7 +473,7 @@ jobs:
           fi
 
           echo "=== Deploy ${SELECTED_FUNCTION} ${EXTRA_ARGS[*]:-} ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy "$SELECTED_FUNCTION" "${EXTRA_ARGS[@]}" --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh "$SELECTED_FUNCTION" "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" "${EXTRA_ARGS[@]}"; then
             echo "result=success" >> $GITHUB_OUTPUT
           else
             echo "result=failed" >> $GITHUB_OUTPUT
@@ -488,7 +488,7 @@ jobs:
         id: deploy_line_webhook
         run: |
           echo "=== Deploy line-webhook (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy line-webhook --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh line-webhook "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" --no-verify-jwt; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -502,7 +502,7 @@ jobs:
         id: deploy_line_daily_brief
         run: |
           echo "=== Deploy line-daily-brief ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy line-daily-brief --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh line-daily-brief "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG"; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -516,7 +516,7 @@ jobs:
         id: deploy_stats_exporter
         run: |
           echo "=== Deploy stats-exporter ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy stats-exporter --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh stats-exporter "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG"; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -530,7 +530,7 @@ jobs:
         id: deploy_health_check
         run: |
           echo "=== Deploy health-check ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy health-check --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh health-check "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG"; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -544,7 +544,7 @@ jobs:
         id: deploy_stripe_consistency_check
         run: |
           echo "=== Deploy stripe-consistency-check ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy stripe-consistency-check --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh stripe-consistency-check "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG"; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -558,7 +558,7 @@ jobs:
         id: deploy_manus_audit
         run: |
           echo "=== Deploy manus-audit-line-daily-brief ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy manus-audit-line-daily-brief --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh manus-audit-line-daily-brief "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG"; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -572,7 +572,7 @@ jobs:
         id: deploy_relay
         run: |
           echo "=== Deploy relay ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy relay --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh relay "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG"; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -598,7 +598,7 @@ jobs:
         id: deploy_stripe_webhook
         run: |
           echo "=== Deploy stripe-webhook (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy stripe-webhook --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh stripe-webhook "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" --no-verify-jwt; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -612,7 +612,7 @@ jobs:
         id: deploy_checkout
         run: |
           echo "=== Deploy create-checkout-session (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy create-checkout-session --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh create-checkout-session "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" --no-verify-jwt; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -626,7 +626,7 @@ jobs:
         id: deploy_ingest_hij
         run: |
           echo "=== Deploy ingest-hij (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy ingest-hij --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh ingest-hij "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" --no-verify-jwt; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -640,7 +640,7 @@ jobs:
         id: deploy_sec_brief
         run: |
           echo "=== Deploy generate-sec-brief (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy generate-sec-brief --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh generate-sec-brief "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" --no-verify-jwt; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -654,7 +654,7 @@ jobs:
         id: deploy_line_register
         run: |
           echo "=== Deploy line-register (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy line-register --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh line-register "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" --no-verify-jwt; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -668,7 +668,7 @@ jobs:
         id: deploy_line_bot
         run: |
           echo "=== Deploy line-bot (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy line-bot --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh line-bot "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" --no-verify-jwt; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -682,7 +682,7 @@ jobs:
         id: deploy_manus_code_fixer
         run: |
           echo "=== Deploy manus-code-fixer (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy manus-code-fixer --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh manus-code-fixer "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" --no-verify-jwt; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -696,7 +696,7 @@ jobs:
         id: deploy_discord_bot
         run: |
           echo "=== Deploy discord-bot (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy discord-bot --no-verify-jwt --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh discord-bot "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG" --no-verify-jwt; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
@@ -710,7 +710,7 @@ jobs:
         id: deploy_manus_intelligent_repair
         run: |
           echo "=== Deploy manus-intelligent-repair ===" | tee -a "$DEPLOY_LOG"
-          if supabase functions deploy manus-intelligent-repair --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+          if bash scripts/supabase/deploy-edge-function.sh manus-intelligent-repair "$SUPABASE_PROJECT_ID" "$DEPLOY_LOG"; then
             echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
             echo "result=success" >> $GITHUB_OUTPUT
           else
