@@ -142,8 +142,21 @@ Deno.test("notification - buildNotificationMessage", async (t) => {
       },
     });
     const message = buildNotificationMessage(result, "admin");
-    assertEquals(message.includes("タスク作成失敗"), true);
+    assertEquals(message.includes("自動修繕失敗"), true);
     assertEquals(message.includes("API connection failed"), true);
+  });
+
+  await t.step("includes manual intervention notice when bounded repair skips", () => {
+    const result = createBaseResult({
+      remediation: {
+        triggered: true,
+        error:
+          "generate_cards: manual intervention required (MANUS_GITHUB_TOKEN/GITHUB_TOKEN not configured)",
+      },
+    });
+    const message = buildNotificationMessage(result, "admin");
+    assertEquals(message.includes("手動対応待ち"), true);
+    assertEquals(message.includes("manual intervention required"), true);
   });
 
   await t.step("includes maintenance info when present", () => {

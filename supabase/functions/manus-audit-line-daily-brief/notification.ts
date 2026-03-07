@@ -88,7 +88,13 @@ export function buildNotificationMessage(
       message += `✅ Manusタスク作成済み\n`;
       message += `📎 ${result.remediation.taskUrl}\n`;
     } else if (result.remediation.error) {
-      message += `❌ タスク作成失敗: ${result.remediation.error}\n`;
+      if (result.remediation.error.includes("manual intervention required")) {
+        message += `⚠️ 手動対応待ち: ${result.remediation.error}\n`;
+      } else {
+        message += `❌ 自動修繕失敗: ${result.remediation.error}\n`;
+      }
+    } else {
+      message += `✅ Intelligent repair を実行しました\n`;
     }
     message += "\n";
   }

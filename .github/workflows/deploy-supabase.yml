@@ -8,6 +8,15 @@ on:
       - "supabase/functions/**"
       - ".github/workflows/deploy-supabase.yml"
   workflow_dispatch:
+    inputs:
+      function_name:
+        description: "Optional single function to deploy"
+        required: false
+        default: ""
+      no_verify_jwt:
+        description: "Use --no-verify-jwt for the selected function"
+        required: false
+        default: "false"
 
 env:
   SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -427,10 +436,55 @@ jobs:
           echo "DEPLOY_FAILED=0" >> $GITHUB_ENV
           echo "FAILED_FUNCTIONS=" >> $GITHUB_ENV
 
+      - name: Sync Manus automation secrets to Supabase
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' || inputs.function_name == 'manus-intelligent-repair' }}
+        env:
+          MANUS_GITHUB_TOKEN: ${{ secrets.MANUS_GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SECRET_ARGS=()
+          if [ -n "${MANUS_GITHUB_TOKEN:-}" ]; then
+            SECRET_ARGS+=("MANUS_GITHUB_TOKEN=${MANUS_GITHUB_TOKEN}")
+          fi
+          if [ -n "${GITHUB_REPO:-}" ]; then
+            SECRET_ARGS+=("GITHUB_REPO=${GITHUB_REPO}")
+          fi
+
+          if [ ${#SECRET_ARGS[@]} -eq 0 ]; then
+            echo "No Manus automation secrets to sync"
+            exit 0
+          fi
+
+          echo "Syncing ${#SECRET_ARGS[@]} Manus automation secret(s) to Supabase"
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_ID" "${SECRET_ARGS[@]}"
+
+      - name: Deploy selected function
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.function_name != '' }}
+        id: deploy_selected_function
+        env:
+          SELECTED_FUNCTION: ${{ inputs.function_name }}
+          SELECTED_NO_VERIFY_JWT: ${{ inputs.no_verify_jwt }}
+        run: |
+          set -euo pipefail
+          EXTRA_ARGS=()
+          if [ "$SELECTED_NO_VERIFY_JWT" = "true" ]; then
+            EXTRA_ARGS+=(--no-verify-jwt)
+          fi
+
+          echo "=== Deploy ${SELECTED_FUNCTION} ${EXTRA_ARGS[*]:-} ===" | tee -a "$DEPLOY_LOG"
+          if supabase functions deploy "$SELECTED_FUNCTION" "${EXTRA_ARGS[@]}" --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+            echo "result=success" >> $GITHUB_OUTPUT
+          else
+            echo "result=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
       # ========================================
       # Core Functions (JWT検証あり)
       # ========================================
       - name: Deploy line-webhook
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_line_webhook
         run: |
           echo "=== Deploy line-webhook (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
@@ -444,6 +498,7 @@ jobs:
           fi
 
       - name: Deploy line-daily-brief
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_line_daily_brief
         run: |
           echo "=== Deploy line-daily-brief ===" | tee -a "$DEPLOY_LOG"
@@ -457,6 +512,7 @@ jobs:
           fi
 
       - name: Deploy stats-exporter
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_stats_exporter
         run: |
           echo "=== Deploy stats-exporter ===" | tee -a "$DEPLOY_LOG"
@@ -470,6 +526,7 @@ jobs:
           fi
 
       - name: Deploy health-check
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_health_check
         run: |
           echo "=== Deploy health-check ===" | tee -a "$DEPLOY_LOG"
@@ -483,6 +540,7 @@ jobs:
           fi
 
       - name: Deploy stripe-consistency-check
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_stripe_consistency_check
         run: |
           echo "=== Deploy stripe-consistency-check ===" | tee -a "$DEPLOY_LOG"
@@ -496,6 +554,7 @@ jobs:
           fi
 
       - name: Deploy manus-audit-line-daily-brief
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_manus_audit
         run: |
           echo "=== Deploy manus-audit-line-daily-brief ===" | tee -a "$DEPLOY_LOG"
@@ -509,6 +568,7 @@ jobs:
           fi
 
       - name: Deploy relay
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_relay
         run: |
           echo "=== Deploy relay ===" | tee -a "$DEPLOY_LOG"
@@ -534,6 +594,7 @@ jobs:
       #   - generate-sec-brief: API Key認証
       # ========================================
       - name: Deploy stripe-webhook
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_stripe_webhook
         run: |
           echo "=== Deploy stripe-webhook (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
@@ -547,6 +608,7 @@ jobs:
           fi
 
       - name: Deploy create-checkout-session
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_checkout
         run: |
           echo "=== Deploy create-checkout-session (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
@@ -560,6 +622,7 @@ jobs:
           fi
 
       - name: Deploy ingest-hij
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_ingest_hij
         run: |
           echo "=== Deploy ingest-hij (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
@@ -573,6 +636,7 @@ jobs:
           fi
 
       - name: Deploy generate-sec-brief
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_sec_brief
         run: |
           echo "=== Deploy generate-sec-brief (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
@@ -586,6 +650,7 @@ jobs:
           fi
 
       - name: Deploy line-register
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_line_register
         run: |
           echo "=== Deploy line-register (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
@@ -599,6 +664,7 @@ jobs:
           fi
 
       - name: Deploy line-bot
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_line_bot
         run: |
           echo "=== Deploy line-bot (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
@@ -612,6 +678,7 @@ jobs:
           fi
 
       - name: Deploy manus-code-fixer
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_manus_code_fixer
         run: |
           echo "=== Deploy manus-code-fixer (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
@@ -625,6 +692,7 @@ jobs:
           fi
 
       - name: Deploy discord-bot
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
         id: deploy_discord_bot
         run: |
           echo "=== Deploy discord-bot (no-verify-jwt) ===" | tee -a "$DEPLOY_LOG"
@@ -637,19 +705,65 @@ jobs:
             echo "result=failed" >> $GITHUB_OUTPUT
           fi
 
+      - name: Deploy manus-intelligent-repair
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
+        id: deploy_manus_intelligent_repair
+        run: |
+          echo "=== Deploy manus-intelligent-repair ===" | tee -a "$DEPLOY_LOG"
+          if supabase functions deploy manus-intelligent-repair --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee -a "$DEPLOY_LOG"; then
+            echo "DEPLOY_SUCCESS=$((DEPLOY_SUCCESS + 1))" >> $GITHUB_ENV
+            echo "result=success" >> $GITHUB_OUTPUT
+          else
+            echo "DEPLOY_FAILED=$((DEPLOY_FAILED + 1))" >> $GITHUB_ENV
+            echo "FAILED_FUNCTIONS=${FAILED_FUNCTIONS}manus-intelligent-repair," >> $GITHUB_ENV
+            echo "result=failed" >> $GITHUB_OUTPUT
+          fi
+
       # ========================================
       # Summary and Notification
       # ========================================
       - name: Generate deployment summary
         id: summary
         if: always()
+        env:
+          SELECTED_FUNCTION: ${{ inputs.function_name }}
+          SELECTED_RESULT: ${{ steps.deploy_selected_function.outputs.result }}
         run: |
           # 環境変数を再読み込み（GitHub Actionsの制限回避）
           SUCCESS_COUNT=0
           FAILED_COUNT=0
           FAILED_LIST=""
+          TOTAL_COUNT=0
+
+          if [ -n "${SELECTED_FUNCTION}" ]; then
+            TOTAL_COUNT=1
+            if [ "${SELECTED_RESULT}" = "success" ]; then
+              SUCCESS_COUNT=1
+            else
+              FAILED_COUNT=1
+              FAILED_LIST="${SELECTED_FUNCTION}"
+            fi
+
+            echo "success_count=${SUCCESS_COUNT}" >> $GITHUB_OUTPUT
+            echo "failed_count=${FAILED_COUNT}" >> $GITHUB_OUTPUT
+            echo "failed_list=${FAILED_LIST}" >> $GITHUB_OUTPUT
+            echo "total_count=${TOTAL_COUNT}" >> $GITHUB_OUTPUT
+
+            echo "=========================================="
+            echo "デプロイ結果サマリー"
+            echo "=========================================="
+            echo "選択デプロイ: ${SELECTED_FUNCTION}"
+            echo "成功: ${SUCCESS_COUNT}/${TOTAL_COUNT}"
+            echo "失敗: ${FAILED_COUNT}/${TOTAL_COUNT}"
+            if [ -n "$FAILED_LIST" ]; then
+              echo "失敗した関数: ${FAILED_LIST}"
+            fi
+            echo "=========================================="
+            exit 0
+          fi
 
           # 各ステップの結果を集計
+          TOTAL_COUNT=16
           [ "${{ steps.deploy_line_webhook.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}line-webhook, "; }
           [ "${{ steps.deploy_line_daily_brief.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}line-daily-brief, "; }
           [ "${{ steps.deploy_stats_exporter.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}stats-exporter, "; }
@@ -665,6 +779,7 @@ jobs:
           [ "${{ steps.deploy_line_bot.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}line-bot, "; }
           [ "${{ steps.deploy_manus_code_fixer.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}manus-code-fixer, "; }
           [ "${{ steps.deploy_discord_bot.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}discord-bot, "; }
+          [ "${{ steps.deploy_manus_intelligent_repair.outputs.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1)) || { FAILED_COUNT=$((FAILED_COUNT + 1)); FAILED_LIST="${FAILED_LIST}manus-intelligent-repair, "; }
 
           # 末尾のカンマとスペースを削除
           FAILED_LIST="${FAILED_LIST%, }"
@@ -672,13 +787,14 @@ jobs:
           echo "success_count=${SUCCESS_COUNT}" >> $GITHUB_OUTPUT
           echo "failed_count=${FAILED_COUNT}" >> $GITHUB_OUTPUT
           echo "failed_list=${FAILED_LIST}" >> $GITHUB_OUTPUT
+          echo "total_count=${TOTAL_COUNT}" >> $GITHUB_OUTPUT
 
           # サマリーをログに出力
           echo "=========================================="
           echo "デプロイ結果サマリー"
           echo "=========================================="
-          echo "成功: ${SUCCESS_COUNT}/15"
-          echo "失敗: ${FAILED_COUNT}/15"
+          echo "成功: ${SUCCESS_COUNT}/${TOTAL_COUNT}"
+          echo "失敗: ${FAILED_COUNT}/${TOTAL_COUNT}"
           if [ -n "$FAILED_LIST" ]; then
             echo "失敗した関数: ${FAILED_LIST}"
           fi
@@ -691,24 +807,34 @@ jobs:
           SUCCESS_COUNT="${{ steps.summary.outputs.success_count }}"
           FAILED_COUNT="${{ steps.summary.outputs.failed_count }}"
           FAILED_LIST="${{ steps.summary.outputs.failed_list }}"
+          TOTAL_COUNT="${{ steps.summary.outputs.total_count }}"
+          SELECTED_FUNCTION="${{ inputs.function_name }}"
 
           if [ "$FAILED_COUNT" = "0" ]; then
             EMOJI="✅"
             COLOR="5763719"
             TITLE="Edge Functions Deploy 成功"
-            DESC="全15関数のデプロイが正常に完了しました"
+            if [ -n "$SELECTED_FUNCTION" ]; then
+              DESC="${SELECTED_FUNCTION} のデプロイが正常に完了しました"
+            else
+              DESC="全${TOTAL_COUNT}関数のデプロイが正常に完了しました"
+            fi
           else
             EMOJI="❌"
             COLOR="15158332"
             TITLE="Edge Functions Deploy 失敗"
-            DESC="一部の関数でデプロイに失敗しました"
+            if [ -n "$SELECTED_FUNCTION" ]; then
+              DESC="${SELECTED_FUNCTION} のデプロイに失敗しました"
+            else
+              DESC="一部の関数でデプロイに失敗しました"
+            fi
           fi
 
           # 失敗した関数がある場合、fieldsに追加
           if [ -n "$FAILED_LIST" ]; then
-            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/15\", \"inline\": true}, {\"name\": \"失敗\", \"value\": \"${FAILED_COUNT}/15\", \"inline\": true}, {\"name\": \"失敗した関数\", \"value\": \"${FAILED_LIST}\", \"inline\": false}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
+            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/${TOTAL_COUNT}\", \"inline\": true}, {\"name\": \"失敗\", \"value\": \"${FAILED_COUNT}/${TOTAL_COUNT}\", \"inline\": true}, {\"name\": \"失敗した関数\", \"value\": \"${FAILED_LIST}\", \"inline\": false}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
           else
-            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/15\", \"inline\": true}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
+            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/${TOTAL_COUNT}\", \"inline\": true}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
           fi
 
           curl -X POST "$DISCORD_SYSTEM_WEBHOOK" \

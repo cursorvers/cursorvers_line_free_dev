@@ -53,9 +53,11 @@ Layer 3: Manus完全介入（最終手段）
 - 自動修正できない場合は Manus タスクを作成
 - 生成したタスクは `orchestration/MANUS_AUTO_FIX_BRIEF.md` を使用
 - `supabase/functions/manus-intelligent-repair` は `MANUS_GITHUB_TOKEN` を優先し、未設定時は GitHub 系修繕を `manual-required` の `skipped` として返す
+- `.github/workflows/deploy-supabase.yml` は `manus-intelligent-repair` を本番 deploy 対象に含み、GitHub Secret の `MANUS_GITHUB_TOKEN` / `GITHUB_REPO` を Supabase Edge Function secret に同期する
 - 重要:
   - GitHub 自動修繕が未接続でも、監査 API 自体は `500` に落とさず `partial` で継続する
   - つまり「監査の健全性」と「GitHub 自動実行の可用性」を分離している
+  - 自動修繕の許可範囲は bounded で、`generate_cards` / `redeploy_function` は自動、`reset_secret` は人手エスカレーションに降格する
 
 ### 自動記録
 
