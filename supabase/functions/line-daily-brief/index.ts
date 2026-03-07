@@ -50,6 +50,7 @@ interface ThemeStats {
 interface BroadcastResult {
   success: boolean;
   requestId?: string | null;
+  responseStatus?: number | null;
   error?: string;
 }
 
@@ -431,6 +432,8 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
   const maxAttempts = 3;
   let attempt = 0;
   let lastError = "";
+  let lastStatus: number | null = null;
+  let lastRequestId: string | null = null;
 
   while (attempt < maxAttempts) {
     attempt += 1;
@@ -456,11 +459,13 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
     if (response.ok) {
       const requestId = response.headers.get("X-Line-Request-Id");
       log.info("Broadcast succeeded", { attempt, requestId });
-      return { success: true, requestId };
+      return { success: true, requestId, responseStatus: response.status };
     }
 
     const errorBody = await response.text();
     lastError = `LINE API error ${response.status}: ${errorBody}`;
+    lastStatus = response.status;
+    lastRequestId = response.headers.get("X-Line-Request-Id");
     const retryAfter = response.headers.get("Retry-After");
     const shouldRetry = response.status === 429 || response.status >= 500;
 
@@ -486,7 +491,12 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
     await delay(retryMs);
   }
 
-  return { success: false, error: lastError || "Unknown LINE broadcast error" };
+  return {
+    success: false,
+    requestId: lastRequestId,
+    responseStatus: lastStatus,
+    error: lastError || "Unknown LINE broadcast error",
+  };
 }
 
 /**
@@ -670,7 +680,7 @@ Deno.serve(async (req) => {
         broadcastStatus: "failed",
         errorMessage: broadcastResult.error || "Unknown error",
         lineRequestId: broadcastResult.requestId || null,
-        lineResponseStatus: null,
+        lineResponseStatus: broadcastResult.responseStatus ?? null,
       }).catch((err) => {
         log.warn("Failed to record broadcast history", { error: err.message });
       });

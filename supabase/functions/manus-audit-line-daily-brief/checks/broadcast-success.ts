@@ -10,6 +10,76 @@ const log = createLogger("audit-broadcast-success");
 const DAYS_TO_CHECK = 7;
 const TARGET_SUCCESS_RATE = 90;
 const CONSECUTIVE_FAILURE_THRESHOLD = 3;
+const MIN_SAMPLE_SIZE = 5;
+const QUOTA_WARNING_PERCENT = 90;
+
+interface QuotaInfo {
+  type: "limited" | "none" | "unknown";
+  limit: number | null;
+  consumption: number | null;
+  percentUsed: number | null;
+}
+
+function getLineChannelAccessToken(): string {
+  return Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ??
+    Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_V2") ??
+    "";
+}
+
+async function fetchQuotaInfo(): Promise<QuotaInfo | null> {
+  const accessToken = getLineChannelAccessToken();
+  if (!accessToken) {
+    return null;
+  }
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+  };
+
+  try {
+    const [quotaResponse, consumptionResponse] = await Promise.all([
+      fetch("https://api.line.me/v2/bot/message/quota", { headers }),
+      fetch("https://api.line.me/v2/bot/message/quota/consumption", {
+        headers,
+      }),
+    ]);
+
+    if (!quotaResponse.ok || !consumptionResponse.ok) {
+      log.warn("Failed to fetch LINE quota metadata", {
+        quotaStatus: quotaResponse.status,
+        consumptionStatus: consumptionResponse.status,
+      });
+      return null;
+    }
+
+    const quotaJson = await quotaResponse.json();
+    const consumptionJson = await consumptionResponse.json();
+
+    const type = quotaJson?.type === "none" || quotaJson?.type === "limited"
+      ? quotaJson.type as "none" | "limited"
+      : "unknown";
+    const limit = typeof quotaJson?.value === "number" ? quotaJson.value : null;
+    const consumption = typeof consumptionJson?.totalUsage === "number"
+      ? consumptionJson.totalUsage
+      : null;
+
+    const percentUsed = type === "limited" && limit && consumption !== null
+      ? (consumption / limit) * 100
+      : null;
+
+    return {
+      type,
+      limit,
+      consumption,
+      percentUsed,
+    };
+  } catch (error) {
+    log.warn("LINE quota lookup failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
 
 export async function checkBroadcastSuccess(
   client: SupabaseClient,
@@ -21,7 +91,7 @@ export async function checkBroadcastSuccess(
 
   const { data, error } = await client
     .from("line_card_broadcasts")
-    .select("sent_at, success")
+    .select("sent_at, success, error_message, line_response_status")
     .gte("sent_at", cutoffDate)
     .order("sent_at", { ascending: false });
 
@@ -33,6 +103,8 @@ export async function checkBroadcastSuccess(
       details: [],
     };
   }
+
+  const quotaInfo = await fetchQuotaInfo();
 
   // Aggregate by date
   const dailyStats: Record<
@@ -75,13 +147,59 @@ export async function checkBroadcastSuccess(
     ? (totalSuccessful / totalBroadcasts) * 100
     : 100;
 
+  const insufficientSample = totalBroadcasts > 0 &&
+    totalBroadcasts < MIN_SAMPLE_SIZE;
+  const quotaSignals = (data || []).filter((record) => {
+    const errorMessage = String(record.error_message ?? "");
+    return record.line_response_status === 429 ||
+      /monthly limit|quota|上限|Too Many Requests/i.test(errorMessage);
+  }).length;
+  const quotaNearLimit = quotaInfo?.type === "limited" &&
+    (quotaInfo.percentUsed ?? 0) >= QUOTA_WARNING_PERCENT;
+  const quotaExhausted = quotaInfo?.type === "limited" &&
+    quotaInfo.limit !== null &&
+    quotaInfo.consumption !== null &&
+    quotaInfo.consumption >= quotaInfo.limit;
+
+  if (quotaInfo?.type === "limited" && quotaInfo.percentUsed !== null) {
+    const usageMessage = `ℹ️ LINE月間通数使用率: ${
+      quotaInfo.percentUsed.toFixed(1)
+    }% (${quotaInfo.consumption}/${quotaInfo.limit})`;
+
+    if (quotaInfo.percentUsed >= QUOTA_WARNING_PERCENT) {
+      warnings.push(
+        `${usageMessage}。無料/上限付きプランの制約を考慮してください。`,
+      );
+    } else {
+      log.info("LINE quota within expected range", {
+        percentUsed: quotaInfo.percentUsed.toFixed(1),
+        consumption: quotaInfo.consumption,
+        limit: quotaInfo.limit,
+      });
+    }
+  }
+
   if (overallSuccessRate < TARGET_SUCCESS_RATE) {
-    warnings.push(
-      `⚠️ 警告: 過去${DAYS_TO_CHECK}日間の配信成功率が${
-        overallSuccessRate.toFixed(1)
-      }%です（目標: ${TARGET_SUCCESS_RATE}%以上）`,
-    );
-    allPassed = false;
+    if (insufficientSample) {
+      warnings.push(
+        `ℹ️ 参考: 過去${DAYS_TO_CHECK}日間の配信成功率は${
+          overallSuccessRate.toFixed(1)
+        }%ですが、試行件数が${totalBroadcasts}件のため監査エラーにはしません`,
+      );
+    } else if (quotaNearLimit || quotaExhausted || quotaSignals > 0) {
+      warnings.push(
+        `ℹ️ 参考: 過去${DAYS_TO_CHECK}日間の配信成功率は${
+          overallSuccessRate.toFixed(1)
+        }%です。月間通数上限の影響が疑われるため、システム障害とはみなしません`,
+      );
+    } else {
+      warnings.push(
+        `⚠️ 警告: 過去${DAYS_TO_CHECK}日間の配信成功率が${
+          overallSuccessRate.toFixed(1)
+        }%です（目標: ${TARGET_SUCCESS_RATE}%以上）`,
+      );
+      allPassed = false;
+    }
   }
 
   // Check consecutive failures
@@ -94,16 +212,25 @@ export async function checkBroadcastSuccess(
     }
   }
   if (consecutiveFailures >= CONSECUTIVE_FAILURE_THRESHOLD) {
-    warnings.push(
-      `🚨 緊急: 連続${consecutiveFailures}日間配信失敗しています！`,
-    );
-    allPassed = false;
+    if (quotaNearLimit || quotaExhausted || quotaSignals > 0) {
+      warnings.push(
+        `ℹ️ 連続${consecutiveFailures}日間の配信失敗がありますが、月間通数上限の影響が疑われます`,
+      );
+    } else {
+      warnings.push(
+        `🚨 緊急: 連続${consecutiveFailures}日間配信失敗しています！`,
+      );
+      allPassed = false;
+    }
   }
 
   log.info("Broadcast success check completed", {
     passed: allPassed,
     overallSuccessRate: overallSuccessRate.toFixed(1),
     warningCount: warnings.length,
+    totalBroadcasts,
+    insufficientSample,
+    quotaPercentUsed: quotaInfo?.percentUsed?.toFixed(1),
   });
 
   return { passed: allPassed, warnings, details };

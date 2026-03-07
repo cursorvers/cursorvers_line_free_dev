@@ -146,7 +146,10 @@ function buildRemediationMessage(remediation: RemediationResult): string {
       }
 
       if (remediation.error) {
-        message += `📝 詳細: ${remediation.error}\n`;
+        const detail = isGitHubAuthFallbackCase
+          ? "GitHub 自動修繕資格情報が無効または未設定のため、GitHub Actions fallback に委譲しました。MANUS_GITHUB_TOKEN のローテーションを実施してください。"
+          : remediation.error;
+        message += `📝 詳細: ${detail}\n`;
       }
       return message;
     }

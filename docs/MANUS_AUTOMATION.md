@@ -177,14 +177,34 @@ git push origin main
 
 ## 設定
 
-### 必須GitHub Secrets
+### Secret Plane
+
+- `GitHub Actions secrets`
+  - 監査実行、workflow dispatch、deploy に使う
+- `Supabase runtime secrets`
+  - `manus-intelligent-repair` や `line-daily-brief` が実行時に読む
+- repo 内 `.env`
+  - local bootstrap のみ。正本にしない
+
+### GitHub Actions secrets
 
 | Secret名 | 説明 | 取得方法 |
 |---------|------|---------|
 | `MANUS_GITHUB_TOKEN` | GitHub自動プッシュ用 | [GitHub Settings](https://github.com/settings/tokens) |
 | `DISCORD_ADMIN_WEBHOOK_URL` | Discord通知用 | Discord Server Settings |
-| `SUPABASE_URL` | Supabase API URL | Supabase Dashboard |
-| `MANUS_AUDIT_API_KEY` | Supabase Service Role Key | Supabase Dashboard |
+| `SUPABASE_ACCESS_TOKEN` | Supabase CLI 用 | Supabase Dashboard / CLI |
+| `SUPABASE_PROJECT_ID` | 対象 project ref | Supabase Dashboard |
+| `MANUS_AUDIT_API_KEY` | 監査 Edge Function 認証 | repo / env policy |
+
+### Supabase runtime secrets
+
+| Secret名 | 説明 |
+|---------|------|
+| `SUPABASE_URL` | Supabase API URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Edge Function runtime DB access |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API |
+| `LINE_CHANNEL_SECRET` | LINE署名検証 |
+| `MANUS_API_KEY` | Manus API |
 
 ### GitHub Token権限
 
