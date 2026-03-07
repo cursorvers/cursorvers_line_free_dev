@@ -34,6 +34,7 @@ import { createLogger } from "../_shared/logger.ts";
 import type { AuditResult } from "../manus-audit-line-daily-brief/types.ts";
 import {
   classifyRepairOverallStatus,
+  ensureGitHubApiOk,
   ManualInterventionRequiredError,
   requireGitHubToken,
 } from "./repair-utils.ts";
@@ -49,7 +50,7 @@ const DISCORD_ADMIN_WEBHOOK_URL = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
 const GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN") ??
   Deno.env.get("GITHUB_TOKEN");
 const GITHUB_REPO = Deno.env.get("GITHUB_REPO") ??
-  "mo666-med/cursorvers_line_free_dev";
+  "cursorvers/cursorvers_line_free_dev";
 
 // 外部API呼び出しのデフォルトタイムアウト（ミリ秒）
 const DEFAULT_API_TIMEOUT = 15000;
@@ -625,7 +626,7 @@ async function executeGenerateCards(step: RepairStep): Promise<string> {
   const githubToken = requireGitHubToken("generate_cards", GITHUB_TOKEN);
 
   const response = await fetchWithTimeout(
-    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/generate-cards.yml/dispatches`,
+    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/replenish-cards.yml/dispatches`,
     {
       method: "POST",
       headers: {
@@ -636,16 +637,14 @@ async function executeGenerateCards(step: RepairStep): Promise<string> {
       body: JSON.stringify({
         ref: "main",
         inputs: {
-          theme,
+          themes: theme,
           count: String(count),
         },
       }),
     },
   );
 
-  if (!response.ok) {
-    throw new Error(`GitHub API error: ${response.status}`);
-  }
+  await ensureGitHubApiOk("generate_cards", response);
 
   return `カード生成ワークフローをトリガー: ${theme} x ${count}`;
 }
@@ -679,9 +678,7 @@ async function executeRedeployFunction(step: RepairStep): Promise<string> {
     },
   );
 
-  if (!response.ok) {
-    throw new Error(`GitHub API error: ${response.status}`);
-  }
+  await ensureGitHubApiOk("redeploy_function", response);
 
   return `関数再デプロイをトリガー: ${functionName} (project: ${projectRef})`;
 }
@@ -773,9 +770,7 @@ ${rootCause ?? "調査が必要"}
     },
   );
 
-  if (!response.ok) {
-    throw new Error(`GitHub API error: ${response.status}`);
-  }
+  await ensureGitHubApiOk("escalate_to_human", response);
 
   const data = await response.json() as { number: number };
   return `GitHub Issue作成: #${data.number}`;

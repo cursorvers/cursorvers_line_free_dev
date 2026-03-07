@@ -18,6 +18,27 @@ export function requireGitHubToken(
   );
 }
 
+export async function ensureGitHubApiOk(
+  actionLabel: string,
+  response: Response,
+): Promise<void> {
+  if (response.ok) {
+    return;
+  }
+
+  const rawBody = (await response.text()).trim();
+  const body = rawBody.length > 180 ? `${rawBody.slice(0, 177)}...` : rawBody;
+  const detail = body ? `: ${body}` : "";
+
+  if ([401, 403, 404, 422].includes(response.status)) {
+    throw new ManualInterventionRequiredError(
+      `${actionLabel}: manual intervention required (GitHub API ${response.status}${detail})`,
+    );
+  }
+
+  throw new Error(`GitHub API error: ${response.status}${detail}`);
+}
+
 export function classifyRepairOverallStatus(
   dryRun: boolean,
   successCount: number,
