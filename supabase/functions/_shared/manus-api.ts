@@ -415,6 +415,11 @@ interface IntelligentRepairResult {
     skippedCount: number;
     overallStatus: "success" | "partial" | "failed" | "dry_run";
   };
+  actions?: Array<{
+    action: string;
+    target: string;
+    params?: Record<string, unknown> | undefined;
+  }> | undefined;
   error?: string | undefined;
 }
 
@@ -516,6 +521,17 @@ export async function triggerIntelligentRepair(
       success: data.summary?.overallStatus !== "failed",
       diagnosis: data.diagnosis,
       summary: data.summary,
+      actions: Array.isArray(data.plan?.steps)
+        ? data.plan.steps.map((step: {
+          action: string;
+          target: string;
+          params?: Record<string, unknown>;
+        }) => ({
+          action: step.action,
+          target: step.target,
+          params: step.params,
+        }))
+        : undefined,
       error: detailSummary || undefined,
     };
   } catch (error) {

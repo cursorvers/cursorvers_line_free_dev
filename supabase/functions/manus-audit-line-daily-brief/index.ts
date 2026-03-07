@@ -237,6 +237,7 @@ Deno.serve(async (req) => {
           triggered: true,
           error: repairResult.error,
           summary: repairResult.summary,
+          actions: repairResult.actions,
         };
 
         if (repairResult.success) {

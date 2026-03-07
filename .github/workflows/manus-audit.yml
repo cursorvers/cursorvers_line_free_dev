@@ -245,6 +245,82 @@ jobs:
             echo "✅ LINE問題なし"
           fi
 
+      - name: Execute GitHub-authenticated fallback repairs
+        if: always() && steps.mode.outputs.mode == 'daily'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "🔁 GitHub認証付きフォールバック修繕を確認..."
+
+          if [ -z "$AUDIT_BODY" ]; then
+            echo "ℹ️ 監査結果が空のためスキップ"
+            exit 0
+          fi
+
+          REM_TRIGGERED=$(echo "$AUDIT_BODY" | jq -r '.remediation.triggered // false')
+          SUCCESS_COUNT=$(echo "$AUDIT_BODY" | jq -r '.remediation.summary.successCount // 0')
+          SKIPPED_COUNT=$(echo "$AUDIT_BODY" | jq -r '.remediation.summary.skippedCount // 0')
+          REMEDIATION_ERROR=$(echo "$AUDIT_BODY" | jq -r '.remediation.error // ""')
+
+          if [ "$REM_TRIGGERED" != "true" ] || [ "$SKIPPED_COUNT" -eq 0 ] || [ "$SUCCESS_COUNT" -ne 0 ]; then
+            echo "ℹ️ GitHubフォールバック不要"
+            exit 0
+          fi
+
+          if ! echo "$REMEDIATION_ERROR" | grep -Eqi 'GitHub API 401|not configured'; then
+            echo "ℹ️ GitHub認証起因のスキップではないためフォールバックしない"
+            exit 0
+          fi
+
+          mapfile -t CARD_REPAIRS < <(
+            echo "$AUDIT_BODY" | jq -r '
+              .remediation.actions[]? |
+              select(.action == "generate_cards") |
+              [.params.theme, ((.params.count // 50) | tostring)] |
+              @tsv
+            '
+          )
+
+          if [ ${#CARD_REPAIRS[@]} -gt 0 ]; then
+            THEMES=$(printf '%s\n' "${CARD_REPAIRS[@]}" | cut -f1 | awk 'NF' | sort -u | paste -sd, -)
+            COUNT=$(printf '%s\n' "${CARD_REPAIRS[@]}" | cut -f2 | awk 'NF' | sort -nr | head -n1)
+
+            if [ -n "$THEMES" ]; then
+              echo "🚀 replenish-cards.yml をフォールバック起動: themes=${THEMES}, count=${COUNT:-50}"
+              gh workflow run replenish-cards.yml \
+                -f themes="$THEMES" \
+                -f count="${COUNT:-50}"
+            fi
+          fi
+
+          mapfile -t REDEPLOY_REPAIRS < <(
+            echo "$AUDIT_BODY" | jq -r '
+              .remediation.actions[]? |
+              select(.action == "redeploy_function") |
+              [.target, ((.params.noVerifyJwt // false) | tostring)] |
+              @tsv
+            '
+          )
+
+          for entry in "${REDEPLOY_REPAIRS[@]}"; do
+            [ -z "$entry" ] && continue
+            FUNCTION_NAME=$(printf '%s' "$entry" | cut -f1)
+            NO_VERIFY_JWT=$(printf '%s' "$entry" | cut -f2)
+
+            if [ -z "$FUNCTION_NAME" ]; then
+              continue
+            fi
+
+            echo "🚀 deploy-supabase.yml をフォールバック起動: function=${FUNCTION_NAME}, no_verify_jwt=${NO_VERIFY_JWT}"
+            gh workflow run deploy-supabase.yml \
+              -f function_name="$FUNCTION_NAME" \
+              -f no_verify_jwt="${NO_VERIFY_JWT:-false}"
+          done
+
+          if echo "$AUDIT_BODY" | jq -e '.remediation.actions[]? | select(.action == "reset_secret")' >/dev/null; then
+            echo "ℹ️ reset_secret は human-gated のため自動実行しません"
+          fi
+
       - name: Auto-fix audit failures with Manus fallback
         if: env.AUDIT_FAILED == 'true'
         id: auto_fix
