@@ -193,6 +193,7 @@ jobs:
           echo "🔍 LINE問題の検出を開始..."
 
           # 監査結果からLINE問題を抽出（AUDIT_BODYはGITHUB_ENV経由で受け取り）
+          # remediation.error に含まれる外部 401 とは分離し、LINE 登録システムの監査結果だけを見る
           LINE_ISSUES=""
 
           if [ -z "$AUDIT_BODY" ]; then
@@ -200,23 +201,34 @@ jobs:
             exit 0
           fi
 
-          # Webhook問題
-          if echo "$AUDIT_BODY" | grep -q "LINE Webhook"; then
-            if echo "$AUDIT_BODY" | grep -q "401\|HTTP 401"; then
+          LINE_CHECK=$(echo "$AUDIT_BODY" | jq -c '.checks.lineRegistrationSystem // null')
+          if [ -z "$LINE_CHECK" ] || [ "$LINE_CHECK" = "null" ]; then
+            echo "ℹ️ LINE登録システム監査データなし"
+            exit 0
+          fi
+
+          LINE_PASSED=$(echo "$LINE_CHECK" | jq -r '.passed // true')
+          LINE_SIGNALS=$(echo "$LINE_CHECK" | jq -r '
+            [
+              (.warnings[]?),
+              (.details.webhookHealth.error?),
+              (.details.apiHealth.error?),
+              (.details.lineBotHealth.error?)
+            ]
+            | map(select(type == "string" and length > 0))
+            | join("\n")
+          ')
+
+          if [ "$LINE_PASSED" != "true" ]; then
+            if echo "$LINE_SIGNALS" | grep -Eq "LINE Webhook|HTTP 401|Unauthorized|401"; then
               LINE_ISSUES="webhook_401"
-            elif echo "$AUDIT_BODY" | grep -q "タイムアウト\|timeout"; then
+            elif echo "$LINE_SIGNALS" | grep -Eqi "タイムアウト|timeout"; then
               LINE_ISSUES="webhook_timeout"
+            elif echo "$LINE_SIGNALS" | grep -Eqi "トークン無効|期限切れ"; then
+              LINE_ISSUES="token_expired"
+            elif echo "$LINE_SIGNALS" | grep -Eqi "LINE登録API.*失敗|API.*down"; then
+              LINE_ISSUES="api_down"
             fi
-          fi
-
-          # トークン問題
-          if echo "$AUDIT_BODY" | grep -q "トークン無効\|期限切れ\|401"; then
-            LINE_ISSUES="token_expired"
-          fi
-
-          # API問題
-          if echo "$AUDIT_BODY" | grep -q "LINE登録API.*失敗\|API.*down"; then
-            LINE_ISSUES="${LINE_ISSUES:-api_down}"
           fi
 
           if [ -n "$LINE_ISSUES" ]; then
