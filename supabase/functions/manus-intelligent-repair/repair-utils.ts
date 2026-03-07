@@ -26,7 +26,9 @@ export function normalizeGitHubRepoAllowlist(
     return Array.from(new Set(values));
   }
 
-  return Array.from(new Set(defaults.filter((value) => value.trim().length > 0)));
+  return Array.from(
+    new Set(defaults.filter((value) => value.trim().length > 0)),
+  );
 }
 
 export function resolveGitHubTargetRepo(
@@ -38,7 +40,9 @@ export function resolveGitHubTargetRepo(
 
   if (!GITHUB_REPO_PATTERN.test(normalizedRepo)) {
     throw new ManualInterventionRequiredError(
-      `${actionLabel}: manual intervention required (invalid GitHub repo target: ${normalizedRepo || "missing"})`,
+      `${actionLabel}: manual intervention required (invalid GitHub repo target: ${
+        normalizedRepo || "missing"
+      })`,
     );
   }
 
@@ -135,9 +139,12 @@ export async function preflightGitHubAccess(
     "Accept": "application/vnd.github+json",
   };
 
-  const rateLimitResponse = await fetchImpl("https://api.github.com/rate_limit", {
-    headers,
-  });
+  const rateLimitResponse = await fetchImpl(
+    "https://api.github.com/rate_limit",
+    {
+      headers,
+    },
+  );
   await ensureGitHubApiOk(actionLabel, rateLimitResponse);
 
   const repoResponse = await fetchImpl(

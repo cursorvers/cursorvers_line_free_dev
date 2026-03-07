@@ -190,13 +190,16 @@ async function dispatchFixWorkflow(
   const endpoint =
     `${GITHUB_API_BASE}/repos/${github.repo.owner}/${github.repo.name}/actions/workflows/${CODE_FIXER_WORKFLOW}/dispatches`;
 
-  const preflightResponse = await fetch(`${GITHUB_API_BASE}/repos/${github.repo.owner}/${github.repo.name}`, {
-    method: "GET",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${github.token}`,
+  const preflightResponse = await fetch(
+    `${GITHUB_API_BASE}/repos/${github.repo.owner}/${github.repo.name}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${github.token}`,
+      },
     },
-  });
+  );
   try {
     await ensureGitHubApiOk("dispatch_fix_workflow", preflightResponse);
   } catch (error) {
@@ -248,7 +251,8 @@ async function createManualIssue(
     return { ok: false, error: message };
   }
 
-  const endpoint = `${GITHUB_API_BASE}/repos/${github.repo.owner}/${github.repo.name}/issues`;
+  const endpoint =
+    `${GITHUB_API_BASE}/repos/${github.repo.owner}/${github.repo.name}/issues`;
   const types = failures.map((failure) => failure.type).join(", ");
 
   const failureDetails = failures

@@ -35,8 +35,8 @@ import type { AuditResult } from "../manus-audit-line-daily-brief/types.ts";
 import {
   classifyRepairOverallStatus,
   ensureGitHubApiOk,
-  normalizeGitHubRepoAllowlist,
   ManualInterventionRequiredError,
+  normalizeGitHubRepoAllowlist,
   preflightGitHubAccess,
   resolveGitHubAuthContext,
 } from "./repair-utils.ts";
