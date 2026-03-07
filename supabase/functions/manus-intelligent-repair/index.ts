@@ -87,6 +87,24 @@ async function fetchWithTimeout(
   }
 }
 
+async function withGitHubManualIntervention<T>(
+  actionLabel: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof ManualInterventionRequiredError) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ManualInterventionRequiredError(
+      `${actionLabel}: manual intervention required (${message})`,
+    );
+  }
+}
+
 // ============================================================
 // Types
 // ============================================================
@@ -625,26 +643,28 @@ async function executeGenerateCards(step: RepairStep): Promise<string> {
   // GitHub Actions workflow_dispatchをトリガー
   const githubToken = requireGitHubToken("generate_cards", GITHUB_TOKEN);
 
-  const response = await fetchWithTimeout(
-    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/replenish-cards.yml/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${githubToken}`,
-        "Accept": "application/vnd.github.v3+json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ref: "main",
-        inputs: {
-          themes: theme,
-          count: String(count),
+  await withGitHubManualIntervention("generate_cards", async () => {
+    const response = await fetchWithTimeout(
+      `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/replenish-cards.yml/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${githubToken}`,
+          "Accept": "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
         },
-      }),
-    },
-  );
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            themes: theme,
+            count: String(count),
+          },
+        }),
+      },
+    );
 
-  await ensureGitHubApiOk("generate_cards", response);
+    await ensureGitHubApiOk("generate_cards", response);
+  });
 
   return `カード生成ワークフローをトリガー: ${theme} x ${count}`;
 }
@@ -659,26 +679,28 @@ async function executeRedeployFunction(step: RepairStep): Promise<string> {
   // GitHub Actions workflow_dispatchをトリガー
   const githubToken = requireGitHubToken("redeploy_function", GITHUB_TOKEN);
 
-  const response = await fetchWithTimeout(
-    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/deploy-supabase.yml/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${githubToken}`,
-        "Accept": "application/vnd.github.v3+json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ref: "main",
-        inputs: {
-          function_name: functionName,
-          no_verify_jwt: noVerifyJwt ? "true" : "false",
+  await withGitHubManualIntervention("redeploy_function", async () => {
+    const response = await fetchWithTimeout(
+      `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/deploy-supabase.yml/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${githubToken}`,
+          "Accept": "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
         },
-      }),
-    },
-  );
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            function_name: functionName,
+            no_verify_jwt: noVerifyJwt ? "true" : "false",
+          },
+        }),
+      },
+    );
 
-  await ensureGitHubApiOk("redeploy_function", response);
+    await ensureGitHubApiOk("redeploy_function", response);
+  });
 
   return `関数再デプロイをトリガー: ${functionName} (project: ${projectRef})`;
 }
@@ -753,26 +775,31 @@ ${rootCause ?? "調査が必要"}
 ---
 🤖 Manus Intelligent Repair による自動生成`;
 
-  const response = await fetchWithTimeout(
-    `https://api.github.com/repos/${GITHUB_REPO}/issues`,
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${githubToken}`,
-        "Accept": "application/vnd.github.v3+json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        title: `🚨 [自動検出] ${issue ?? "システム異常"}`,
-        body: issueBody,
-        labels: ["auto-detected", "needs-human"],
-      }),
+  const data = await withGitHubManualIntervention(
+    "escalate_to_human",
+    async () => {
+      const response = await fetchWithTimeout(
+        `https://api.github.com/repos/${GITHUB_REPO}/issues`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${githubToken}`,
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: `🚨 [自動検出] ${issue ?? "システム異常"}`,
+            body: issueBody,
+            labels: ["auto-detected", "needs-human"],
+          }),
+        },
+      );
+
+      await ensureGitHubApiOk("escalate_to_human", response);
+      return await response.json() as { number: number };
     },
   );
 
-  await ensureGitHubApiOk("escalate_to_human", response);
-
-  const data = await response.json() as { number: number };
   return `GitHub Issue作成: #${data.number}`;
 }
 
