@@ -18,7 +18,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-if [[ "$FUNCTION_NAME" == "manus-intelligent-repair" && -f "$LOCKFILE_PATH" ]]; then
+if [[ -f "$LOCKFILE_PATH" ]]; then
   LOCKFILE_BACKUP="${LOCKFILE_PATH}.bak.kernel"
   echo "[deploy-helper] temporarily disabling deno.lock for ${FUNCTION_NAME}" | tee -a "$DEPLOY_LOG"
   mv "$LOCKFILE_PATH" "$LOCKFILE_BACKUP"
