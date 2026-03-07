@@ -158,9 +158,68 @@ Deno.test("notification - buildNotificationMessage", async (t) => {
       });
       const message = buildNotificationMessage(result, "admin");
       assertEquals(message.includes("手動対応待ち"), true);
-      assertEquals(message.includes("manual intervention required"), true);
-    },
+    assertEquals(message.includes("manual intervention required"), true);
+  },
   );
+
+  await t.step("includes remediation summary when repair succeeds", () => {
+    const result = createBaseResult({
+      remediation: {
+        triggered: true,
+        summary: {
+          totalSteps: 3,
+          successCount: 3,
+          failedCount: 0,
+          skippedCount: 0,
+          overallStatus: "success",
+        },
+      },
+    });
+    const message = buildNotificationMessage(result, "admin");
+    assertEquals(message.includes("自動修繕完了"), true);
+    assertEquals(message.includes("成功 3件 / 全 3件"), true);
+  });
+
+  await t.step("includes remediation summary when repair is partial", () => {
+    const result = createBaseResult({
+      remediation: {
+        triggered: true,
+        error:
+          "generate_cards: manual intervention required (MANUS_GITHUB_TOKEN/GITHUB_TOKEN not configured)",
+        summary: {
+          totalSteps: 3,
+          successCount: 1,
+          failedCount: 0,
+          skippedCount: 2,
+          overallStatus: "partial",
+        },
+      },
+    });
+    const message = buildNotificationMessage(result, "admin");
+    assertEquals(message.includes("一部自動修繕完了"), true);
+    assertEquals(message.includes("成功 1件 / 失敗 0件 / スキップ 2件"), true);
+    assertEquals(message.includes("manual intervention required"), true);
+  });
+
+  await t.step("includes manual-required summary when all steps are skipped", () => {
+    const result = createBaseResult({
+      remediation: {
+        triggered: true,
+        error:
+          "generate_cards: manual intervention required (MANUS_GITHUB_TOKEN/GITHUB_TOKEN not configured)",
+        summary: {
+          totalSteps: 3,
+          successCount: 0,
+          failedCount: 0,
+          skippedCount: 3,
+          overallStatus: "partial",
+        },
+      },
+    });
+    const message = buildNotificationMessage(result, "admin");
+    assertEquals(message.includes("手動対応待ち"), true);
+    assertEquals(message.includes("3件スキップ"), true);
+  });
 
   await t.step("includes maintenance info when present", () => {
     const result = createBaseResult({

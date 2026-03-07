@@ -2,7 +2,7 @@
  * 通知モジュール
  */
 import { createLogger } from "../_shared/logger.ts";
-import { AuditResult } from "./types.ts";
+import { AuditResult, RemediationResult } from "./types.ts";
 
 const log = createLogger("audit-notification");
 
@@ -84,22 +84,69 @@ export function buildNotificationMessage(
   // Remediation
   if (result.remediation?.triggered) {
     message += `**🤖 自動修繕**\n`;
+    message += buildRemediationMessage(result.remediation);
     if (result.remediation.taskUrl) {
+      if (!message.endsWith("\n")) {
+        message += "\n";
+      }
       message += `✅ Manusタスク作成済み\n`;
       message += `📎 ${result.remediation.taskUrl}\n`;
-    } else if (result.remediation.error) {
-      if (result.remediation.error.includes("manual intervention required")) {
-        message += `⚠️ 手動対応待ち: ${result.remediation.error}\n`;
-      } else {
-        message += `❌ 自動修繕失敗: ${result.remediation.error}\n`;
-      }
-    } else {
-      message += `✅ Intelligent repair を実行しました\n`;
     }
     message += "\n";
   }
 
   return message.trim();
+}
+
+function buildRemediationMessage(remediation: RemediationResult): string {
+  const summary = remediation.summary;
+
+  if (summary) {
+    if (summary.overallStatus === "success") {
+      return `✅ 自動修繕完了: 成功 ${summary.successCount}件 / 全 ${summary.totalSteps}件\n`;
+    }
+
+    if (summary.overallStatus === "dry_run") {
+      return `ℹ️ ドライラン: 実行対象 ${summary.totalSteps}件を確認しました\n`;
+    }
+
+    if (
+      summary.successCount === 0 && summary.failedCount === 0 &&
+      summary.skippedCount > 0
+    ) {
+      let message =
+        `⚠️ 手動対応待ち: 自動修繕は安全のため ${summary.skippedCount}件スキップしました\n`;
+      if (remediation.error) {
+        message += `📝 詳細: ${remediation.error}\n`;
+      }
+      return message;
+    }
+
+    if (summary.overallStatus === "partial") {
+      let message =
+        `⚠️ 一部自動修繕完了: 成功 ${summary.successCount}件 / 失敗 ${summary.failedCount}件 / スキップ ${summary.skippedCount}件\n`;
+      if (remediation.error) {
+        message += `📝 詳細: ${remediation.error}\n`;
+      }
+      return message;
+    }
+
+    let message =
+      `❌ 自動修繕失敗: 成功 ${summary.successCount}件 / 失敗 ${summary.failedCount}件 / スキップ ${summary.skippedCount}件\n`;
+    if (remediation.error) {
+      message += `📝 詳細: ${remediation.error}\n`;
+    }
+    return message;
+  }
+
+  if (remediation.error) {
+    if (remediation.error.includes("manual intervention required")) {
+      return `⚠️ 手動対応待ち: ${remediation.error}\n`;
+    }
+    return `❌ 自動修繕失敗: ${remediation.error}\n`;
+  }
+
+  return `✅ Intelligent repair を実行しました\n`;
 }
 
 function buildSectionMessage(

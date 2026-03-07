@@ -99,11 +99,20 @@ export interface MaintenanceResult {
   archivedCards: number;
 }
 
+export interface RemediationSummary {
+  totalSteps: number;
+  successCount: number;
+  failedCount: number;
+  skippedCount: number;
+  overallStatus: "success" | "partial" | "failed" | "dry_run";
+}
+
 export interface RemediationResult {
   triggered: boolean;
   taskId?: string | undefined;
   taskUrl?: string | undefined;
   error?: string | undefined;
+  summary?: RemediationSummary | undefined;
 }
 
 export interface AuditResult {

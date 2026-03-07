@@ -412,7 +412,8 @@ interface IntelligentRepairResult {
     totalSteps: number;
     successCount: number;
     failedCount: number;
-    overallStatus: string;
+    skippedCount: number;
+    overallStatus: "success" | "partial" | "failed" | "dry_run";
   };
   error?: string | undefined;
 }
