@@ -158,8 +158,8 @@ Deno.test("notification - buildNotificationMessage", async (t) => {
       });
       const message = buildNotificationMessage(result, "admin");
       assertEquals(message.includes("手動対応待ち"), true);
-    assertEquals(message.includes("manual intervention required"), true);
-  },
+      assertEquals(message.includes("manual intervention required"), true);
+    },
   );
 
   await t.step("includes remediation summary when repair succeeds", () => {
@@ -201,25 +201,28 @@ Deno.test("notification - buildNotificationMessage", async (t) => {
     assertEquals(message.includes("manual intervention required"), true);
   });
 
-  await t.step("includes manual-required summary when all steps are skipped", () => {
-    const result = createBaseResult({
-      remediation: {
-        triggered: true,
-        error:
-          "generate_cards: manual intervention required (MANUS_GITHUB_TOKEN/GITHUB_TOKEN not configured)",
-        summary: {
-          totalSteps: 3,
-          successCount: 0,
-          failedCount: 0,
-          skippedCount: 3,
-          overallStatus: "partial",
+  await t.step(
+    "includes manual-required summary when all steps are skipped",
+    () => {
+      const result = createBaseResult({
+        remediation: {
+          triggered: true,
+          error:
+            "generate_cards: manual intervention required (MANUS_GITHUB_TOKEN/GITHUB_TOKEN not configured)",
+          summary: {
+            totalSteps: 3,
+            successCount: 0,
+            failedCount: 0,
+            skippedCount: 3,
+            overallStatus: "partial",
+          },
         },
-      },
-    });
-    const message = buildNotificationMessage(result, "admin");
-    assertEquals(message.includes("手動対応待ち"), true);
-    assertEquals(message.includes("3件スキップ"), true);
-  });
+      });
+      const message = buildNotificationMessage(result, "admin");
+      assertEquals(message.includes("手動対応待ち"), true);
+      assertEquals(message.includes("3件スキップ"), true);
+    },
+  );
 
   await t.step("includes maintenance info when present", () => {
     const result = createBaseResult({
