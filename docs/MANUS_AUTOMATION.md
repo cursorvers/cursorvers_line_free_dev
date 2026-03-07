@@ -52,12 +52,24 @@ Layer 3: Manus完全介入（最終手段）
 - 監査失敗時に `scripts/auto-fix/auto-fix-or-manus.sh` を実行
 - 自動修正できない場合は Manus タスクを作成
 - 生成したタスクは `orchestration/MANUS_AUTO_FIX_BRIEF.md` を使用
-- `supabase/functions/manus-intelligent-repair` は `MANUS_GITHUB_TOKEN` を優先し、未設定時は GitHub 系修繕を `manual-required` の `skipped` として返す
+- `supabase/functions/manus-intelligent-repair` は `MANUS_GITHUB_TOKEN` を優先し、互換目的で `GITHUB_TOKEN` を fallback として許容する
+- dispatch 前に GitHub API preflight を行い、`401/403/404/422` は `manual-required` の `skipped` に落とす
+- `GITHUB_REPO` は `MANUS_ALLOWED_GITHUB_REPOS` allowlist によって制約され、誤った repo への dispatch を防ぐ
 - `.github/workflows/deploy-supabase.yml` は `manus-intelligent-repair` を本番 deploy 対象に含み、GitHub Secret の `MANUS_GITHUB_TOKEN` / `GITHUB_REPO` を Supabase Edge Function secret に同期する
 - 重要:
   - GitHub 自動修繕が未接続でも、監査 API 自体は `500` に落とさず `partial` で継続する
   - つまり「監査の健全性」と「GitHub 自動実行の可用性」を分離している
   - 自動修繕の許可範囲は bounded で、`generate_cards` / `redeploy_function` は自動、`reset_secret` は人手エスカレーションに降格する
+  - GitHub Actions fallback は `401/403/404/422` と `manual intervention required` を auth/config 起因の degraded mode として扱う
+
+### GitHub auth hardening
+
+- 現在の production default は `MANUS_GITHUB_TOKEN`
+- `GITHUB_TOKEN` fallback は互換レイヤーであり、長期的な正本ではない
+- 推奨:
+  - fine-grained token または GitHub App に移行する
+  - `MANUS_ALLOWED_GITHUB_REPOS` を設定して dispatch 対象 repo を固定する
+  - `MANUS_GITHUB_TOKEN` が stale な場合も監査 API は落とさず、GitHub Actions fallback へ委譲する
 
 ### 自動記録
 

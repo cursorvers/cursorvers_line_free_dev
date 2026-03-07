@@ -267,7 +267,7 @@ jobs:
             exit 0
           fi
 
-          if ! echo "$REMEDIATION_ERROR" | grep -Eqi 'GitHub API 401|not configured'; then
+          if ! echo "$REMEDIATION_ERROR" | grep -Eqi 'GitHub API (401|403|404|422)|MANUS_GITHUB_TOKEN|GITHUB_TOKEN|not configured|manual intervention required'; then
             echo "ℹ️ GitHub認証起因のスキップではないためフォールバックしない"
             exit 0
           fi

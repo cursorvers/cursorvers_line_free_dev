@@ -35,8 +35,10 @@ import type { AuditResult } from "../manus-audit-line-daily-brief/types.ts";
 import {
   classifyRepairOverallStatus,
   ensureGitHubApiOk,
+  normalizeGitHubRepoAllowlist,
   ManualInterventionRequiredError,
-  requireGitHubToken,
+  preflightGitHubAccess,
+  resolveGitHubAuthContext,
 } from "./repair-utils.ts";
 
 const log = createLogger("manus-intelligent-repair");
@@ -47,10 +49,14 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
   "";
 const MANUS_REPAIR_API_KEY = Deno.env.get("MANUS_REPAIR_API_KEY");
 const DISCORD_ADMIN_WEBHOOK_URL = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
-const GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN") ??
-  Deno.env.get("GITHUB_TOKEN");
+const MANUS_GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN");
+const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN");
 const GITHUB_REPO = Deno.env.get("GITHUB_REPO") ??
   "cursorvers/cursorvers_line_free_dev";
+const GITHUB_ALLOWED_REPOS = normalizeGitHubRepoAllowlist(
+  Deno.env.get("MANUS_ALLOWED_GITHUB_REPOS"),
+  [GITHUB_REPO],
+);
 
 // 外部API呼び出しのデフォルトタイムアウト（ミリ秒）
 const DEFAULT_API_TIMEOUT = 15000;
@@ -86,6 +92,9 @@ async function fetchWithTimeout(
     clearTimeout(timeoutId);
   }
 }
+
+const githubFetch: typeof fetch = (input, init) =>
+  fetchWithTimeout(String(input), init);
 
 async function withGitHubManualIntervention<T>(
   actionLabel: string,
@@ -682,15 +691,22 @@ async function executeGenerateCards(step: RepairStep): Promise<string> {
   const themeList = normalizedThemes.join(",");
 
   // GitHub Actions workflow_dispatchをトリガー
-  const githubToken = requireGitHubToken("generate_cards", GITHUB_TOKEN);
+  const github = resolveGitHubAuthContext("generate_cards", {
+    manusToken: MANUS_GITHUB_TOKEN,
+    githubToken: GITHUB_TOKEN,
+    repo: GITHUB_REPO,
+    allowedRepos: GITHUB_ALLOWED_REPOS,
+  });
 
   await withGitHubManualIntervention("generate_cards", async () => {
+    await preflightGitHubAccess("generate_cards", github, githubFetch);
+
     const response = await fetchWithTimeout(
-      `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/replenish-cards.yml/dispatches`,
+      `https://api.github.com/repos/${github.repo}/actions/workflows/replenish-cards.yml/dispatches`,
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${githubToken}`,
+          "Authorization": `Bearer ${github.token}`,
           "Accept": "application/vnd.github.v3+json",
           "Content-Type": "application/json",
         },
@@ -718,15 +734,22 @@ async function executeRedeployFunction(step: RepairStep): Promise<string> {
   const functionName = step.target;
 
   // GitHub Actions workflow_dispatchをトリガー
-  const githubToken = requireGitHubToken("redeploy_function", GITHUB_TOKEN);
+  const github = resolveGitHubAuthContext("redeploy_function", {
+    manusToken: MANUS_GITHUB_TOKEN,
+    githubToken: GITHUB_TOKEN,
+    repo: GITHUB_REPO,
+    allowedRepos: GITHUB_ALLOWED_REPOS,
+  });
 
   await withGitHubManualIntervention("redeploy_function", async () => {
+    await preflightGitHubAccess("redeploy_function", github, githubFetch);
+
     const response = await fetchWithTimeout(
-      `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/deploy-supabase.yml/dispatches`,
+      `https://api.github.com/repos/${github.repo}/actions/workflows/deploy-supabase.yml/dispatches`,
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${githubToken}`,
+          "Authorization": `Bearer ${github.token}`,
           "Accept": "application/vnd.github.v3+json",
           "Content-Type": "application/json",
         },
@@ -749,7 +772,12 @@ async function executeRedeployFunction(step: RepairStep): Promise<string> {
 async function executeResetSecret(step: RepairStep): Promise<string> {
   // シークレットのリセットは人間の介入が必要
   // GitHub Issueを作成して通知
-  requireGitHubToken("reset_secret", GITHUB_TOKEN);
+  resolveGitHubAuthContext("reset_secret", {
+    manusToken: MANUS_GITHUB_TOKEN,
+    githubToken: GITHUB_TOKEN,
+    repo: GITHUB_REPO,
+    allowedRepos: GITHUB_ALLOWED_REPOS,
+  });
   return await executeEscalate({
     ...step,
     params: {
@@ -802,7 +830,12 @@ async function executeEscalate(step: RepairStep): Promise<string> {
     rootCause?: string;
   };
 
-  const githubToken = requireGitHubToken("escalate_to_human", GITHUB_TOKEN);
+  const github = resolveGitHubAuthContext("escalate_to_human", {
+    manusToken: MANUS_GITHUB_TOKEN,
+    githubToken: GITHUB_TOKEN,
+    repo: GITHUB_REPO,
+    allowedRepos: GITHUB_ALLOWED_REPOS,
+  });
 
   const issueBody = `## 問題
 ${issue ?? "不明な問題"}
@@ -819,12 +852,14 @@ ${rootCause ?? "調査が必要"}
   const data = await withGitHubManualIntervention(
     "escalate_to_human",
     async () => {
+      await preflightGitHubAccess("escalate_to_human", github, githubFetch);
+
       const response = await fetchWithTimeout(
-        `https://api.github.com/repos/${GITHUB_REPO}/issues`,
+        `https://api.github.com/repos/${github.repo}/issues`,
         {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${githubToken}`,
+            "Authorization": `Bearer ${github.token}`,
             "Accept": "application/vnd.github.v3+json",
             "Content-Type": "application/json",
           },

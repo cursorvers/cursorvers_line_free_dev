@@ -129,7 +129,8 @@ function buildRemediationMessage(remediation: RemediationResult): string {
         action.action === "reset_secret"
       ) ?? [];
       const isGitHubAuthFallbackCase = remediation.error
-        ? /GitHub API 401|not configured/i.test(remediation.error)
+        ? /GitHub API (401|403|404|422)|MANUS_GITHUB_TOKEN|GITHUB_TOKEN|not configured|manual intervention required/i
+          .test(remediation.error)
         : false;
 
       let message =

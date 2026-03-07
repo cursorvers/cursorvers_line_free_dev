@@ -98,8 +98,17 @@
 
 #### `MANUS_GITHUB_TOKEN`
 - **用途**: GitHub API操作（Issue作成、ワークフロートリガー等）
-- **設定値**: Personal Access Token（workflow権限付き）
+- **設定値**: Fine-grained PAT か GitHub App installation token を推奨
 - **使用箇所**: 自動修繕、Issue作成ワークフロー
+- **備考**:
+  - 長期的には GitHub App 化を推奨
+  - stale/invalid 時も system は `manual-required` / GitHub Actions fallback で継続する
+
+#### `MANUS_ALLOWED_GITHUB_REPOS`
+- **用途**: Manus が dispatch / issue 作成してよい GitHub repo の allowlist
+- **設定値**: 例 `cursorvers/cursorvers_line_free_dev,cursorvers/fugue-orchestrator`
+- **使用箇所**: `manus-intelligent-repair`, `manus-code-fixer`
+- **備考**: secret ではなく variable / runtime config として扱う
 
 ---
 
