@@ -488,16 +488,20 @@ export async function triggerIntelligentRepair(
 
     const data = await response.json();
     const detailMessages = Array.isArray(data.executed)
-      ? Array.from(new Set(
-        (data.executed as IntelligentRepairExecutionEntry[])
-          .filter((entry) => entry.status === "failed" || entry.status === "skipped")
-          .map((entry) => entry.error ?? entry.output)
-          .filter((message): message is string =>
-            typeof message === "string" &&
-            message.length > 0 &&
-            !message.startsWith("[DRY RUN]")
-          ),
-      ))
+      ? Array.from(
+        new Set(
+          (data.executed as IntelligentRepairExecutionEntry[])
+            .filter((entry) =>
+              entry.status === "failed" || entry.status === "skipped"
+            )
+            .map((entry) => entry.error ?? entry.output)
+            .filter((message): message is string =>
+              typeof message === "string" &&
+              message.length > 0 &&
+              !message.startsWith("[DRY RUN]")
+            ),
+        ),
+      )
       : [];
     const detailSummary = detailMessages.slice(0, 3).join(" | ");
 
