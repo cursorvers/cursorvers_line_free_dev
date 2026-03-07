@@ -193,6 +193,18 @@ interface RepairResponse {
   };
 }
 
+const VALID_CARD_THEMES = [
+  "ai_gov",
+  "tax",
+  "law",
+  "biz",
+  "career",
+  "asset",
+  "general",
+] as const;
+
+type CardTheme = typeof VALID_CARD_THEMES[number];
+
 // ============================================================
 // Authentication
 // ============================================================
@@ -429,17 +441,21 @@ function createRepairStep(
   order: number,
 ): RepairStep {
   switch (action) {
-    case "generate_cards":
+    case "generate_cards": {
+      const themes = extractThemesFromIssue(issue);
+      const theme = themes[0] ?? "general";
       return {
         action,
         target: "line_cards",
         params: {
-          theme: extractThemeFromIssue(issue),
+          theme,
+          themes,
           count: 50,
         },
         order,
         rollbackable: true,
       };
+    }
 
     case "redeploy_function":
       return {
@@ -498,13 +514,30 @@ function createRepairStep(
   }
 }
 
-function extractThemeFromIssue(issue: DiagnosedIssue): string {
-  // descriptionからテーマを抽出
-  const match = issue.description.match(/(\w+)テーマ/);
-  if (match && match[1]) {
-    return match[1];
+function extractThemesFromIssue(issue: DiagnosedIssue): CardTheme[] {
+  const themesFromRootCause = Array.from(
+    issue.rootCause.matchAll(/([a-z_]+)\(\d+枚\)/g),
+    (match) => match[1],
+  );
+
+  const uniqueThemes = Array.from(new Set(themesFromRootCause))
+    .filter((theme): theme is CardTheme =>
+      VALID_CARD_THEMES.includes(theme as CardTheme)
+    );
+
+  if (uniqueThemes.length > 0) {
+    return uniqueThemes;
   }
-  return "general";
+
+  const descriptionMatch = issue.description.match(/([a-z_]+)テーマ/);
+  if (
+    descriptionMatch?.[1] &&
+    VALID_CARD_THEMES.includes(descriptionMatch[1] as CardTheme)
+  ) {
+    return [descriptionMatch[1] as CardTheme];
+  }
+
+  return ["general"];
 }
 
 function extractFunctionFromIssue(issue: DiagnosedIssue): string {
@@ -638,7 +671,15 @@ async function executeStep(step: RepairStep): Promise<string> {
 }
 
 async function executeGenerateCards(step: RepairStep): Promise<string> {
-  const { theme, count } = step.params as { theme: string; count: number };
+  const { theme, themes, count } = step.params as {
+    theme?: string;
+    themes?: string[];
+    count: number;
+  };
+  const normalizedThemes = (Array.isArray(themes) && themes.length > 0)
+    ? themes
+    : [theme ?? "general"];
+  const themeList = normalizedThemes.join(",");
 
   // GitHub Actions workflow_dispatchをトリガー
   const githubToken = requireGitHubToken("generate_cards", GITHUB_TOKEN);
@@ -656,7 +697,7 @@ async function executeGenerateCards(step: RepairStep): Promise<string> {
         body: JSON.stringify({
           ref: "main",
           inputs: {
-            themes: theme,
+            themes: themeList,
             count: String(count),
           },
         }),
@@ -666,7 +707,7 @@ async function executeGenerateCards(step: RepairStep): Promise<string> {
     await ensureGitHubApiOk("generate_cards", response);
   });
 
-  return `カード生成ワークフローをトリガー: ${theme} x ${count}`;
+  return `カード生成ワークフローをトリガー: ${themeList} x ${count}`;
 }
 
 async function executeRedeployFunction(step: RepairStep): Promise<string> {

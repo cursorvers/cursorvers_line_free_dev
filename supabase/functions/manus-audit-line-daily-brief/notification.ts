@@ -114,8 +114,30 @@ function buildRemediationMessage(remediation: RemediationResult): string {
       summary.successCount === 0 && summary.failedCount === 0 &&
       summary.skippedCount > 0
     ) {
+      const fallbackEligibleActions = remediation.actions?.filter((action) =>
+        action.action === "generate_cards" ||
+        action.action === "redeploy_function"
+      ) ?? [];
+      const humanGatedActions = remediation.actions?.filter((action) =>
+        action.action === "reset_secret"
+      ) ?? [];
+      const isGitHubAuthFallbackCase = remediation.error
+        ? /GitHub API 401|not configured/i.test(remediation.error)
+        : false;
+
       let message =
-        `⚠️ 手動対応待ち: 自動修繕は安全のため ${summary.skippedCount}件スキップしました\n`;
+        isGitHubAuthFallbackCase && fallbackEligibleActions.length > 0
+          ? `🔁 GitHub修繕フォールバック対象: 自動修繕 ${fallbackEligibleActions.length}件を後続ワークフローへ委譲します\n`
+          : `⚠️ 手動対応待ち: 自動修繕は安全のため ${summary.skippedCount}件スキップしました\n`;
+
+      if (humanGatedActions.length > 0) {
+        message += `🛡️ 人手ゲート対象: ${
+          humanGatedActions.map((action) =>
+            action.target
+          ).join(", ")
+        }\n`;
+      }
+
       if (remediation.error) {
         message += `📝 詳細: ${remediation.error}\n`;
       }

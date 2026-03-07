@@ -209,6 +209,22 @@ Deno.test("notification - buildNotificationMessage", async (t) => {
           triggered: true,
           error:
             "generate_cards: manual intervention required (MANUS_GITHUB_TOKEN/GITHUB_TOKEN not configured)",
+          actions: [
+            {
+              action: "generate_cards",
+              target: "line_cards",
+              params: { themes: ["asset"], count: 50 },
+            },
+            {
+              action: "redeploy_function",
+              target: "line-daily-brief",
+              params: { noVerifyJwt: false },
+            },
+            {
+              action: "reset_secret",
+              target: "LINE_CHANNEL_ACCESS_TOKEN",
+            },
+          ],
           summary: {
             totalSteps: 3,
             successCount: 0,
@@ -219,8 +235,8 @@ Deno.test("notification - buildNotificationMessage", async (t) => {
         },
       });
       const message = buildNotificationMessage(result, "admin");
-      assertEquals(message.includes("手動対応待ち"), true);
-      assertEquals(message.includes("3件スキップ"), true);
+      assertEquals(message.includes("GitHub修繕フォールバック対象"), true);
+      assertEquals(message.includes("LINE_CHANNEL_ACCESS_TOKEN"), true);
     },
   );
 

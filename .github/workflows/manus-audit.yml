@@ -276,7 +276,20 @@ jobs:
             echo "$AUDIT_BODY" | jq -r '
               .remediation.actions[]? |
               select(.action == "generate_cards") |
-              [.params.theme, ((.params.count // 50) | tostring)] |
+              [
+                (
+                  if (.params.themes | type?) == "array" then
+                    (.params.themes | map(select(type == "string" and length > 0)) | join(","))
+                  elif (.params.themes | type?) == "string" then
+                    .params.themes
+                  elif (.params.theme | type?) == "string" then
+                    .params.theme
+                  else
+                    ""
+                  end
+                ),
+                ((.params.count // 50) | tostring)
+              ] |
               @tsv
             '
           )
