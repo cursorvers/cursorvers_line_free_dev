@@ -811,14 +811,22 @@ async function sendNotification(
   response: RepairResponse,
   channels: string[],
 ): Promise<void> {
+  const waitingForManualIntervention =
+    response.summary.overallStatus === "partial" &&
+    response.summary.successCount === 0 &&
+    response.summary.failedCount === 0 &&
+    response.summary.skippedCount > 0;
   const emoji = response.summary.overallStatus === "success"
     ? "✅"
-    : response.summary.overallStatus === "partial"
+    : response.summary.overallStatus === "partial" ||
+        waitingForManualIntervention
     ? "⚠️"
     : "🚨";
 
   const statusText = response.summary.overallStatus === "success"
     ? "自動修繕完了"
+    : waitingForManualIntervention
+    ? "手動対応待ち"
     : response.summary.overallStatus === "partial"
     ? "一部修繕成功"
     : response.summary.overallStatus === "dry_run"
