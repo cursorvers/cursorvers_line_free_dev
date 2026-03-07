@@ -116,9 +116,9 @@ Deno.test("ensureGitHubApiOk throws hard error for retryable server failures", a
 
 Deno.test("preflightGitHubAccess checks rate limit and repo reachability", async () => {
   const seen: string[] = [];
-  const fetchImpl: typeof fetch = async (input) => {
+  const fetchImpl: typeof fetch = (input) => {
     seen.push(String(input));
-    return new Response("{}", { status: 200 });
+    return Promise.resolve(new Response("{}", { status: 200 }));
   };
 
   await preflightGitHubAccess(
