@@ -415,11 +415,13 @@ interface IntelligentRepairResult {
     skippedCount: number;
     overallStatus: "success" | "partial" | "failed" | "dry_run";
   };
-  actions?: Array<{
-    action: string;
-    target: string;
-    params?: Record<string, unknown> | undefined;
-  }> | undefined;
+  actions?:
+    | Array<{
+      action: string;
+      target: string;
+      params?: Record<string, unknown> | undefined;
+    }>
+    | undefined;
   error?: string | undefined;
 }
 
