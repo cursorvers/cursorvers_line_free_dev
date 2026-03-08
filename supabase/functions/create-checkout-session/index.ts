@@ -4,7 +4,7 @@ import {
   createCorsHeaders,
   createCorsPreflightResponse,
 } from "../_shared/http-utils.ts";
-import { isValidEmail } from "../_shared/validation-utils.ts";
+import { parseCheckoutRequest, validateCheckoutRequest } from "./utils.ts";
 
 const log = createLogger("create-checkout-session");
 
@@ -35,6 +35,33 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const parsedRequest = await parseCheckoutRequest(req);
+    if (!parsedRequest.ok) {
+      log.warn("Rejected checkout request", {
+        method: req.method,
+        status: parsedRequest.status,
+        error: parsedRequest.error,
+        contentType: req.headers.get("content-type"),
+        contentLength: req.headers.get("content-length"),
+      });
+      return new Response(
+        JSON.stringify({ error: parsedRequest.error }),
+        {
+          status: parsedRequest.status,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            ...(parsedRequest.status === 405
+              ? { "Allow": "POST, OPTIONS" }
+              : {}),
+          },
+        },
+      );
+    }
+
+    const { email, opt_in_email, agree_terms, line_user_id } =
+      parsedRequest.body;
+
     // Get environment variables
     const stripeApiKey = Deno.env.get("STRIPE_API_KEY");
     const priceIdLibrary = Deno.env.get("STRIPE_PRICE_ID_LIBRARY");
@@ -51,34 +78,11 @@ Deno.serve(async (req) => {
       httpClient: Stripe.createFetchHttpClient(),
     });
 
-    // Parse request body
-    const { email, opt_in_email, agree_terms, line_user_id } = await req.json();
-
     // Validate input
-    if (!email) {
+    const validation = validateCheckoutRequest(email, agree_terms);
+    if (!validation.valid) {
       return new Response(
-        JSON.stringify({ error: "Email is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    if (!agree_terms) {
-      return new Response(
-        JSON.stringify({ error: "Terms agreement is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // Validate email format
-    if (!isValidEmail(email)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid email format" }),
+        JSON.stringify({ error: validation.error }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

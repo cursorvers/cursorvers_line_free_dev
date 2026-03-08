@@ -57,6 +57,39 @@ interface FixResult {
   };
 }
 
+async function parseFixRequest(req: Request): Promise<
+  | { ok: true; body: FixRequest }
+  | { ok: false; status: number; error: string }
+> {
+  const rawBody = await req.text();
+  if (!rawBody.trim()) {
+    return { ok: false, status: 400, error: "Request body must be valid JSON" };
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as Partial<FixRequest> | null;
+    const body = parsed && typeof parsed === "object"
+      ? {
+        repository: parsed.repository ?? "",
+        branch: parsed.branch ?? "",
+        path: parsed.path ?? "",
+        failures: Array.isArray(parsed.failures) ? parsed.failures : [],
+        ...(typeof parsed.commitSha === "string"
+          ? { commitSha: parsed.commitSha }
+          : {}),
+      }
+      : {
+        repository: "",
+        branch: "",
+        path: "",
+        failures: [],
+      };
+    return { ok: true, body };
+  } catch {
+    return { ok: false, status: 400, error: "Request body must be valid JSON" };
+  }
+}
+
 interface FixedItem {
   type: FailureType;
   files: string[];
@@ -476,7 +509,25 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const request = await req.json() as FixRequest;
+    const parsedRequest = await parseFixRequest(req);
+    if (!parsedRequest.ok) {
+      log.warn("Rejected fix request", {
+        method: req.method,
+        status: parsedRequest.status,
+        error: parsedRequest.error,
+        contentType: req.headers.get("content-type"),
+        contentLength: req.headers.get("content-length"),
+      });
+      return new Response(
+        JSON.stringify({ error: parsedRequest.error }),
+        {
+          status: parsedRequest.status,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const request = parsedRequest.body;
 
     log.info("Processing fix request", {
       repository: request.repository,

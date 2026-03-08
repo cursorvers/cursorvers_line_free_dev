@@ -265,6 +265,64 @@ jobs:
             fi
           }
 
+          run_checkout_guard_smoke() {
+            local name="$1"
+            local file="$2"
+            local method="$3"
+            local body="$4"
+            local expected_status="$5"
+            local expected_fragment="$6"
+            local log_file="/tmp/${name}.log"
+            local body_file="/tmp/${name}-body.txt"
+
+            STRIPE_API_KEY="sk_test_smoke" \
+              STRIPE_PRICE_ID_LIBRARY="price_smoke" \
+              STRIPE_SUCCESS_URL_LIBRARY="https://example.com/success" \
+              STRIPE_CANCEL_URL_LIBRARY="https://example.com/cancel" \
+              deno run --allow-env --allow-net "$file" >"$log_file" 2>&1 &
+            local pid=$!
+
+            local status=000
+            for i in 1 2 3 4 5; do
+              sleep 1
+              local curl_args=(
+                -s
+                -o "$body_file"
+                -w "%{http_code}"
+                -X "$method"
+              )
+              if [ "$method" = "POST" ]; then
+                curl_args+=( -H "content-type: application/json" )
+              fi
+              if [ -n "$body" ]; then
+                curl_args+=( -d "$body" )
+              fi
+              status=$(curl "${curl_args[@]}" http://localhost:8000/ || true)
+              if [ "$status" != "000" ]; then
+                break
+              fi
+            done
+
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+
+            if [ "$status" != "$expected_status" ]; then
+              echo "${name}: Unexpected status: $status"
+              echo "Response:"
+              cat "$body_file" || true
+              echo "Log:"
+              tail -n 50 "$log_file" || true
+              exit 1
+            fi
+
+            local response_body
+            response_body=$(cat "$body_file" || true)
+            if ! echo "$response_body" | grep -q "$expected_fragment"; then
+              echo "${name}: Unexpected body: $response_body"
+              exit 1
+            fi
+          }
+
           run_line_register_smoke() {
             local name="$1"
             local file="$2"
@@ -371,6 +429,8 @@ jobs:
           run_stripe_smoke "stripe-webhook" "supabase/functions/stripe-webhook/index.ts"
           run_discord_smoke "discord-bot" "supabase/functions/discord-bot/index.ts"
           run_checkout_smoke "create-checkout-session" "supabase/functions/create-checkout-session/index.ts"
+          run_checkout_guard_smoke "create-checkout-session-method-guard" "supabase/functions/create-checkout-session/index.ts" "GET" "" "405" "Method Not Allowed"
+          run_checkout_guard_smoke "create-checkout-session-json-guard" "supabase/functions/create-checkout-session/index.ts" "POST" "" "400" "Request body must be valid JSON"
           run_line_register_smoke "line-register" "supabase/functions/line-register/index.ts"
           run_json_smoke "stats-exporter" "supabase/functions/stats-exporter/index.ts" "GET" "" \
             "x-smoke-test: true"

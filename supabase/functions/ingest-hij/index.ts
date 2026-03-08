@@ -21,6 +21,31 @@ interface IngestPayload {
   body: string;
 }
 
+async function parseIngestPayload(req: Request): Promise<
+  | { ok: true; body: IngestPayload }
+  | { ok: false; status: number; error: string }
+> {
+  const rawBody = await req.text();
+  if (!rawBody.trim()) {
+    return { ok: false, status: 400, error: "Request body must be valid JSON" };
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as Partial<IngestPayload> | null;
+    const body = parsed && typeof parsed === "object"
+      ? {
+        message_id: parsed.message_id ?? "",
+        sent_at: parsed.sent_at ?? "",
+        subject: parsed.subject ?? "",
+        body: parsed.body ?? "",
+      }
+      : { message_id: "", sent_at: "", subject: "", body: "" };
+    return { ok: true, body };
+  } catch {
+    return { ok: false, status: 400, error: "Request body must be valid JSON" };
+  }
+}
+
 // TLP抽出関数
 function extractTLP(text: string): string | null {
   // TLP:GREEN, TLP:AMBER, TLP:RED, TLP:CLEAR をマッチ
@@ -242,8 +267,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    // ペイロードをパース
-    const payload = (await req.json()) as IngestPayload;
+    const parsedPayload = await parseIngestPayload(req);
+    if (!parsedPayload.ok) {
+      log.warn("Rejected ingest request", {
+        method: req.method,
+        status: parsedPayload.status,
+        error: parsedPayload.error,
+        contentType: req.headers.get("content-type"),
+        contentLength: req.headers.get("content-length"),
+      });
+      return new Response(JSON.stringify({ error: parsedPayload.error }), {
+        status: parsedPayload.status,
+        headers: responseHeaders,
+      });
+    }
+
+    const payload = parsedPayload.body;
 
     // 必須フィールドの検証
     if (!payload.message_id || !payload.sent_at || !payload.body) {
