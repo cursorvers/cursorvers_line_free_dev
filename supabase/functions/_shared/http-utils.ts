@@ -152,6 +152,30 @@ export function isJsonContentType(request: Request): boolean {
   return contentType.toLowerCase().includes("application/json");
 }
 
+export type RequiredJsonBodyParseResult<T> =
+  | { ok: true; body: T }
+  | { ok: false; error: string; status: number };
+
+/**
+ * 必須のJSONリクエストボディをパース
+ * 空ボディと不正JSONは400として扱う
+ */
+export async function parseRequiredJsonBody<T>(
+  request: Request,
+  errorMessage = "Request body must be valid JSON",
+): Promise<RequiredJsonBodyParseResult<T>> {
+  const rawBody = await request.text();
+  if (!rawBody.trim()) {
+    return { ok: false, error: errorMessage, status: 400 };
+  }
+
+  try {
+    return { ok: true, body: JSON.parse(rawBody) as T };
+  } catch {
+    return { ok: false, error: errorMessage, status: 400 };
+  }
+}
+
 /**
  * リクエストボディをJSONとしてパース
  */

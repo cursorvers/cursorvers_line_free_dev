@@ -1,3 +1,5 @@
+import { parseRequiredJsonBody } from "../_shared/http-utils.ts";
+
 const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
 const DISCORD_GUILD_ID = Deno.env.get("DISCORD_GUILD_ID") ?? "";
 
@@ -94,7 +96,17 @@ Deno.serve(async (req) => {
         headers: { "Content-Type": "application/json" },
       });
     }
-    const body = await req.json();
+    const parsedBody = await parseRequiredJsonBody<{
+      channel_id?: string;
+      name?: string;
+    }>(req);
+    if (!parsedBody.ok) {
+      return new Response(JSON.stringify({ error: parsedBody.error }), {
+        status: parsedBody.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const body = parsedBody.body;
     const { channel_id, name } = body;
     if (!channel_id || !name) {
       return new Response(
@@ -178,7 +190,18 @@ Deno.serve(async (req) => {
         headers: { "Content-Type": "application/json" },
       });
     }
-    const body = await req.json();
+    const parsedBody = await parseRequiredJsonBody<{
+      channel_id?: string;
+      content?: string;
+      embeds?: unknown[];
+    }>(req);
+    if (!parsedBody.ok) {
+      return new Response(JSON.stringify({ error: parsedBody.error }), {
+        status: parsedBody.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const body = parsedBody.body;
     const { channel_id, content, embeds } = body;
     if (!channel_id || (!content && !embeds)) {
       return new Response(

@@ -12,6 +12,7 @@ import {
   isValidHttpMethod,
   jsonResponse,
   parseQueryParams,
+  parseRequiredJsonBody,
 } from "./http-utils.ts";
 
 Deno.test("http-utils - addCorsHeaders", async (t) => {
@@ -216,6 +217,49 @@ Deno.test("http-utils - isJsonContentType", async (t) => {
     const request = new Request("https://example.com");
 
     assertEquals(isJsonContentType(request), false);
+  });
+});
+
+Deno.test("http-utils - parseRequiredJsonBody", async (t) => {
+  await t.step("parses valid JSON body", async () => {
+    const request = new Request("https://example.com", {
+      method: "POST",
+      body: JSON.stringify({ ok: true }),
+    });
+
+    const result = await parseRequiredJsonBody<{ ok: boolean }>(request);
+
+    assertEquals(result, { ok: true, body: { ok: true } });
+  });
+
+  await t.step("returns 400 for empty body", async () => {
+    const request = new Request("https://example.com", {
+      method: "POST",
+      body: "",
+    });
+
+    const result = await parseRequiredJsonBody(request);
+
+    assertEquals(result, {
+      ok: false,
+      error: "Request body must be valid JSON",
+      status: 400,
+    });
+  });
+
+  await t.step("returns 400 for invalid JSON", async () => {
+    const request = new Request("https://example.com", {
+      method: "POST",
+      body: "{",
+    });
+
+    const result = await parseRequiredJsonBody(request);
+
+    assertEquals(result, {
+      ok: false,
+      error: "Request body must be valid JSON",
+      status: 400,
+    });
   });
 });
 

@@ -30,6 +30,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { parseRequiredJsonBody } from "../_shared/http-utils.ts";
 import { createLogger } from "../_shared/logger.ts";
 import type { AuditResult } from "../manus-audit-line-daily-brief/types.ts";
 import {
@@ -989,10 +990,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const request = await req.json() as RepairRequest;
-    const dryRun = request.options.dry_run ?? false;
-    const autoEscalate = request.options.auto_escalate ?? true;
-    const notifyChannels = request.options.notify ?? ["discord"];
+    const parsedRequest = await parseRequiredJsonBody<RepairRequest>(req);
+    if (!parsedRequest.ok) {
+      return new Response(
+        JSON.stringify({ error: parsedRequest.error }),
+        {
+          status: parsedRequest.status,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const request = parsedRequest.body;
+    const options = request.options ?? {};
+    const dryRun = options.dry_run ?? false;
+    const autoEscalate = options.auto_escalate ?? true;
+    const notifyChannels = options.notify ?? ["discord"];
 
     log.info("Starting intelligent repair", {
       trigger: request.trigger,
