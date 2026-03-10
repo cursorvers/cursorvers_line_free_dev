@@ -1,10 +1,19 @@
 import { parseRequiredJsonBody } from "../_shared/http-utils.ts";
+import {
+  discordStatusUnauthorizedResponse,
+  verifyDiscordStatusAuth,
+} from "./auth.ts";
 
 const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
 const DISCORD_GUILD_ID = Deno.env.get("DISCORD_GUILD_ID") ?? "";
+const DISCORD_ADMIN_SECRET = Deno.env.get("DISCORD_ADMIN_SECRET") ?? "";
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
+
+  if (!verifyDiscordStatusAuth(req, { adminSecret: DISCORD_ADMIN_SECRET })) {
+    return discordStatusUnauthorizedResponse();
+  }
 
   // /bot-info: Bot Token の検証
   if (url.pathname.endsWith("/bot-info")) {
