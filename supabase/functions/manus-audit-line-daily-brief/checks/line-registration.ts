@@ -107,7 +107,7 @@ export async function checkLineRegistrationSystem(
   // 全チェックを並列実行（Promise.allSettledで1つの失敗が他に影響しない）
   const results = await Promise.allSettled([
     checkWebhookHealth(config.supabaseUrl),
-    checkApiHealth(config.supabaseUrl),
+    checkApiHealth(config.supabaseUrl, client),
     checkGoogleSheetsSync(config.googleSaJson, config.membersSheetId),
     checkLandingPageAccess(config.landingPageUrl),
     checkLineBotHealth(),
@@ -267,10 +267,13 @@ async function checkWebhookHealth(
 
 /**
  * LINE登録API の疎通チェック
+ * テスト用レコードは作成後に即削除（ゴーストレコード防止）
  */
 async function checkApiHealth(
   supabaseUrl: string,
+  client: SupabaseClient,
 ): Promise<ResponseTimeHealthResult> {
+  const testEmail = `manus-audit-${Date.now()}@example.com`;
   try {
     const { response, responseTime } = await fetchWithTimeout(
       `${supabaseUrl}/functions/v1/line-register`,
@@ -278,8 +281,8 @@ async function checkApiHealth(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: `manus-audit-${Date.now()}@example.com`,
-          opt_in_email: true,
+          email: testEmail,
+          opt_in_email: false,
         }),
       },
     );
@@ -288,6 +291,19 @@ async function checkApiHealth(
       const data = await response.json();
       if (data.ok) {
         log.info("LINE register API is healthy", { responseTime });
+        // テスト用レコードを即時削除
+        const { error: deleteError } = await client
+          .from("members")
+          .delete()
+          .eq("email", testEmail);
+        if (deleteError) {
+          log.warn("Failed to cleanup audit test record", {
+            email: testEmail,
+            error: deleteError.message,
+          });
+        } else {
+          log.info("Audit test record cleaned up", { email: testEmail });
+        }
         return { passed: true, responseTime };
       } else {
         return {

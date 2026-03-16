@@ -50,6 +50,7 @@ interface ThemeStats {
 interface BroadcastResult {
   success: boolean;
   requestId?: string | null;
+  responseStatus?: number | null;
   error?: string;
 }
 
@@ -199,11 +200,28 @@ function getCooldownDate(days: number): Date {
  * 1. Never select the same theme as the previous delivery
  * 2. Prefer different source type (belief vs note) from previous delivery
  * 3. Apply cooldown period to avoid recently used cards
+ * 4. When forcedSourceType is set, only select cards from that source
  */
-async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
+async function selectCard(
+  client: SupabaseClient,
+  forcedSourceType?: SourceType,
+): Promise<LineCard | null> {
   // Configuration
   const COOLDOWN_DAYS = 7;
   const CARD_LIMIT = 20;
+
+  // Source path prefix for forced source type filtering
+  const SOURCE_PATH_PREFIX: Record<string, string> = {
+    belief: "05_Beliefs/",
+    note: "note.com/",
+  };
+  const sourcePrefix = forcedSourceType
+    ? SOURCE_PATH_PREFIX[forcedSourceType]
+    : undefined;
+
+  if (forcedSourceType) {
+    log.info("Forced source type", { forcedSourceType, sourcePrefix });
+  }
 
   // Fetch last delivery info for diversity
   const [lastTheme, lastSourceType] = await Promise.all([
@@ -220,6 +238,26 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
   let availableThemes = themeStats.filter((t) =>
     t.ready_count > 0 || t.total_times_used > 0
   );
+
+  // When source type is forced, only consider themes that have cards of that source
+  if (forcedSourceType && sourcePrefix) {
+    const { data: themesWithSource } = await client
+      .from("line_cards")
+      .select("theme")
+      .like("source_path", `${sourcePrefix}%`)
+      .in("status", ["ready", "used"])
+      .limit(1000);
+
+    const validThemes = new Set(
+      (themesWithSource ?? []).map((r) => r.theme as CardTheme),
+    );
+    availableThemes = availableThemes.filter((t) => validThemes.has(t.theme));
+    log.info("Filtered themes by source type", {
+      forcedSourceType,
+      validThemes: [...validThemes],
+      remainingThemes: availableThemes.length,
+    });
+  }
 
   // Exclude last theme to avoid repetition
   if (lastTheme && availableThemes.length > 1) {
@@ -251,7 +289,7 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
 
   // Fetch cards with cooldown filter
   // Cards are eligible if: last_used_at is null OR last_used_at < cooldownDate
-  const { data: cards, error } = await client
+  let cardQuery = client
     .from("line_cards")
     .select("id,body,theme,source_path,times_used,status")
     .eq("theme", selectedTheme)
@@ -259,6 +297,12 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
     .or(`last_used_at.is.null,last_used_at.lt.${cooldownIso}`)
     .order("times_used", { ascending: true })
     .limit(CARD_LIMIT);
+
+  if (sourcePrefix) {
+    cardQuery = cardQuery.like("source_path", `${sourcePrefix}%`);
+  }
+
+  const { data: cards, error } = await cardQuery;
 
   if (error) {
     throw new Error(`Failed to fetch cards: ${error.message}`);
@@ -270,13 +314,19 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
       "No available cards after cooldown filter, trying without cooldown",
     );
     // Fallback: fetch without cooldown filter
-    const { data: fallbackCards, error: fallbackError } = await client
+    let fallbackQuery = client
       .from("line_cards")
       .select("id,body,theme,source_path,times_used,status")
       .eq("theme", selectedTheme)
       .in("status", ["ready", "used"])
       .order("times_used", { ascending: true })
       .limit(CARD_LIMIT);
+
+    if (sourcePrefix) {
+      fallbackQuery = fallbackQuery.like("source_path", `${sourcePrefix}%`);
+    }
+
+    const { data: fallbackCards, error: fallbackError } = await fallbackQuery;
 
     if (fallbackError || !fallbackCards || fallbackCards.length === 0) {
       log.warn("No available cards for selected theme", { selectedTheme });
@@ -294,9 +344,18 @@ async function selectCard(client: SupabaseClient): Promise<LineCard | null> {
     return selectedCard;
   }
 
-  // Prefer different source type for diversity
+  // Prefer different source type for diversity (skip if forced)
   let selectedCard: LineCard;
-  if (lastSourceType) {
+  if (forcedSourceType) {
+    // Source type already filtered in query — pick randomly
+    const randomIndex = Math.floor(Math.random() * cards.length);
+    selectedCard = cards[randomIndex] as LineCard;
+    log.info("Selected card with forced source type", {
+      cardId: selectedCard.id,
+      sourceType: getSourceType(selectedCard.source_path),
+      forcedSourceType,
+    });
+  } else if (lastSourceType) {
     const preferredCards = cards.filter(
       (c) => getSourceType(c.source_path) !== lastSourceType,
     );
@@ -373,6 +432,8 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
   const maxAttempts = 3;
   let attempt = 0;
   let lastError = "";
+  let lastStatus: number | null = null;
+  let lastRequestId: string | null = null;
 
   while (attempt < maxAttempts) {
     attempt += 1;
@@ -398,11 +459,13 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
     if (response.ok) {
       const requestId = response.headers.get("X-Line-Request-Id");
       log.info("Broadcast succeeded", { attempt, requestId });
-      return { success: true, requestId };
+      return { success: true, requestId, responseStatus: response.status };
     }
 
     const errorBody = await response.text();
     lastError = `LINE API error ${response.status}: ${errorBody}`;
+    lastStatus = response.status;
+    lastRequestId = response.headers.get("X-Line-Request-Id");
     const retryAfter = response.headers.get("Retry-After");
     const shouldRetry = response.status === 429 || response.status >= 500;
 
@@ -428,7 +491,12 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
     await delay(retryMs);
   }
 
-  return { success: false, error: lastError || "Unknown LINE broadcast error" };
+  return {
+    success: false,
+    requestId: lastRequestId,
+    responseStatus: lastStatus,
+    error: lastError || "Unknown LINE broadcast error",
+  };
 }
 
 /**
@@ -561,8 +629,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    log.info("Step 1: Selecting card");
-    const card = await selectCard(supabaseClient);
+    // Parse optional source_type from request body
+    let forcedSourceType: SourceType | undefined;
+    try {
+      const body = await req.json();
+      if (body.source_type && ["belief", "note"].includes(body.source_type)) {
+        forcedSourceType = body.source_type as SourceType;
+        log.info("Request specifies source_type", { forcedSourceType });
+      }
+    } catch {
+      // No body or invalid JSON — use default behavior
+    }
+
+    log.info("Step 1: Selecting card", {
+      forcedSourceType: forcedSourceType ?? "auto",
+    });
+    const card = await selectCard(supabaseClient, forcedSourceType);
 
     if (!card) {
       log.warn("No card available to send");
@@ -598,7 +680,7 @@ Deno.serve(async (req) => {
         broadcastStatus: "failed",
         errorMessage: broadcastResult.error || "Unknown error",
         lineRequestId: broadcastResult.requestId || null,
-        lineResponseStatus: null,
+        lineResponseStatus: broadcastResult.responseStatus ?? null,
       }).catch((err) => {
         log.warn("Failed to record broadcast history", { error: err.message });
       });

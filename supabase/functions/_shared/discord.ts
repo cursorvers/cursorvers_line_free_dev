@@ -1,16 +1,29 @@
 /**
- * Discord API ユーティリティ
+ * Discord API Adapter
  * Role付与/剥奪、招待生成などの共通処理
+ * All endpoint URLs are sourced from DISCORD_ENDPOINTS (no inline URLs).
+ *
+ * @see discord-endpoints.ts for endpoint definitions
+ * @see Plans.md Phase 5-4
  */
 
 import { createLogger } from "./logger.ts";
 import { extractErrorMessage } from "./error-utils.ts";
 import { maskDiscordUserId } from "./masking-utils.ts";
+import { DISCORD_ENDPOINTS } from "./discord-endpoints.ts";
 
 const log = createLogger("discord");
 
-const DEFAULT_CLIENT_ROOM_CATEGORY_ID = "1463892771608723518";
-const DEFAULT_ADMIN_BOT_ID = "1447704583374639165";
+const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
+const DISCORD_GUILD_ID = Deno.env.get("DISCORD_GUILD_ID") ?? "";
+const DISCORD_ROLE_ID = Deno.env.get("DISCORD_ROLE_ID") ?? "";
+const DISCORD_FREE_ROLE_ID = Deno.env.get("DISCORD_FREE_ROLE_ID") ?? "";
+const DISCORD_INVITE_CHANNEL_ID = Deno.env.get("DISCORD_INVITE_CHANNEL_ID") ??
+  "";
+const DISCORD_CLIENT_ROOM_CATEGORY_ID =
+  Deno.env.get("DISCORD_CLIENT_ROOM_CATEGORY_ID") ?? "1463892771608723518";
+const DISCORD_ADMIN_BOT_ID = Deno.env.get("DISCORD_ADMIN_BOT_ID") ??
+  "1447704583374639165";
 
 // Rate Limit リトライ設定
 const MAX_RETRIES = 3;
@@ -20,14 +33,6 @@ const DEFAULT_TIMEOUT_MS = 5000;
 interface DiscordResult {
   success: boolean;
   error?: string;
-}
-
-interface DiscordConfig {
-  botToken: string;
-  guildId: string;
-  roleId: string;
-  clientRoomCategoryId: string;
-  adminBotId: string;
 }
 
 interface DiscordChannelOverwrite {
@@ -41,17 +46,6 @@ interface DiscordGuildChannel {
   id: string;
   parent_id?: string | null;
   permission_overwrites?: DiscordChannelOverwrite[];
-}
-
-function getDiscordConfig(): DiscordConfig {
-  return {
-    botToken: Deno.env.get("DISCORD_BOT_TOKEN") ?? "",
-    guildId: Deno.env.get("DISCORD_GUILD_ID") ?? "",
-    roleId: Deno.env.get("DISCORD_ROLE_ID") ?? "",
-    clientRoomCategoryId: Deno.env.get("DISCORD_CLIENT_ROOM_CATEGORY_ID") ??
-      DEFAULT_CLIENT_ROOM_CATEGORY_ID,
-    adminBotId: Deno.env.get("DISCORD_ADMIN_BOT_ID") ?? DEFAULT_ADMIN_BOT_ID,
-  };
 }
 
 function sanitizeDiscordChannelName(username: string): string {
@@ -118,20 +112,20 @@ export async function createDiscordInvite(
   maxAge: number = 1209600,
   maxUses: number = 1,
 ): Promise<{ success: boolean; inviteUrl?: string; error?: string }> {
-  const { botToken, guildId } = getDiscordConfig();
-
-  if (!botToken || !guildId) {
-    log.warn("Discord credentials not configured");
+  if (!DISCORD_BOT_TOKEN || !DISCORD_INVITE_CHANNEL_ID) {
+    log.warn(
+      "Discord credentials not configured (BOT_TOKEN or INVITE_CHANNEL_ID missing)",
+    );
     return { success: false, error: "Discord credentials not configured" };
   }
 
   try {
     const response = await fetchWithRateLimit(
-      `https://discord.com/api/v10/guilds/${guildId}/invites`,
+      DISCORD_ENDPOINTS.channelInvite.build(DISCORD_INVITE_CHANNEL_ID),
       {
         method: "POST",
         headers: {
-          Authorization: `Bot ${botToken}`,
+          Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -151,7 +145,9 @@ export async function createDiscordInvite(
 
     const invite = await response.json();
     const inviteUrl = `https://discord.gg/${invite.code}`;
-    log.info("Discord invite created", { inviteUrl });
+    log.info("Discord invite created", {
+      inviteCodePrefix: invite.code.slice(0, 4) + "***",
+    });
     return { success: true, inviteUrl };
   } catch (err) {
     const errorMessage = extractErrorMessage(err);
@@ -167,21 +163,24 @@ export async function addDiscordRole(
   discordUserId: string,
   roleId?: string,
 ): Promise<DiscordResult> {
-  const { botToken, guildId, roleId: defaultRoleId } = getDiscordConfig();
-  const targetRoleId = roleId ?? defaultRoleId;
+  const targetRoleId = roleId ?? DISCORD_ROLE_ID;
 
-  if (!botToken || !guildId || !targetRoleId) {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID || !targetRoleId) {
     log.warn("Discord credentials not configured for role assignment");
     return { success: false, error: "Discord credentials not configured" };
   }
 
   try {
     const response = await fetchWithRateLimit(
-      `https://discord.com/api/v10/guilds/${guildId}/members/${discordUserId}/roles/${targetRoleId}`,
+      DISCORD_ENDPOINTS.memberRole.build(
+        DISCORD_GUILD_ID,
+        discordUserId,
+        targetRoleId,
+      ),
       {
-        method: "PUT",
+        method: DISCORD_ENDPOINTS.memberRole.method,
         headers: {
-          Authorization: `Bot ${botToken}`,
+          Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
         },
       },
     );
@@ -213,21 +212,24 @@ export async function removeDiscordRole(
   discordUserId: string,
   roleId?: string,
 ): Promise<DiscordResult> {
-  const { botToken, guildId, roleId: defaultRoleId } = getDiscordConfig();
-  const targetRoleId = roleId ?? defaultRoleId;
+  const targetRoleId = roleId ?? DISCORD_ROLE_ID;
 
-  if (!botToken || !guildId || !targetRoleId) {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID || !targetRoleId) {
     log.warn("Discord credentials not configured for role removal");
     return { success: false, error: "Discord credentials not configured" };
   }
 
   try {
     const response = await fetchWithRateLimit(
-      `https://discord.com/api/v10/guilds/${guildId}/members/${discordUserId}/roles/${targetRoleId}`,
+      DISCORD_ENDPOINTS.memberRoleRemove.build(
+        DISCORD_GUILD_ID,
+        discordUserId,
+        targetRoleId,
+      ),
       {
-        method: "DELETE",
+        method: DISCORD_ENDPOINTS.memberRoleRemove.method,
         headers: {
-          Authorization: `Bot ${botToken}`,
+          Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
         },
       },
     );
@@ -260,10 +262,17 @@ export async function removeDiscordRole(
   }
 }
 
+/**
+ * 既存のclient-roomを検索
+ * ユーザーのpermission_overwritesを持つチャンネルをカテゴリ内で検索
+ */
 export async function findExistingClientRoom(
   discordUserId: string,
 ): Promise<string | null> {
-  const { botToken, guildId, clientRoomCategoryId } = getDiscordConfig();
+  const botToken = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
+  const guildId = Deno.env.get("DISCORD_GUILD_ID") ?? "";
+  const categoryId = Deno.env.get("DISCORD_CLIENT_ROOM_CATEGORY_ID") ??
+    "1463892771608723518";
 
   if (!botToken || !guildId) {
     log.warn("Discord credentials not configured for client room lookup");
@@ -292,7 +301,7 @@ export async function findExistingClientRoom(
 
     const channels = await response.json() as DiscordGuildChannel[];
     const existingChannel = channels.find((channel) =>
-      channel.parent_id === clientRoomCategoryId &&
+      channel.parent_id === categoryId &&
       channel.permission_overwrites?.some((overwrite) =>
         overwrite.id === discordUserId
       )
@@ -309,16 +318,21 @@ export async function findExistingClientRoom(
   }
 }
 
+/**
+ * client-room（プライベートチャンネル）を自動造成
+ * - カテゴリ配下にユーザー専用チャンネルを作成
+ * - @everyone は閲覧不可、対象ユーザーとAdmin Botのみアクセス可
+ */
 export async function createClientRoom(
   discordUserId: string,
   username: string,
 ): Promise<{ success: boolean; channelId?: string; error?: string }> {
-  const {
-    botToken,
-    guildId,
-    clientRoomCategoryId,
-    adminBotId,
-  } = getDiscordConfig();
+  const botToken = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
+  const guildId = Deno.env.get("DISCORD_GUILD_ID") ?? "";
+  const categoryId = Deno.env.get("DISCORD_CLIENT_ROOM_CATEGORY_ID") ??
+    "1463892771608723518";
+  const adminBotId = Deno.env.get("DISCORD_ADMIN_BOT_ID") ??
+    "1447704583374639165";
 
   if (!botToken || !guildId) {
     log.warn("Discord credentials not configured for client room creation");
@@ -337,7 +351,7 @@ export async function createClientRoom(
         body: JSON.stringify({
           name: sanitizeDiscordChannelName(username),
           type: 0,
-          parent_id: clientRoomCategoryId,
+          parent_id: categoryId,
           permission_overwrites: [
             {
               id: guildId,
@@ -393,9 +407,7 @@ export async function sendDiscordDM(
   discordUserId: string,
   message: string,
 ): Promise<DiscordResult> {
-  const { botToken } = getDiscordConfig();
-
-  if (!botToken) {
+  if (!DISCORD_BOT_TOKEN) {
     log.warn("Discord bot token not configured");
     return { success: false, error: "Discord bot token not configured" };
   }
@@ -403,11 +415,11 @@ export async function sendDiscordDM(
   try {
     // まずDMチャンネルを作成
     const channelResponse = await fetchWithRateLimit(
-      `https://discord.com/api/v10/users/@me/channels`,
+      DISCORD_ENDPOINTS.dmChannel.build(),
       {
-        method: "POST",
+        method: DISCORD_ENDPOINTS.dmChannel.method,
         headers: {
-          Authorization: `Bot ${botToken}`,
+          Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -427,11 +439,11 @@ export async function sendDiscordDM(
 
     // DMを送信
     const messageResponse = await fetchWithRateLimit(
-      `https://discord.com/api/v10/channels/${channel.id}/messages`,
+      DISCORD_ENDPOINTS.channelMessage.build(channel.id),
       {
-        method: "POST",
+        method: DISCORD_ENDPOINTS.channelMessage.method,
         headers: {
-          Authorization: `Bot ${botToken}`,
+          Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ content: message }),
@@ -454,4 +466,44 @@ export async function sendDiscordDM(
     log.error("Discord DM error", { errorMessage });
     return { success: false, error: errorMessage };
   }
+}
+
+/**
+ * Discord Roleを入れ替え（旧ロール削除 + 新ロール付与）
+ * いずれかが失敗しても、もう一方は試行する
+ */
+export async function swapDiscordRole(
+  discordUserId: string,
+  oldRoleId: string,
+  newRoleId: string,
+): Promise<DiscordResult> {
+  const removeResult = await removeDiscordRole(discordUserId, oldRoleId);
+  const addResult = await addDiscordRole(discordUserId, newRoleId);
+
+  if (!removeResult.success && !addResult.success) {
+    return {
+      success: false,
+      error: `Remove: ${removeResult.error}, Add: ${addResult.error}`,
+    };
+  }
+
+  if (!addResult.success) {
+    return { success: false, error: `Add failed: ${addResult.error}` };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Free Role IDを取得するヘルパー
+ */
+export function getDiscordFreeRoleId(): string {
+  return DISCORD_FREE_ROLE_ID;
+}
+
+/**
+ * Paid Role IDを取得するヘルパー
+ */
+export function getDiscordPaidRoleId(): string {
+  return DISCORD_ROLE_ID;
 }

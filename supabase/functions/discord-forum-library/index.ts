@@ -1,11 +1,29 @@
-// supabase/functions/discord-forum-library/index.ts
-// Discord Forum × note.com 全記事同期 Edge Function
-// Actions: sync | import | status | seed
-
+/**
+ * Discord Forum Library Edge Function
+ *
+ * note.com 記事を Discord Forum チャンネルにスレッドとして投稿・管理する。
+ *
+ * Actions:
+ * - setup:      Forum チャンネル作成 + タグ設定（初回1回）
+ * - seed:       note-recommendations.ts から note_articles テーブルへ初期データ投入
+ * - sync:       note.com API から全記事を取得して DB に同期
+ * - import:     未投稿記事を Forum スレッドとして投稿
+ * - status:     投稿状況（total / posted / pending）を返す
+ * - fix-embeds: embed なしスレッドのメッセージを再編集して OGP 展開を再トリガー
+ */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createLogger } from "../_shared/logger.ts";
+import { createLogger, errorToContext } from "../_shared/logger.ts";
 import { extractErrorMessage } from "../_shared/error-utils.ts";
-import { FORUM_TAGS, mapHashtagsToForumTags } from "./tag-mapping.ts";
+import { DISCORD_ENDPOINTS } from "../_shared/discord-endpoints.ts";
+import {
+  COURSE_RECOMMENDATIONS,
+  getAllArticles,
+} from "../line-webhook/lib/note-recommendations.ts";
+import { mapHashtagsToForumTags } from "./tag-mapping.ts";
+
+// ============================================
+// Constants
+// ============================================
 
 const log = createLogger("discord-forum-library");
 
@@ -13,17 +31,68 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
   "";
 const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
+const DISCORD_GUILD_ID = Deno.env.get("DISCORD_GUILD_ID") ?? "";
 const DISCORD_FORUM_CHANNEL_ID = Deno.env.get("DISCORD_FORUM_CHANNEL_ID") ??
   "";
 
-const NOTE_API_BASE =
-  "https://note.com/api/v2/creators/nice_wren7963/contents";
-const NOTE_PAGE_SIZE = 6;
-const DISCORD_API_BASE = "https://discord.com/api/v10";
-const DISCORD_API_TIMEOUT = 8000;
-const DISCORD_RATE_LIMIT_PAUSE = 2000;
+/** Discord Forum channel type */
+const CHANNEL_TYPE_GUILD_FORUM = 15;
 
-// --- 型定義 ---
+/** Discord Forum max available_tags */
+const FORUM_MAX_TAGS = 20;
+
+/** Forum thread title max length */
+const FORUM_TITLE_MAX_LENGTH = 100;
+
+/** Rate limit: delay between posts (ms) */
+const POST_DELAY_MS = 3_000;
+
+/** Default max articles per invocation (fit within Edge Function timeout) */
+const DEFAULT_IMPORT_LIMIT = 10;
+
+/** Discord API timeout (ms) */
+const DISCORD_TIMEOUT_MS = 10_000;
+
+/** Max retries for rate-limited requests */
+const MAX_RETRIES = 3;
+
+const DEFAULT_RETRY_DELAY_MS = 1_000;
+
+/** note.com public API base URL */
+const NOTE_API_BASE = "https://note.com/api/v2/creators/nice_wren7963/contents";
+
+/** note.com API items per page */
+const NOTE_PAGE_SIZE = 6;
+
+/** Delay between note.com API requests (ms) */
+const NOTE_API_DELAY_MS = 500;
+
+// ============================================
+// Types
+// ============================================
+
+type Action =
+  | "setup"
+  | "seed"
+  | "sync"
+  | "import"
+  | "status"
+  | "fix-embeds";
+
+interface NoteArticleRow {
+  id: string;
+  article_id: string;
+  title: string;
+  url: string;
+  tags: string[];
+  course_keyword: string | null;
+  discord_thread_id: string | null;
+  posted_at: string | null;
+  note_key: string | null;
+  hashtags: string[];
+  price: number;
+}
+
 interface NoteApiArticle {
   key: string;
   name: string;
@@ -40,75 +109,290 @@ interface NoteApiResponse {
   };
 }
 
+interface ForumTag {
+  id?: string;
+  name: string;
+}
+
+interface SetupResult {
+  action: "setup";
+  channelId: string;
+  tagsConfigured: number;
+}
+
+interface SeedResult {
+  action: "seed";
+  inserted: number;
+  skipped: number;
+  total: number;
+}
+
+interface ImportResult {
+  action: "import";
+  posted: number;
+  failed: number;
+  skipped: number;
+}
+
 interface SyncResult {
+  action: "sync";
   fetched: number;
   inserted: number;
   updated: number;
   skipped: number;
 }
 
-interface ImportResult {
-  posted: number;
-  skipped: number;
-  errors: number;
-}
-
 interface StatusResult {
+  action: "status";
   total: number;
   posted: number;
   pending: number;
   paid: number;
 }
 
-type ActionResult = SyncResult | ImportResult | StatusResult | { seeded: number };
+interface FixEmbedsResult {
+  action: "fix-embeds";
+  checked: number;
+  fixed: number;
+  alreadyOk: number;
+  failed: number;
+}
 
-// --- メインハンドラ ---
-Deno.serve(async (req) => {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return errorResponse("Missing Supabase configuration", 500);
-  }
+type ActionResult =
+  | SetupResult
+  | SeedResult
+  | SyncResult
+  | ImportResult
+  | StatusResult
+  | FixEmbedsResult;
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
+// ============================================
+// Discord API helpers (internal rate-limit control)
+// ============================================
+
+async function discordFetch(
+  url: string,
+  options: RequestInit,
+  retries: number = MAX_RETRIES,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DISCORD_TIMEOUT_MS);
 
   try {
-    const { action } = await req.json();
-    log.info("Action received", { action });
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
 
-    let result: ActionResult;
+    if (response.status === 429 && retries > 0) {
+      const retryAfterHeader = response.headers.get("Retry-After");
+      const retryAfterMs = retryAfterHeader
+        ? parseFloat(retryAfterHeader) * 1000
+        : DEFAULT_RETRY_DELAY_MS;
 
-    switch (action) {
-      case "sync":
-        result = await handleSync(supabase);
-        break;
-      case "import":
-        if (!DISCORD_BOT_TOKEN || !DISCORD_FORUM_CHANNEL_ID) {
-          return errorResponse("Missing Discord configuration", 500);
-        }
-        result = await handleImport(supabase);
-        break;
-      case "status":
-        result = await handleStatus(supabase);
-        break;
-      case "seed":
-        result = await handleSeed(supabase);
-        break;
-      default:
-        return errorResponse(`Unknown action: ${action}`, 400);
+      log.warn("Discord rate limited, retrying", {
+        retryAfterMs,
+        retriesLeft: retries - 1,
+      });
+
+      await delay(retryAfterMs);
+      return discordFetch(url, options, retries - 1);
     }
 
-    log.info("Action completed", { action, result });
-    return jsonResponse({ success: true, action, ...result });
-  } catch (err) {
-    log.error("Action failed", { errorMessage: extractErrorMessage(err) });
-    return errorResponse(extractErrorMessage(err), 500);
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
   }
-});
+}
 
-// ==============================================
-// sync: note.com API → DB
-// ==============================================
+function discordHeaders(
+  json = true,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+  };
+  if (json) {
+    headers["Content-Type"] = "application/json";
+  }
+  return headers;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function truncateTitle(title: string): string {
+  if (title.length <= FORUM_TITLE_MAX_LENGTH) return title;
+  return title.slice(0, FORUM_TITLE_MAX_LENGTH - 1) + "\u2026";
+}
+
+// ============================================
+// Collect all unique tags from articles
+// ============================================
+
+function collectAllTags(): string[] {
+  const tagSet = new Set<string>();
+  for (const course of COURSE_RECOMMENDATIONS) {
+    for (const article of course.articles) {
+      if (article.tags) {
+        for (const tag of article.tags) {
+          tagSet.add(tag);
+        }
+      }
+    }
+  }
+  return [...tagSet].sort();
+}
+
+// ============================================
+// Action: setup
+// ============================================
+
+async function handleSetup(): Promise<SetupResult> {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID) {
+    throw new Error("DISCORD_BOT_TOKEN and DISCORD_GUILD_ID are required");
+  }
+
+  // 1. Create Forum channel
+  const createUrl = DISCORD_ENDPOINTS.guildChannel.build(DISCORD_GUILD_ID);
+  const allTags = collectAllTags();
+
+  // Discord allows max 20 available_tags per Forum channel
+  const limitedTags = allTags.slice(0, FORUM_MAX_TAGS);
+  if (allTags.length > FORUM_MAX_TAGS) {
+    log.warn("Tags exceed Discord limit, truncating", {
+      total: allTags.length,
+      limit: FORUM_MAX_TAGS,
+      dropped: allTags.slice(FORUM_MAX_TAGS),
+    });
+  }
+
+  const availableTags = limitedTags.map((tag) => ({
+    name: tag,
+  }));
+
+  const createResponse = await discordFetch(createUrl, {
+    method: DISCORD_ENDPOINTS.guildChannel.method,
+    headers: discordHeaders(),
+    body: JSON.stringify({
+      name: "note-article-library",
+      type: CHANNEL_TYPE_GUILD_FORUM,
+      topic:
+        "note.com 記事ライブラリ - タグで検索してお探しの記事を見つけてください",
+      available_tags: availableTags,
+    }),
+  });
+
+  if (!createResponse.ok) {
+    const errorBody = await createResponse.text();
+    throw new Error(
+      `Failed to create Forum channel: ${createResponse.status} ${errorBody}`,
+    );
+  }
+
+  const channel = await createResponse.json();
+  log.info("Forum channel created", {
+    channelId: channel.id,
+    name: channel.name,
+  });
+
+  return {
+    action: "setup",
+    channelId: channel.id,
+    tagsConfigured: allTags.length,
+  };
+}
+
+// ============================================
+// Action: seed
+// ============================================
+
+async function handleSeed(supabase: SupabaseClient): Promise<SeedResult> {
+  const articles = getAllArticles();
+  let inserted = 0;
+  let skipped = 0;
+
+  for (const course of COURSE_RECOMMENDATIONS) {
+    for (const article of course.articles) {
+      if (!article.url) {
+        skipped++;
+        continue;
+      }
+
+      const { error } = await supabase
+        .from("note_articles")
+        .upsert(
+          {
+            article_id: article.id,
+            title: article.title,
+            url: article.url,
+            tags: article.tags ?? [],
+            course_keyword: course.keyword,
+          },
+          { onConflict: "article_id" },
+        );
+
+      if (error) {
+        log.warn("Failed to upsert article", {
+          articleId: article.id,
+          error: error.message,
+        });
+        skipped++;
+      } else {
+        inserted++;
+      }
+    }
+  }
+
+  log.info("Seed completed", { inserted, skipped, total: articles.length });
+
+  return {
+    action: "seed",
+    inserted,
+    skipped,
+    total: articles.length,
+  };
+}
+
+// ============================================
+// Action: sync (note.com API → DB)
+// ============================================
+
+async function fetchAllNoteArticles(): Promise<NoteApiArticle[]> {
+  const allArticles: NoteApiArticle[] = [];
+  let page = 1;
+
+  while (true) {
+    const apiUrl = `${NOTE_API_BASE}?kind=note&page=${page}`;
+    log.debug("Fetching note.com API", { page });
+
+    const res = await fetch(apiUrl);
+    if (!res.ok) {
+      throw new Error(`note.com API error: ${res.status} on page ${page}`);
+    }
+
+    const json: NoteApiResponse = await res.json();
+    const { contents, isLastPage } = json.data;
+
+    allArticles.push(...contents);
+
+    if (isLastPage || contents.length < NOTE_PAGE_SIZE) {
+      break;
+    }
+
+    page++;
+    await delay(NOTE_API_DELAY_MS);
+  }
+
+  return allArticles;
+}
+
+export function extractNoteKey(url: string | null): string | null {
+  if (!url) return null;
+  const match = url.match(/\/n\/([a-zA-Z0-9]+)$/);
+  return match?.[1] ?? null;
+}
+
 async function handleSync(supabase: SupabaseClient): Promise<SyncResult> {
   const allArticles = await fetchAllNoteArticles();
   log.info("Fetched articles from note.com", { count: allArticles.length });
@@ -142,7 +426,10 @@ async function handleSync(supabase: SupabaseClient): Promise<SyncResult> {
         .eq("id", existing.id);
 
       if (error) {
-        log.warn("Update failed", { noteKey: article.key, error: error.message });
+        log.warn("Update failed", {
+          noteKey: article.key,
+          error: error.message,
+        });
         skipped++;
       } else {
         updated++;
@@ -163,7 +450,10 @@ async function handleSync(supabase: SupabaseClient): Promise<SyncResult> {
         });
 
       if (error) {
-        log.warn("Insert failed", { noteKey: article.key, error: error.message });
+        log.warn("Insert failed", {
+          noteKey: article.key,
+          error: error.message,
+        });
         skipped++;
       } else {
         inserted++;
@@ -171,344 +461,488 @@ async function handleSync(supabase: SupabaseClient): Promise<SyncResult> {
     }
   }
 
-  return { fetched: allArticles.length, inserted, updated, skipped };
+  return {
+    action: "sync",
+    fetched: allArticles.length,
+    inserted,
+    updated,
+    skipped,
+  };
 }
 
-// ==============================================
-// import: DB → Discord Forum スレッド作成
-// ==============================================
-async function handleImport(supabase: SupabaseClient): Promise<ImportResult> {
-  // 未投稿記事を取得（publish_at 降順）
-  const { data: articles, error } = await supabase
-    .from("note_articles")
-    .select("*")
-    .is("discord_thread_id", null)
-    .order("publish_at", { ascending: true });
+// ============================================
+// Action: import
+// ============================================
 
-  if (error) {
-    throw new Error(`DB query failed: ${error.message}`);
+async function handleImport(
+  supabase: SupabaseClient,
+  limit: number = DEFAULT_IMPORT_LIMIT,
+): Promise<ImportResult> {
+  if (!DISCORD_BOT_TOKEN || !DISCORD_FORUM_CHANNEL_ID) {
+    throw new Error(
+      "DISCORD_BOT_TOKEN and DISCORD_FORUM_CHANNEL_ID are required",
+    );
   }
 
-  if (!articles || articles.length === 0) {
-    log.info("No pending articles to import");
-    return { posted: 0, skipped: 0, errors: 0 };
+  // 1. Fetch available tags from the Forum channel to get tag IDs
+  const channelUrl = DISCORD_ENDPOINTS.channelTags.build(
+    DISCORD_FORUM_CHANNEL_ID,
+  );
+  const channelResponse = await discordFetch(channelUrl, {
+    method: "GET",
+    headers: discordHeaders(false),
+  });
+
+  if (!channelResponse.ok) {
+    throw new Error(`Failed to fetch channel info: ${channelResponse.status}`);
   }
 
-  // Forum チャンネルのタグ一覧を取得
-  const channelTagMap = await fetchForumChannelTags();
+  const channelData = await channelResponse.json();
+  const forumTags: ForumTag[] = channelData.available_tags ?? [];
 
-  let posted = 0;
-  const skipped = 0;
-  let errors = 0;
-
-  for (const article of articles) {
-    try {
-      const titlePrefix = article.price > 0 ? "[有料] " : "";
-      const threadName = `${titlePrefix}${article.title}`.slice(0, 100);
-
-      const priceNote = article.price > 0
-        ? `\n**価格:** ¥${article.price.toLocaleString()}`
-        : "";
-
-      const tagsLine = (article.tags as string[]).length > 0
-        ? `\n**タグ:** ${(article.tags as string[]).join(", ")}`
-        : "";
-
-      const messageContent = [
-        `📝 **${article.title}**`,
-        "",
-        article.url ?? "",
-        priceNote,
-        tagsLine,
-      ].filter(Boolean).join("\n");
-
-      // タグIDを解決
-      const appliedTagIds = resolveTagIdsFromMap(
-        article.tags as string[],
-        channelTagMap,
-      );
-
-      // Discord Forum スレッド作成
-      const threadId = await createForumThread(
-        threadName,
-        messageContent,
-        appliedTagIds,
-      );
-
-      if (!threadId) {
-        errors++;
-        continue;
-      }
-
-      // DB 更新
-      await supabase
-        .from("note_articles")
-        .update({
-          discord_thread_id: threadId,
-          posted_at: new Date().toISOString(),
-        })
-        .eq("id", article.id);
-
-      posted++;
-
-      // Discord Rate Limit 対策: スレッド作成間に pause
-      await sleep(DISCORD_RATE_LIMIT_PAUSE);
-    } catch (err) {
-      log.error("Import error for article", {
-        articleId: article.article_id,
-        errorMessage: extractErrorMessage(err),
-      });
-      errors++;
+  // Build tag name → ID map
+  const tagIdMap = new Map<string, string>();
+  for (const tag of forumTags) {
+    if (tag.id) {
+      tagIdMap.set(tag.name, tag.id);
     }
   }
 
-  return { posted, skipped, errors };
+  // 2. Get unposted articles
+  const { data: pendingArticles, error: fetchError } = await supabase
+    .from("note_articles")
+    .select("*")
+    .is("discord_thread_id", null)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch pending articles: ${fetchError.message}`);
+  }
+
+  const articles = (pendingArticles ?? []) as NoteArticleRow[];
+
+  if (articles.length === 0) {
+    log.info("No pending articles to import");
+    return { action: "import", posted: 0, failed: 0, skipped: 0 };
+  }
+
+  log.info("Starting import", { pendingCount: articles.length });
+
+  let posted = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (let i = 0; i < articles.length; i++) {
+    const article = articles[i];
+    if (!article) {
+      skipped++;
+      continue;
+    }
+
+    // Rate limit: pause between posts
+    if (i > 0) {
+      await delay(POST_DELAY_MS);
+    }
+
+    try {
+      // Map article tags to Forum tag IDs
+      const appliedTagIds: string[] = [];
+      for (const tag of article.tags) {
+        const tagId = tagIdMap.get(tag);
+        if (tagId) {
+          appliedTagIds.push(tagId);
+        }
+      }
+
+      // Build message content
+      const courseInfo = article.course_keyword
+        ? `\n**コース:** ${article.course_keyword}`
+        : "";
+      const priceInfo = article.price > 0
+        ? `\n**価格:** ¥${article.price.toLocaleString()}`
+        : "";
+      const tagsInfo = article.tags.length > 0
+        ? `\n**タグ:** ${article.tags.join(", ")}`
+        : "";
+
+      const messageContent =
+        `${article.url}${courseInfo}${priceInfo}${tagsInfo}`;
+
+      // Paid article prefix
+      const titlePrefix = article.price > 0 ? "[有料] " : "";
+      const threadTitle = truncateTitle(
+        `${titlePrefix}${article.title}`,
+      );
+
+      // Create Forum thread
+      const threadUrl = DISCORD_ENDPOINTS.forumThread.build(
+        DISCORD_FORUM_CHANNEL_ID,
+      );
+      const threadResponse = await discordFetch(threadUrl, {
+        method: DISCORD_ENDPOINTS.forumThread.method,
+        headers: discordHeaders(),
+        body: JSON.stringify({
+          name: threadTitle,
+          message: {
+            content: messageContent,
+          },
+          applied_tags: appliedTagIds.slice(0, 5), // Discord max 5 tags
+        }),
+      });
+
+      if (!threadResponse.ok) {
+        const errorBody = await threadResponse.text();
+        log.error("Failed to create forum thread", {
+          articleId: article.article_id,
+          status: threadResponse.status,
+          error: errorBody,
+        });
+        failed++;
+        continue;
+      }
+
+      const threadData = await threadResponse.json();
+
+      // Update DB with thread ID
+      const { error: updateError } = await supabase
+        .from("note_articles")
+        .update({
+          discord_thread_id: threadData.id,
+          posted_at: new Date().toISOString(),
+        })
+        .eq("article_id", article.article_id);
+
+      if (updateError) {
+        log.error("Failed to update article after posting", {
+          articleId: article.article_id,
+          error: updateError.message,
+        });
+        failed++;
+        continue;
+      }
+
+      posted++;
+      log.info("Forum thread created", {
+        articleId: article.article_id,
+        threadId: threadData.id,
+        progress: `${i + 1}/${articles.length}`,
+      });
+    } catch (err) {
+      log.error("Error posting article", {
+        articleId: article.article_id,
+        ...errorToContext(err),
+      });
+      failed++;
+    }
+  }
+
+  log.info("Import completed", { posted, failed, skipped });
+  return { action: "import", posted, failed, skipped };
 }
 
-// ==============================================
-// status: 投稿状況レポート
-// ==============================================
+// ============================================
+// Action: status
+// ============================================
+
 async function handleStatus(supabase: SupabaseClient): Promise<StatusResult> {
-  const { count: total } = await supabase
+  const { count: totalCount, error: totalError } = await supabase
     .from("note_articles")
     .select("*", { count: "exact", head: true });
 
-  const { count: posted } = await supabase
+  if (totalError) {
+    throw new Error(`Failed to count articles: ${totalError.message}`);
+  }
+
+  const { count: postedCount, error: postedError } = await supabase
     .from("note_articles")
     .select("*", { count: "exact", head: true })
     .not("discord_thread_id", "is", null);
 
-  const { count: paid } = await supabase
+  if (postedError) {
+    throw new Error(`Failed to count posted: ${postedError.message}`);
+  }
+
+  const { count: paidCount, error: paidError } = await supabase
     .from("note_articles")
     .select("*", { count: "exact", head: true })
     .gt("price", 0);
 
+  if (paidError) {
+    throw new Error(`Failed to count paid: ${paidError.message}`);
+  }
+
+  const total = totalCount ?? 0;
+  const posted = postedCount ?? 0;
+
   return {
-    total: total ?? 0,
-    posted: posted ?? 0,
-    pending: (total ?? 0) - (posted ?? 0),
-    paid: paid ?? 0,
+    action: "status",
+    total,
+    posted,
+    pending: total - posted,
+    paid: paidCount ?? 0,
   };
 }
 
-// ==============================================
-// seed: note-recommendations.ts の既存52件を DB に投入
-// (初回セットアップ用、冪等)
-// ==============================================
-async function handleSeed(
+// ============================================
+// Action: fix-embeds
+// ============================================
+
+/** Delay between embed fix edits (ms) — slower to let Discord unfurl */
+const EMBED_FIX_DELAY_MS = 5_000;
+
+/** Default batch size for fix-embeds (fits within Edge Function timeout) */
+const DEFAULT_FIX_EMBEDS_LIMIT = 20;
+
+async function handleFixEmbeds(
   supabase: SupabaseClient,
-): Promise<{ seeded: number }> {
-  // note-recommendations.ts の静的データは直接インポートせず
-  // note.com API で全件取得する sync を使うことを推奨
-  // seed は article_id と url から note_key を逆算して既存レコードの紐付けに使用
+  limit: number = DEFAULT_FIX_EMBEDS_LIMIT,
+  offset: number = 0,
+): Promise<FixEmbedsResult> {
+  if (!DISCORD_BOT_TOKEN) {
+    throw new Error("DISCORD_BOT_TOKEN is required");
+  }
 
-  const { data: existing } = await supabase
+  // 1. Get posted articles batch (those with discord_thread_id)
+  const { data: postedArticles, error: fetchError } = await supabase
     .from("note_articles")
-    .select("id")
-    .limit(1);
+    .select("article_id, title, discord_thread_id")
+    .not("discord_thread_id", "is", null)
+    .order("posted_at", { ascending: true })
+    .range(offset, offset + limit - 1);
 
-  if (existing && existing.length > 0) {
-    log.info("Table already has data, running backfill for note_key");
+  if (fetchError) {
+    throw new Error(`Failed to fetch posted articles: ${fetchError.message}`);
+  }
 
-    // URL から note_key をバックフィル
-    const { data: needsKey } = await supabase
-      .from("note_articles")
-      .select("id, url")
-      .is("note_key", null);
+  const articles = (postedArticles ?? []) as Array<{
+    article_id: string;
+    title: string;
+    discord_thread_id: string;
+  }>;
 
-    let backfilled = 0;
-    for (const row of needsKey ?? []) {
-      const noteKey = extractNoteKey(row.url);
-      if (noteKey) {
-        await supabase
-          .from("note_articles")
-          .update({ note_key: noteKey })
-          .eq("id", row.id);
-        backfilled++;
+  if (articles.length === 0) {
+    return {
+      action: "fix-embeds",
+      checked: 0,
+      fixed: 0,
+      alreadyOk: 0,
+      failed: 0,
+    };
+  }
+
+  log.info("Checking embeds", { threadCount: articles.length });
+
+  let checked = 0;
+  let fixed = 0;
+  let alreadyOk = 0;
+  let failed = 0;
+
+  for (const article of articles) {
+    const threadId = article.discord_thread_id;
+
+    try {
+      // 2. Fetch the first message in the thread
+      const messagesUrl = `${
+        DISCORD_ENDPOINTS.channelMessages.build(threadId)
+      }?limit=1`;
+      const messagesRes = await discordFetch(messagesUrl, {
+        method: DISCORD_ENDPOINTS.channelMessages.method,
+        headers: discordHeaders(false),
+      });
+
+      if (!messagesRes.ok) {
+        log.warn("Failed to fetch thread messages", {
+          threadId,
+          status: messagesRes.status,
+        });
+        failed++;
+        checked++;
+        continue;
+      }
+
+      const messages = await messagesRes.json();
+      if (!Array.isArray(messages) || messages.length === 0) {
+        log.warn("No messages in thread", { threadId });
+        failed++;
+        checked++;
+        continue;
+      }
+
+      const firstMessage = messages[0];
+      checked++;
+
+      // 3. Check if embeds are present
+      if (
+        Array.isArray(firstMessage.embeds) &&
+        firstMessage.embeds.length > 0
+      ) {
+        alreadyOk++;
+        continue;
+      }
+
+      // 4. Edit the message with same content to re-trigger unfurling
+      const editUrl = DISCORD_ENDPOINTS.editMessage.build(
+        threadId,
+        firstMessage.id,
+      );
+      const editRes = await discordFetch(editUrl, {
+        method: DISCORD_ENDPOINTS.editMessage.method,
+        headers: discordHeaders(),
+        body: JSON.stringify({ content: firstMessage.content }),
+      });
+
+      if (!editRes.ok) {
+        const errorBody = await editRes.text();
+        log.warn("Failed to edit message for embed fix", {
+          threadId,
+          messageId: firstMessage.id,
+          status: editRes.status,
+          error: errorBody,
+        });
+        failed++;
+      } else {
+        fixed++;
+        log.info("Embed fix triggered", {
+          threadId,
+          articleId: article.article_id,
+        });
+      }
+
+      // 5. Delay to avoid rate limiting
+      await delay(EMBED_FIX_DELAY_MS);
+    } catch (err) {
+      log.error("Error fixing embed", {
+        threadId,
+        ...errorToContext(err),
+      });
+      failed++;
+      checked++;
+    }
+  }
+
+  log.info("Fix-embeds completed", { checked, fixed, alreadyOk, failed });
+  return { action: "fix-embeds", checked, fixed, alreadyOk, failed };
+}
+
+// ============================================
+// Main handler
+// ============================================
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  const startTime = Date.now();
+
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Missing Supabase configuration");
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Parse action, limit, offset from query param or body
+    let action: Action = "status";
+    let importLimit = DEFAULT_IMPORT_LIMIT;
+    let offset = 0;
+    const url = new URL(req.url);
+    const queryAction = url.searchParams.get("action");
+    const queryLimit = url.searchParams.get("limit");
+    const queryOffset = url.searchParams.get("offset");
+
+    if (queryAction) {
+      action = queryAction as Action;
+    }
+    if (queryLimit) {
+      importLimit = Math.max(
+        1,
+        Math.min(50, parseInt(queryLimit, 10) || DEFAULT_IMPORT_LIMIT),
+      );
+    }
+    if (queryOffset) {
+      offset = Math.max(0, parseInt(queryOffset, 10) || 0);
+    }
+
+    if (req.method === "POST") {
+      try {
+        const body = await req.json();
+        if (body.action) {
+          action = body.action as Action;
+        }
+        if (body.limit) {
+          importLimit = Math.max(
+            1,
+            Math.min(50, Number(body.limit) || DEFAULT_IMPORT_LIMIT),
+          );
+        }
+        if (body.offset !== undefined) {
+          offset = Math.max(0, Number(body.offset) || 0);
+        }
+      } catch {
+        // No body or invalid JSON — use defaults
       }
     }
 
-    return { seeded: backfilled };
-  }
-
-  log.info("Empty table — run 'sync' action to populate from note.com API");
-  return { seeded: 0 };
-}
-
-// ==============================================
-// note.com API ヘルパー
-// ==============================================
-async function fetchAllNoteArticles(): Promise<NoteApiArticle[]> {
-  const allArticles: NoteApiArticle[] = [];
-  let page = 1;
-
-  while (true) {
-    const url = `${NOTE_API_BASE}?kind=note&page=${page}`;
-    log.debug("Fetching note.com API", { page, url });
-
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`note.com API error: ${res.status} on page ${page}`);
-    }
-
-    const json: NoteApiResponse = await res.json();
-    const { contents, isLastPage } = json.data;
-
-    allArticles.push(...contents);
-
-    if (isLastPage || contents.length < NOTE_PAGE_SIZE) {
-      break;
-    }
-
-    page++;
-    // note.com API に優しく
-    await sleep(500);
-  }
-
-  return allArticles;
-}
-
-// ==============================================
-// Discord API ヘルパー
-// ==============================================
-async function fetchForumChannelTags(): Promise<Map<string, string>> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DISCORD_API_TIMEOUT);
-
-  try {
-    const res = await fetch(
-      `${DISCORD_API_BASE}/channels/${DISCORD_FORUM_CHANNEL_ID}`,
-      {
-        headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` },
-        signal: controller.signal,
-      },
-    );
-
-    if (!res.ok) {
-      log.error("Failed to fetch forum channel", { status: res.status });
-      return new Map();
-    }
-
-    const channel = await res.json();
-    const tagMap = new Map<string, string>();
-
-    for (const tag of channel.available_tags ?? []) {
-      tagMap.set(tag.name, tag.id);
-    }
-
-    log.info("Fetched forum tags", { count: tagMap.size });
-    return tagMap;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function createForumThread(
-  name: string,
-  content: string,
-  appliedTagIds: string[],
-): Promise<string | null> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DISCORD_API_TIMEOUT);
-
-  try {
-    const res = await fetch(
-      `${DISCORD_API_BASE}/channels/${DISCORD_FORUM_CHANNEL_ID}/threads`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          message: { content },
-          applied_tags: appliedTagIds.slice(0, 5),
+    const validActions: Action[] = [
+      "setup",
+      "seed",
+      "sync",
+      "import",
+      "status",
+      "fix-embeds",
+    ];
+    if (!validActions.includes(action)) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: `Invalid action: ${action}. Valid: ${validActions.join(", ")}`,
         }),
-        signal: controller.signal,
-      },
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    log.info("Action started", { action });
+
+    let result: ActionResult;
+
+    switch (action) {
+      case "setup":
+        result = await handleSetup();
+        break;
+      case "seed":
+        result = await handleSeed(supabase);
+        break;
+      case "sync":
+        result = await handleSync(supabase);
+        break;
+      case "import":
+        result = await handleImport(supabase, importLimit);
+        break;
+      case "status":
+        result = await handleStatus(supabase);
+        break;
+      case "fix-embeds":
+        result = await handleFixEmbeds(supabase, importLimit, offset);
+        break;
+    }
+
+    log.info("Action completed", {
+      action,
+      durationMs: Date.now() - startTime,
+    });
+
+    return new Response(
+      JSON.stringify({ ok: true, ...result }),
+      { headers: { "Content-Type": "application/json" } },
     );
+  } catch (err) {
+    const errorMessage = extractErrorMessage(err);
+    log.error("Action failed", {
+      ...errorToContext(err),
+      durationMs: Date.now() - startTime,
+    });
 
-    if (res.status === 429) {
-      const retryAfter = res.headers.get("Retry-After");
-      const waitMs = retryAfter ? parseFloat(retryAfter) * 1000 : 5000;
-      log.warn("Discord rate limited, waiting", { waitMs });
-      await sleep(waitMs);
-      // Retry once
-      return createForumThread(name, content, appliedTagIds);
-    }
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      log.error("Failed to create forum thread", {
-        status: res.status,
-        errorText,
-        threadName: name,
-      });
-      return null;
-    }
-
-    const thread = await res.json();
-    log.info("Forum thread created", { threadId: thread.id, name });
-    return thread.id;
-  } finally {
-    clearTimeout(timeoutId);
+    return new Response(
+      JSON.stringify({ ok: false, error: errorMessage }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
   }
-}
-
-// ==============================================
-// ユーティリティ
-// ==============================================
-function resolveTagIdsFromMap(
-  tagNames: readonly string[],
-  channelTagMap: Map<string, string>,
-): string[] {
-  const ids: string[] = [];
-  for (const name of tagNames) {
-    const id = channelTagMap.get(name);
-    if (id) {
-      ids.push(id);
-    }
-  }
-  return ids;
-}
-
-function extractNoteKey(url: string | null): string | null {
-  if (!url) return null;
-  const match = url.match(/\/n\/([a-zA-Z0-9]+)$/);
-  return match?.[1] ?? null;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-function errorResponse(message: string, status: number): Response {
-  return jsonResponse({ success: false, error: message }, status);
-}
-
-// エクスポート（テスト用）
-export {
-  type ActionResult,
-  createForumThread,
-  extractNoteKey,
-  fetchAllNoteArticles,
-  FORUM_TAGS,
-  handleImport,
-  handleSeed,
-  handleStatus,
-  handleSync,
-  type ImportResult,
-  mapHashtagsToForumTags,
-  type NoteApiArticle,
-  resolveTagIdsFromMap,
-  type StatusResult,
-  type SyncResult,
-};
+});

@@ -88,7 +88,7 @@ jobs:
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
-          N8N_INSTANCE_URL: ${{ secrets.N8N_INSTANCE_URL }}
+          N8N_INSTANCE_URL: ${{ vars.N8N_INSTANCE_URL }}
         run: |
           chmod +x ./scripts/daily-check.sh
           ./scripts/daily-check.sh

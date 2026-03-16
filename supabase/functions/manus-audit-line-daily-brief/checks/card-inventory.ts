@@ -20,7 +20,7 @@ const THEMES: CardTheme[] = [
   "asset",
   "general",
 ];
-const MIN_READY_CARDS = 50;
+const MIN_READY_CARDS = 30;
 
 /** RPC応答の行の型定義 */
 interface RpcInventoryRow {
@@ -38,15 +38,16 @@ function isValidRpcRow(row: unknown): row is RpcInventoryRow {
   if (!row || typeof row !== "object") return false;
   const r = row as Record<string, unknown>;
   return (
-    typeof r.theme === "string" &&
-    (r.ready_count === null || typeof r.ready_count === "number" ||
-      typeof r.ready_count === "bigint") &&
-    (r.used_count === null || typeof r.used_count === "number" ||
-      typeof r.used_count === "bigint") &&
-    (r.archived_count === null || typeof r.archived_count === "number" ||
-      typeof r.archived_count === "bigint") &&
-    (r.total_count === null || typeof r.total_count === "number" ||
-      typeof r.total_count === "bigint")
+    typeof r["theme"] === "string" &&
+    (r["ready_count"] === null || typeof r["ready_count"] === "number" ||
+      typeof r["ready_count"] === "bigint") &&
+    (r["used_count"] === null || typeof r["used_count"] === "number" ||
+      typeof r["used_count"] === "bigint") &&
+    (r["archived_count"] === null ||
+      typeof r["archived_count"] === "number" ||
+      typeof r["archived_count"] === "bigint") &&
+    (r["total_count"] === null || typeof r["total_count"] === "number" ||
+      typeof r["total_count"] === "bigint")
   );
 }
 

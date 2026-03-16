@@ -52,6 +52,24 @@ Layer 3: Manus完全介入（最終手段）
 - 監査失敗時に `scripts/auto-fix/auto-fix-or-manus.sh` を実行
 - 自動修正できない場合は Manus タスクを作成
 - 生成したタスクは `orchestration/MANUS_AUTO_FIX_BRIEF.md` を使用
+- `supabase/functions/manus-intelligent-repair` は `MANUS_GITHUB_TOKEN` を優先し、互換目的で `GITHUB_TOKEN` を fallback として許容する
+- dispatch 前に GitHub API preflight を行い、`401/403/404/422` は `manual-required` の `skipped` に落とす
+- `GITHUB_REPO` は `MANUS_ALLOWED_GITHUB_REPOS` allowlist によって制約され、誤った repo への dispatch を防ぐ
+- `.github/workflows/deploy-supabase.yml` は `manus-intelligent-repair` を本番 deploy 対象に含み、GitHub Secret の `MANUS_GITHUB_TOKEN` / `GITHUB_REPO` を Supabase Edge Function secret に同期する
+- 重要:
+  - GitHub 自動修繕が未接続でも、監査 API 自体は `500` に落とさず `partial` で継続する
+  - つまり「監査の健全性」と「GitHub 自動実行の可用性」を分離している
+  - 自動修繕の許可範囲は bounded で、`generate_cards` / `redeploy_function` は自動、`reset_secret` は人手エスカレーションに降格する
+  - GitHub Actions fallback は `401/403/404/422` と `manual intervention required` を auth/config 起因の degraded mode として扱う
+
+### GitHub auth hardening
+
+- 現在の production default は `MANUS_GITHUB_TOKEN`
+- `GITHUB_TOKEN` fallback は互換レイヤーであり、長期的な正本ではない
+- 推奨:
+  - fine-grained token または GitHub App に移行する
+  - `MANUS_ALLOWED_GITHUB_REPOS` を設定して dispatch 対象 repo を固定する
+  - `MANUS_GITHUB_TOKEN` が stale な場合も監査 API は落とさず、GitHub Actions fallback へ委譲する
 
 ### 自動記録
 
@@ -171,14 +189,34 @@ git push origin main
 
 ## 設定
 
-### 必須GitHub Secrets
+### Secret Plane
+
+- `GitHub Actions secrets`
+  - 監査実行、workflow dispatch、deploy に使う
+- `Supabase runtime secrets`
+  - `manus-intelligent-repair` や `line-daily-brief` が実行時に読む
+- repo 内 `.env`
+  - local bootstrap のみ。正本にしない
+
+### GitHub Actions secrets
 
 | Secret名 | 説明 | 取得方法 |
 |---------|------|---------|
 | `MANUS_GITHUB_TOKEN` | GitHub自動プッシュ用 | [GitHub Settings](https://github.com/settings/tokens) |
 | `DISCORD_ADMIN_WEBHOOK_URL` | Discord通知用 | Discord Server Settings |
-| `SUPABASE_URL` | Supabase API URL | Supabase Dashboard |
-| `MANUS_AUDIT_API_KEY` | Supabase Service Role Key | Supabase Dashboard |
+| `SUPABASE_ACCESS_TOKEN` | Supabase CLI 用 | Supabase Dashboard / CLI |
+| `SUPABASE_PROJECT_ID` | 対象 project ref | Supabase Dashboard |
+| `MANUS_AUDIT_API_KEY` | 監査 Edge Function 認証 | repo / env policy |
+
+### Supabase runtime secrets
+
+| Secret名 | 説明 |
+|---------|------|
+| `SUPABASE_URL` | Supabase API URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Edge Function runtime DB access |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API |
+| `LINE_CHANNEL_SECRET` | LINE署名検証 |
+| `MANUS_API_KEY` | Manus API |
 
 ### GitHub Token権限
 
@@ -208,6 +246,7 @@ git push origin main
 1. `scripts/auto-fix/`のスクリプトが存在するか確認
 2. スクリプトに実行権限があるか確認（`chmod +x`）
 3. `MANUS_GITHUB_TOKEN`に`workflow`スコープがあるか確認
+4. トークン未設定時は監査結果が `partial` で返ることを確認し、Discord 通知に `manual intervention required` が出ているか確認
 
 ### ログがGitHubにプッシュされない
 

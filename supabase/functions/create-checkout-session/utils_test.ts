@@ -3,7 +3,11 @@
  * Note: CORS/response helpers moved to _shared/http-utils.ts and tested there
  */
 import { assertEquals } from "std-assert";
-import { isValidEmail, validateCheckoutRequest } from "./utils.ts";
+import {
+  isValidEmail,
+  parseCheckoutRequest,
+  validateCheckoutRequest,
+} from "./utils.ts";
 
 Deno.test("create-checkout-session - isValidEmail", async (t) => {
   await t.step("accepts valid email", () => {
@@ -82,5 +86,95 @@ Deno.test("create-checkout-session - validateCheckoutRequest", async (t) => {
     const result = validateCheckoutRequest("test@example.com", undefined);
     assertEquals(result.valid, false);
     assertEquals(result.error, "Terms agreement is required");
+  });
+});
+
+Deno.test("create-checkout-session - parseCheckoutRequest", async (t) => {
+  await t.step("accepts valid JSON POST request", async () => {
+    const request = new Request("https://example.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "test@example.com",
+        agree_terms: true,
+        opt_in_email: false,
+      }),
+    });
+
+    const result = await parseCheckoutRequest(request);
+
+    assertEquals(result.ok, true);
+    if (result.ok) {
+      assertEquals(result.body.email, "test@example.com");
+      assertEquals(result.body.agree_terms, true);
+      assertEquals(result.body.opt_in_email, false);
+    }
+  });
+
+  await t.step("rejects non-POST method", async () => {
+    const request = new Request("https://example.com", {
+      method: "GET",
+    });
+
+    const result = await parseCheckoutRequest(request);
+
+    assertEquals(result, {
+      ok: false,
+      error: "Method Not Allowed",
+      status: 405,
+    });
+  });
+
+  await t.step(
+    "accepts valid JSON without content type for compatibility",
+    async () => {
+      const request = new Request("https://example.com", {
+        method: "POST",
+        body: JSON.stringify({
+          email: "test@example.com",
+          agree_terms: true,
+        }),
+      });
+
+      const result = await parseCheckoutRequest(request);
+
+      assertEquals(result.ok, true);
+      if (result.ok) {
+        assertEquals(result.body.email, "test@example.com");
+        assertEquals(result.body.agree_terms, true);
+      }
+    },
+  );
+
+  await t.step("rejects invalid JSON body", async () => {
+    const request = new Request("https://example.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{",
+    });
+
+    const result = await parseCheckoutRequest(request);
+
+    assertEquals(result, {
+      ok: false,
+      error: "Request body must be valid JSON",
+      status: 400,
+    });
+  });
+
+  await t.step("rejects empty JSON body", async () => {
+    const request = new Request("https://example.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "",
+    });
+
+    const result = await parseCheckoutRequest(request);
+
+    assertEquals(result, {
+      ok: false,
+      error: "Request body must be valid JSON",
+      status: 400,
+    });
   });
 });

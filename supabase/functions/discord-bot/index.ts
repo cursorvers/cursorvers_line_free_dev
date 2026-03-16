@@ -30,6 +30,7 @@ const RATE_LIMIT = {
 const DISCORD_PUBLIC_KEY = Deno.env.get("DISCORD_PUBLIC_KEY") ?? "";
 const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
 const DISCORD_ROLE_ID = Deno.env.get("DISCORD_ROLE_ID") ?? "";
+const DISCORD_FREE_ROLE_ID = Deno.env.get("DISCORD_FREE_ROLE_ID") ?? "";
 const SEC_BRIEF_CHANNEL_ID = Deno.env.get("SEC_BRIEF_CHANNEL_ID") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
@@ -130,6 +131,22 @@ async function handleJoin(
     });
   }
 
+  // guild_id 検証: 正規サーバーからのリクエストのみ受け付け
+  const expectedGuildId = Deno.env.get("DISCORD_GUILD_ID") ?? "";
+  if (expectedGuildId && guildId !== expectedGuildId) {
+    log.warn("Invalid guild_id in /join command", {
+      guildId,
+      expectedGuildId,
+    });
+    return jsonResponse({
+      type: 4,
+      data: {
+        content: "⛔ **エラー**: このサーバーではコマンドを使用できません。",
+        flags: 64,
+      },
+    });
+  }
+
   const isAllowed = await checkRateLimit(supabase, userId);
   if (!isAllowed) {
     return jsonResponse({
@@ -163,14 +180,13 @@ async function handleJoin(
     });
   }
 
-  // メールアドレスで検索（members テーブル。支払いメール = email）
+  // メールアドレスで検索（members テーブル。全tier対象で検索し、コード側で分岐）
   const { data: member, error } = await supabase
     .from("members")
     .select(
       "id,email,discord_user_id,tier,status,stripe_customer_id,stripe_subscription_id",
     )
     .eq("email", email)
-    .in("status", ["active", "trialing"])
     .maybeSingle();
 
   if (error || !member) {
@@ -181,7 +197,40 @@ async function handleJoin(
       type: 4,
       data: {
         content:
-          `⛔ **エラー**: そのメールアドレス (${email}) の決済情報が見つかりません。\nStripeで決済したメールアドレスを正確に入力してください。`,
+          `⛔ **エラー**: そのメールアドレス (${email}) が見つかりません。\nLINEで友だち追加してメールアドレスを登録してください。\n既に登録済みの方は、登録時のメールアドレスを正確に入力してください。`,
+        flags: 64,
+      },
+    });
+  }
+
+  // /join は有料プラン（library/master）専用
+  const paidTiers = ["library", "master"];
+  const isPaid = paidTiers.includes(member.tier ?? "");
+
+  if (!isPaid) {
+    await recordAttempt(supabase, userId, false, {
+      email: maskEmail(email) ?? "***",
+    });
+    return jsonResponse({
+      type: 4,
+      data: {
+        content:
+          "ℹ️ このコマンドは有料プラン会員専用です。\n無料メンバーの方は、Discordに参加するだけで無料特典チャンネルにアクセスできます。\n\n💎 有料プランへのアップグレードはこちら:\nhttps://cursorvers.com/services",
+        flags: 64,
+      },
+    });
+  }
+
+  // 有料会員だがサブスクが無効な場合
+  if (member.status !== "active") {
+    await recordAttempt(supabase, userId, false, {
+      email: maskEmail(email) ?? "***",
+    });
+    return jsonResponse({
+      type: 4,
+      data: {
+        content:
+          "⛔ **エラー**: サブスクリプションが無効です。\n有効なサブスクリプションが必要です。再度お申込みいただくか、管理者にお問い合わせください。",
         flags: 64,
       },
     });
@@ -198,7 +247,7 @@ async function handleJoin(
     });
   }
 
-  // ロール付与 (Discord API) with timeout + rate-limit handling
+  // Paidロール付与 (Discord API) with timeout + rate-limit handling
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), DISCORD_API_TIMEOUT);
 
@@ -255,6 +304,24 @@ async function handleJoin(
     clearTimeout(timeoutId);
   }
 
+  // Freeロールを削除（昇格処理）
+  if (DISCORD_FREE_ROLE_ID) {
+    try {
+      await fetch(
+        `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${DISCORD_FREE_ROLE_ID}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` },
+        },
+      );
+    } catch (err) {
+      // Freeロール削除失敗は致命的ではない
+      log.warn("Failed to remove free role during upgrade", {
+        errorMessage: extractErrorMessage(err),
+      });
+    }
+  }
+
   // DB更新 (Discord IDを紐付け)
   const { error: updateError } = await supabase
     .from("members")
@@ -281,6 +348,10 @@ async function handleJoin(
 
   // ウェルカムメッセージをチャンネルに公開投稿
   const channelId = interaction.channel_id;
+  const tierLabel = member.tier === "master"
+    ? "Master Class"
+    : "Library Member";
+
   if (channelId) {
     try {
       await fetch(
@@ -292,7 +363,8 @@ async function handleJoin(
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            content: `🎉 <@${userId}>さん、**Cursorvers Library**へようこそ！`,
+            content:
+              `🎉 <@${userId}>さん、**Cursorvers ${tierLabel}**へようこそ！`,
           }),
         },
       );
@@ -308,7 +380,7 @@ async function handleJoin(
     type: 4,
     data: {
       content:
-        "🎉 **認証成功！**\nLibrary Memberの権限を付与しました。\n左側のメニューに限定チャンネルが表示されているか確認してください。",
+        `🎉 **認証成功！**\n${tierLabel}の権限を付与しました。\n左側のメニューに限定チャンネルが表示されているか確認してください。`,
       flags: 64,
     },
   });
@@ -435,9 +507,22 @@ async function handleSecBriefLatest(
 // ドラフトを#sec-briefに公開してstatusをpublishedに変更
 // ============================================
 async function handleSecBriefPublish(
-  _interaction: DiscordInteraction,
+  interaction: DiscordInteraction,
   supabase: SupabaseClient,
 ): Promise<Response> {
+  // 管理者ロールチェック
+  const adminRoleId = Deno.env.get("DISCORD_ADMIN_ROLE_ID") ?? "";
+  const memberRoles = interaction.member?.roles ?? [];
+  if (adminRoleId && !memberRoles.includes(adminRoleId)) {
+    return jsonResponse({
+      type: 4,
+      data: {
+        content: "⛔ **エラー**: このコマンドは管理者のみが実行できます。",
+        flags: 64,
+      },
+    });
+  }
+
   // 最新のドラフトを取得
   const { data, error } = await supabase
     .from("sec_brief")

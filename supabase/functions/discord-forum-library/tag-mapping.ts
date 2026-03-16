@@ -25,13 +25,13 @@ export const FORUM_TAGS = [
   "画像解析",
 ] as const;
 
-export type ForumTag = typeof FORUM_TAGS[number];
+export type ForumTagName = (typeof FORUM_TAGS)[number];
 
 /**
  * note.com ハッシュタグ → Forum タグ マッピング
  * キーは "#" なしのハッシュタグ名
  */
-const HASHTAG_TO_FORUM_TAG: Record<string, ForumTag> = {
+const HASHTAG_TO_FORUM_TAG: Record<string, ForumTagName> = {
   // 医療AI基礎
   "医療AI": "医療AI基礎",
   "AI": "医療AI基礎",
@@ -159,7 +159,9 @@ const HASHTAG_TO_FORUM_TAG: Record<string, ForumTag> = {
  * note.com ハッシュタグ配列を Forum タグ配列に変換
  * 重複除去、最大5個/スレッド制限を適用
  */
-export function mapHashtagsToForumTags(hashtags: readonly string[]): string[] {
+export function mapHashtagsToForumTags(
+  hashtags: readonly string[],
+): string[] {
   const tagSet = new Set<string>();
 
   for (const raw of hashtags) {
@@ -172,22 +174,4 @@ export function mapHashtagsToForumTags(hashtags: readonly string[]): string[] {
 
   // Discord Forum: 最大5タグ/スレッド
   return [...tagSet].slice(0, 5);
-}
-
-/**
- * Forum タグ名からタグIDを解決
- * channelTagMap は { tagName: tagId } の形式
- */
-export function resolveTagIds(
-  tagNames: readonly string[],
-  channelTagMap: ReadonlyMap<string, string>,
-): string[] {
-  const ids: string[] = [];
-  for (const name of tagNames) {
-    const id = channelTagMap.get(name);
-    if (id) {
-      ids.push(id);
-    }
-  }
-  return ids;
 }

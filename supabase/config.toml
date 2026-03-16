@@ -5,7 +5,6 @@ enabled = true
 import_map = "functions/deno.json"
 
 [functions.create-checkout-session]
-import_map = "functions/deno.json"
 
 [functions.stripe-webhook]
 import_map = "functions/deno.json"

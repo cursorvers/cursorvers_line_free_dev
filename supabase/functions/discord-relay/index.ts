@@ -1,3 +1,5 @@
+import { parseRequiredJsonBody } from "../_shared/http-utils.ts";
+
 /**
  * Discord Relay Function
  * n8n からの投稿を正しいチャンネルにルーティング
@@ -404,6 +406,24 @@ async function sendToChannel(
   );
 }
 
+async function parseRelayBody<T>(req: Request): Promise<
+  | { ok: true; body: T }
+  | { ok: false; response: Response }
+> {
+  const parsed = await parseRequiredJsonBody<T>(req);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({ error: parsed.error }), {
+        status: parsed.status,
+        headers: { "Content-Type": "application/json" },
+      }),
+    };
+  }
+
+  return parsed;
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
 
@@ -429,7 +449,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    const parsedBody = await parseRelayBody<{
+      content?: string;
+      embeds?: unknown[];
+      text?: string;
+      url?: string;
+      author?: string;
+    }>(req);
+    if (!parsedBody.ok) {
+      return parsedBody.response;
+    }
+    const body = parsedBody.body;
     const { content, embeds, text, url: postUrl, author } = body;
 
     // n8n からのフォーマットに対応
@@ -453,7 +483,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    const parsedBody = await parseRelayBody<{
+      content?: string;
+      embeds?: unknown[];
+      subject?: string;
+      snippet?: string;
+      from?: string;
+    }>(req);
+    if (!parsedBody.ok) {
+      return parsedBody.response;
+    }
+    const body = parsedBody.body;
     const { content, embeds, subject, snippet, from } = body;
 
     // コンテンツ検証（空、生JSON等を拒否）
@@ -497,7 +537,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    const parsedBody = await parseRelayBody<{
+      content?: string;
+      embeds?: unknown[];
+    }>(req);
+    if (!parsedBody.ok) {
+      return parsedBody.response;
+    }
+    const body = parsedBody.body;
     const { content, embeds } = body;
 
     const sanitized = content
@@ -516,7 +563,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    const parsedBody = await parseRelayBody<{
+      content?: string;
+      embeds?: unknown[];
+    }>(req);
+    if (!parsedBody.ok) {
+      return parsedBody.response;
+    }
+    const body = parsedBody.body;
     const { content, embeds } = body;
 
     // content のクリーンアップ（URL デコード + Flex JSON 除去 + truncate）
@@ -569,7 +623,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    const parsedBody = await parseRelayBody<{
+      channel_id?: string;
+      message_ids?: string[];
+    }>(req);
+    if (!parsedBody.ok) {
+      return parsedBody.response;
+    }
+    const body = parsedBody.body;
     const { channel_id, message_ids } = body;
 
     if (

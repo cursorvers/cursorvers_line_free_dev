@@ -1,8 +1,8 @@
 name: Manus Audit (Report)
 
 on:
-  schedule:
-    - cron: '0 21 * * *'   # UTC21:00 = JST06:00
+  # Deprecated: scheduled audit execution is handled by `manus-audit.yml` (Unified).
+  # Keep this workflow for manual runs / debugging only.
   workflow_dispatch:
 
 jobs:

@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
         passed: false,
         warnings: [
           "🧪 [TEST] カード在庫不足をシミュレート",
-          "⚠️ 警告: testテーマのreadyカードが10枚（50枚未満）",
+          "⚠️ 警告: testテーマのreadyカードが10枚（30枚未満）",
         ],
       };
     }
@@ -236,6 +236,8 @@ Deno.serve(async (req) => {
         result.remediation = {
           triggered: true,
           error: repairResult.error,
+          summary: repairResult.summary,
+          actions: repairResult.actions,
         };
 
         if (repairResult.success) {

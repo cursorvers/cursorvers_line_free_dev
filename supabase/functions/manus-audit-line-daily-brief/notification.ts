@@ -2,11 +2,18 @@
  * 通知モジュール
  */
 import { createLogger } from "../_shared/logger.ts";
-import { AuditResult } from "./types.ts";
+import { AuditResult, RemediationResult } from "./types.ts";
 
 const log = createLogger("audit-notification");
 
 type NotificationAudience = "admin" | "maintenance" | "manus";
+
+function formatJstTimestamp(isoTimestamp: string): string {
+  return new Date(isoTimestamp).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour12: false,
+  }) + " JST";
+}
 
 export function buildNotificationMessage(
   result: AuditResult,
@@ -27,7 +34,7 @@ export function buildNotificationMessage(
     : "正常";
 
   let message = `${emoji} **Manus監査レポート** (${result.mode})\n`;
-  message += `時刻: ${new Date(result.timestamp).toLocaleString("ja-JP")}\n`;
+  message += `時刻: ${formatJstTimestamp(result.timestamp)}\n`;
   message += `ステータス: **${statusText}**\n\n`;
 
   if (!isOk || audience !== "admin") {
@@ -84,16 +91,95 @@ export function buildNotificationMessage(
   // Remediation
   if (result.remediation?.triggered) {
     message += `**🤖 自動修繕**\n`;
+    message += buildRemediationMessage(result.remediation);
     if (result.remediation.taskUrl) {
+      if (!message.endsWith("\n")) {
+        message += "\n";
+      }
       message += `✅ Manusタスク作成済み\n`;
       message += `📎 ${result.remediation.taskUrl}\n`;
-    } else if (result.remediation.error) {
-      message += `❌ タスク作成失敗: ${result.remediation.error}\n`;
     }
     message += "\n";
   }
 
   return message.trim();
+}
+
+function buildRemediationMessage(remediation: RemediationResult): string {
+  const summary = remediation.summary;
+
+  if (summary) {
+    if (summary.overallStatus === "success") {
+      return `✅ 自動修繕完了: 成功 ${summary.successCount}件 / 全 ${summary.totalSteps}件\n`;
+    }
+
+    if (summary.overallStatus === "dry_run") {
+      return `ℹ️ ドライラン: 実行対象 ${summary.totalSteps}件を確認しました\n`;
+    }
+
+    if (
+      summary.successCount === 0 && summary.failedCount === 0 &&
+      summary.skippedCount > 0
+    ) {
+      const fallbackEligibleActions = remediation.actions?.filter((action) =>
+        action.action === "generate_cards" ||
+        action.action === "redeploy_function"
+      ) ?? [];
+      const humanGatedActions = remediation.actions?.filter((action) =>
+        action.action === "reset_secret"
+      ) ?? [];
+      const isGitHubAuthFallbackCase = remediation.error
+        ? /GitHub API (401|403|404|422)|MANUS_GITHUB_TOKEN|GITHUB_TOKEN|not configured|manual intervention required/i
+          .test(remediation.error)
+        : false;
+
+      let message =
+        isGitHubAuthFallbackCase && fallbackEligibleActions.length > 0
+          ? `🔁 GitHub修繕フォールバック対象: 自動修繕 ${fallbackEligibleActions.length}件を後続ワークフローへ委譲します\n`
+          : `⚠️ 手動対応待ち: 自動修繕は安全のため ${summary.skippedCount}件スキップしました\n`;
+
+      if (humanGatedActions.length > 0) {
+        message += `🛡️ 人手ゲート対象: ${
+          humanGatedActions.map((action) =>
+            action.target
+          ).join(", ")
+        }\n`;
+      }
+
+      if (remediation.error) {
+        const detail = isGitHubAuthFallbackCase
+          ? "GitHub 自動修繕資格情報が無効または未設定のため、GitHub Actions fallback に委譲しました。MANUS_GITHUB_TOKEN のローテーションを実施してください。"
+          : remediation.error;
+        message += `📝 詳細: ${detail}\n`;
+      }
+      return message;
+    }
+
+    if (summary.overallStatus === "partial") {
+      let message =
+        `⚠️ 一部自動修繕完了: 成功 ${summary.successCount}件 / 失敗 ${summary.failedCount}件 / スキップ ${summary.skippedCount}件\n`;
+      if (remediation.error) {
+        message += `📝 詳細: ${remediation.error}\n`;
+      }
+      return message;
+    }
+
+    let message =
+      `❌ 自動修繕失敗: 成功 ${summary.successCount}件 / 失敗 ${summary.failedCount}件 / スキップ ${summary.skippedCount}件\n`;
+    if (remediation.error) {
+      message += `📝 詳細: ${remediation.error}\n`;
+    }
+    return message;
+  }
+
+  if (remediation.error) {
+    if (remediation.error.includes("manual intervention required")) {
+      return `⚠️ 手動対応待ち: ${remediation.error}\n`;
+    }
+    return `❌ 自動修繕失敗: ${remediation.error}\n`;
+  }
+
+  return `✅ Intelligent repair を実行しました\n`;
 }
 
 function buildSectionMessage(

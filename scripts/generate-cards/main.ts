@@ -6,7 +6,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
 // Types
-type CardTheme = "ai_gov" | "tax" | "law" | "biz" | "career" | "asset" | "general";
+type CardTheme =
+  | "ai_gov"
+  | "tax"
+  | "law"
+  | "biz"
+  | "career"
+  | "asset"
+  | "general";
 
 interface GeneratedCard {
   body: string;
@@ -25,6 +32,42 @@ const THEME_DESCRIPTIONS: Record<CardTheme, string> = {
   general: "医師向けの一般的な情報・ライフハック",
 };
 
+const VALID_THEMES = new Set<CardTheme>(
+  Object.keys(THEME_DESCRIPTIONS) as CardTheme[],
+);
+
+function parseThemes(input: string | undefined): CardTheme[] {
+  if (!input) {
+    return ["tax", "career", "general"];
+  }
+
+  const parsed = input.split(",")
+    .map((theme) => theme.trim())
+    .filter((theme) => theme.length > 0);
+
+  const invalidThemes = parsed.filter((theme) =>
+    !VALID_THEMES.has(theme as CardTheme)
+  );
+  if (invalidThemes.length > 0) {
+    throw new Error(`Invalid theme(s): ${invalidThemes.join(", ")}`);
+  }
+
+  return parsed as CardTheme[];
+}
+
+function parseCount(input: string | undefined): number {
+  if (!input) {
+    return 20;
+  }
+
+  const parsed = Number.parseInt(input, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid count: ${input}`);
+  }
+
+  return parsed;
+}
+
 /**
  * SHA-256 hash
  */
@@ -42,11 +85,12 @@ async function sha256(text: string): Promise<string> {
 async function generateCardsWithOpenAI(
   theme: CardTheme,
   count: number,
-  apiKey: string
+  apiKey: string,
 ): Promise<string[]> {
   const themeDesc = THEME_DESCRIPTIONS[theme];
 
-  const prompt = `あなたは医師向けの情報発信を行うLINE Botのコンテンツ作成者です。
+  const prompt =
+    `あなたは医師向けの情報発信を行うLINE Botのコンテンツ作成者です。
 
 以下のテーマで、医師が日々の業務や生活に役立つ短いTips（1-2文、50-100文字程度）を${count}個作成してください。
 
@@ -98,7 +142,7 @@ async function generateCardsWithOpenAI(
 async function insertCards(
   supabaseUrl: string,
   supabaseKey: string,
-  cards: GeneratedCard[]
+  cards: GeneratedCard[],
 ): Promise<{ inserted: number; skipped: number }> {
   const client = createClient(supabaseUrl, supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -149,10 +193,8 @@ async function main() {
   const countArg = args.find((a) => a.startsWith("--count="));
   const dryRun = args.includes("--dry-run");
 
-  const themes = themesArg
-    ? (themesArg.split("=")[1].split(",") as CardTheme[])
-    : ["tax", "career", "general"] as CardTheme[];
-  const countPerTheme = countArg ? parseInt(countArg.split("=")[1]) : 20;
+  const themes = parseThemes(themesArg?.split("=")[1]);
+  const countPerTheme = parseCount(countArg?.split("=")[1]);
 
   // Environment
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
@@ -172,13 +214,18 @@ async function main() {
 
   let totalInserted = 0;
   let totalSkipped = 0;
+  let hadErrors = false;
 
   for (const theme of themes) {
     console.log(`Generating ${countPerTheme} cards for theme: ${theme}...`);
 
     try {
       // Generate
-      const tips = await generateCardsWithOpenAI(theme, countPerTheme, openaiKey);
+      const tips = await generateCardsWithOpenAI(
+        theme,
+        countPerTheme,
+        openaiKey,
+      );
       console.log(`  Generated ${tips.length} tips`);
 
       // Create cards with hash
@@ -187,25 +234,34 @@ async function main() {
           body,
           theme,
           content_hash: await sha256(`ai-generated:${theme}:${body}`),
-        }))
+        })),
       );
 
       if (dryRun) {
         console.log(`  [DRY RUN] Would insert ${cards.length} cards`);
-        cards.slice(0, 3).forEach((c) => console.log(`    - ${c.body.slice(0, 50)}...`));
+        cards.slice(0, 3).forEach((c) =>
+          console.log(`    - ${c.body.slice(0, 50)}...`)
+        );
       } else {
         if (!supabaseUrl || !supabaseKey) {
-          console.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
+          console.error(
+            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required",
+          );
           Deno.exit(1);
         }
 
         const result = await insertCards(supabaseUrl, supabaseKey, cards);
-        console.log(`  Inserted: ${result.inserted}, Skipped: ${result.skipped}`);
+        console.log(
+          `  Inserted: ${result.inserted}, Skipped: ${result.skipped}`,
+        );
         totalInserted += result.inserted;
         totalSkipped += result.skipped;
       }
     } catch (error) {
-      console.error(`  Error: ${error instanceof Error ? error.message : error}`);
+      hadErrors = true;
+      console.error(
+        `  Error: ${error instanceof Error ? error.message : error}`,
+      );
     }
 
     console.log("");
@@ -214,6 +270,10 @@ async function main() {
   console.log("=== Summary ===");
   console.log(`Total inserted: ${totalInserted}`);
   console.log(`Total skipped: ${totalSkipped}`);
+
+  if (hadErrors) {
+    Deno.exit(1);
+  }
 }
 
 main();

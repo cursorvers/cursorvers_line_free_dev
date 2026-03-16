@@ -1,0 +1,124 @@
+# .github/workflows/discord-forum-sync.yml
+# 週1回 Discord Forum に未投稿の note 記事をスレッドとして同期
+
+name: Discord Forum Sync
+
+on:
+  schedule:
+    # 毎週日曜 JST 04:00 (UTC 土曜 19:00)
+    - cron: '0 19 * * 6'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to run (seed / import / status)'
+        required: true
+        default: 'import'
+        type: choice
+        options:
+          - seed
+          - import
+          - status
+
+concurrency:
+  group: discord-forum-sync
+  cancel-in-progress: true
+
+jobs:
+  sync-forum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Setup log directory
+        run: |
+          mkdir -p workflow-logs
+          echo "LOG_FILE=workflow-logs/discord-forum-sync-$(date -u +%Y%m%d_%H%M%S).log" >> $GITHUB_ENV
+
+      - name: Run Discord Forum Library
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          exec > >(tee -a "$LOG_FILE") 2>&1
+
+          ACTION="${{ github.event.inputs.action || 'import' }}"
+          echo "📚 Discord Forum Sync: action=${ACTION}"
+
+          call_edge_function() {
+            local payload="$1"
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+              "${SUPABASE_URL}/functions/v1/discord-forum-library" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -d "$payload")
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+
+            echo "Response: $BODY"
+            echo "HTTP Code: $HTTP_CODE"
+
+            if [ "$HTTP_CODE" -ne 200 ]; then
+              echo "❌ Edge Function returned $HTTP_CODE"
+              return 1
+            fi
+
+            OK=$(echo "$BODY" | jq -r '.ok // false')
+            if [ "$OK" != "true" ]; then
+              echo "❌ Action failed: $(echo "$BODY" | jq -r '.error // "unknown"')"
+              return 1
+            fi
+          }
+
+          if [ "$ACTION" = "import" ]; then
+            # Loop import in batches of 10 until no pending articles
+            BATCH=1
+            TOTAL_POSTED=0
+            MAX_BATCHES=10
+
+            while [ "$BATCH" -le "$MAX_BATCHES" ]; do
+              echo "--- Batch ${BATCH}/${MAX_BATCHES} ---"
+              call_edge_function "{\"action\": \"import\", \"limit\": 10}" || exit 1
+
+              POSTED=$(echo "$BODY" | jq -r '.posted // 0')
+              TOTAL_POSTED=$((TOTAL_POSTED + POSTED))
+
+              echo "Batch ${BATCH}: posted=${POSTED}, total_posted=${TOTAL_POSTED}"
+
+              if [ "$POSTED" -eq 0 ]; then
+                echo "No more pending articles"
+                break
+              fi
+
+              BATCH=$((BATCH + 1))
+              if [ "$BATCH" -le "$MAX_BATCHES" ]; then
+                echo "Waiting 5s before next batch..."
+                sleep 5
+              fi
+            done
+
+            echo "✅ Import 完了: total_posted=${TOTAL_POSTED}"
+          else
+            call_edge_function "{\"action\": \"${ACTION}\"}" || exit 1
+            echo "✅ Discord Forum Sync 完了"
+            echo "$BODY" | jq .
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            curl -X POST "$DISCORD_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d '{"content": "⚠️ **Discord Forum Sync ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          fi
+
+      - name: Upload workflow logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discord-forum-sync-logs-${{ github.run_number }}-${{ github.run_attempt }}
+          path: workflow-logs/
+          retention-days: 90

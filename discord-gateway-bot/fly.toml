@@ -1,0 +1,15 @@
+app = "cursorvers-discord-gateway"
+primary_region = "nrt"
+
+[build]
+
+[env]
+  # Set via fly secrets:
+  # DISCORD_BOT_TOKEN
+  # DISCORD_GUILD_ID
+  # DISCORD_FREE_ROLE_ID
+
+# No HTTP service needed - this is a worker process
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

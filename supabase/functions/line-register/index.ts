@@ -479,15 +479,23 @@ Deno.serve(async (req) => {
         });
       }
 
+      const notifyOptions: {
+        totalMembers?: number;
+        email?: string;
+      } = {};
+      if (totalMembers !== undefined) {
+        notifyOptions.totalMembers = totalMembers;
+      }
+      if (email) {
+        notifyOptions.email = email;
+      }
+
       notifyLineEvent(
         "new_registration",
         lineUserId,
         lineDisplayName,
         linePictureUrl,
-        {
-          totalMembers,
-          email: email ?? undefined,
-        },
+        notifyOptions,
       ).catch((err) => {
         log.warn("n8n notification failed", {
           error: extractErrorMessage(err),

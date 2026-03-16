@@ -1,10 +1,24 @@
-# 必須GitHub Secrets設定ガイド
+# Secret Plane 設定ガイド
 
-このドキュメントでは、Cursorversシステムの自動点検・監視機能に必要なGitHub Secretsの設定方法を説明します。
+このドキュメントでは、Cursorvers システムの secret を `GitHub Actions secrets` と `platform runtime secrets` に分離して管理する方法を説明します。
+
+## 基本方針
+
+- `GitHub secrets`: CI/CD と workflow dispatch 用
+- `platform secrets`: Supabase Edge Functions や runtime が読む正本
+- repo 内 `.env` は正本にしない
+
+## Secret Plane
+
+| Plane | 置き場所 | 用途 | 例 |
+|---|---|---|---|
+| GitHub Org/Repo/Environment Secrets | GitHub Actions | 監査、デプロイ、workflow 実行 | `MANUS_GITHUB_TOKEN`, `MANUS_AUDIT_API_KEY`, `SUPABASE_ACCESS_TOKEN` |
+| Platform Runtime Secrets | Supabase / Cloudflare / Vercel | 本番実行時の `Deno.env.get(...)` / runtime env | `SUPABASE_SERVICE_ROLE_KEY`, `LINE_CHANNEL_ACCESS_TOKEN`, `MANUS_API_KEY` |
+| Local bootstrap | shell env / repo外 env file | one-shot import only | `export MANUS_GITHUB_TOKEN=...` |
 
 ---
 
-## 📋 必須Secrets一覧
+## 📋 GitHub Actions Secrets
 
 ### 1. Discord Webhook関連
 
@@ -27,27 +41,17 @@
 
 ---
 
-### 2. Supabase関連
-
-#### `SUPABASE_URL`
-- **用途**: Supabase APIエンドポイント
-- **設定値**: `https://haaxgwyimoqzzxzdaeep.supabase.co`
-- **使用箇所**: 全てのSupabase Edge Functions呼び出し
-
-#### `SUPABASE_SERVICE_ROLE_KEY`
-- **用途**: Supabase管理者権限での操作
-- **設定値**: Supabaseプロジェクト設定から取得
-- **使用箇所**: データベース操作、Edge Functions認証
+### 2. Supabase関連（CI / deploy 用）
 
 #### `SUPABASE_ACCESS_TOKEN`
 - **用途**: Supabase CLI操作（デプロイ、ログ確認等）
 - **設定値**: `supabase login`で取得したトークン
 - **使用箇所**: GitHub Actionsでのデプロイワークフロー
 
-#### `SUPABASE_ANON_KEY`
-- **用途**: 公開APIアクセス
-- **設定値**: Supabaseプロジェクト設定から取得
-- **使用箇所**: フロントエンドからのAPI呼び出し
+#### `SUPABASE_PROJECT_ID`
+- **用途**: GitHub Actions から対象 Supabase project を指定
+- **設定値**: `haaxgwyimoqzzxzdaeep`
+- **使用箇所**: Edge Functions deploy workflow
 
 ---
 
@@ -75,9 +79,9 @@
   - `supabase/functions/manus-audit-line-daily-brief/`
 
 #### `MANUS_API_KEY`
-- **用途**: Manus API呼び出し（カード生成等）
+- **用途**: GitHub Actions から Supabase runtime secret へ同期する入力値
 - **設定値**: Manus APIから取得
-- **使用箇所**: カード自動生成ワークフロー
+- **使用箇所**: deploy / bootstrap
 
 ---
 
@@ -94,10 +98,35 @@
 
 #### `MANUS_GITHUB_TOKEN`
 - **用途**: GitHub API操作（Issue作成、ワークフロートリガー等）
-- **設定値**: Personal Access Token（workflow権限付き）
+- **設定値**: Fine-grained PAT か GitHub App installation token を推奨
 - **使用箇所**: 自動修繕、Issue作成ワークフロー
+- **備考**:
+  - 長期的には GitHub App 化を推奨
+  - stale/invalid 時も system は `manual-required` / GitHub Actions fallback で継続する
+
+#### `MANUS_ALLOWED_GITHUB_REPOS`
+- **用途**: Manus が dispatch / issue 作成してよい GitHub repo の allowlist
+- **設定値**: 例 `cursorvers/cursorvers_line_free_dev,cursorvers/fugue-orchestrator`
+- **使用箇所**: `manus-intelligent-repair`, `manus-code-fixer`
+- **備考**: secret ではなく variable / runtime config として扱う
 
 ---
+
+## 📋 Platform Runtime Secrets
+
+以下は GitHub の正本ではなく、runtime 側の secret store に置きます。
+
+### Supabase Edge Function Secrets
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_ANON_KEY`
+- `LINE_CHANNEL_ACCESS_TOKEN`
+- `LINE_CHANNEL_SECRET`
+- `MANUS_API_KEY`
+- `DISCORD_SYSTEM_WEBHOOK`
+
+必要に応じて GitHub Actions から deploy 時に同期してよいですが、実行時の正本は Supabase 側です。
 
 ## 🔧 設定方法
 
@@ -117,11 +146,9 @@
 gh secret set DISCORD_ADMIN_WEBHOOK_URL --body "https://discord.com/api/webhooks/..."
 gh secret set DISCORD_SYSTEM_WEBHOOK --body "https://discord.com/api/webhooks/..."
 
-# Supabase
-gh secret set SUPABASE_URL --body "https://haaxgwyimoqzzxzdaeep.supabase.co"
-gh secret set SUPABASE_SERVICE_ROLE_KEY --body "your-service-role-key"
+# Supabase (CI)
 gh secret set SUPABASE_ACCESS_TOKEN --body "your-access-token"
-gh secret set SUPABASE_ANON_KEY --body "your-anon-key"
+gh secret set SUPABASE_PROJECT_ID --body "haaxgwyimoqzzxzdaeep"
 
 # n8n
 gh secret set N8N_API_KEY --body "your-n8n-api-key"
@@ -136,6 +163,14 @@ gh secret set GOOGLE_SERVICE_ACCOUNT_JSON --body "$(cat service-account.json)"
 
 # GitHub
 gh secret set MANUS_GITHUB_TOKEN --body "your-github-token"
+```
+
+Supabase runtime へは:
+
+```bash
+supabase secrets set LINE_CHANNEL_ACCESS_TOKEN=... --project-ref haaxgwyimoqzzxzdaeep
+supabase secrets set MANUS_API_KEY=... --project-ref haaxgwyimoqzzxzdaeep
+supabase secrets set DISCORD_SYSTEM_WEBHOOK=... --project-ref haaxgwyimoqzzxzdaeep
 ```
 
 ---
@@ -159,6 +194,7 @@ gh run list --workflow=manus-audit-daily.yml --limit 1
 1. **Secretsは絶対にコミットしない**
    - `.env`ファイルや設定ファイルに直接記載しない
    - `.gitignore`に機密情報ファイルを追加
+   - repo 内 `.env` を本番/CI の正本にしない
 
 2. **定期的なローテーション**
    - APIキーやトークンは定期的に再生成

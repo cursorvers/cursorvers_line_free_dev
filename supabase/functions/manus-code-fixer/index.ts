@@ -25,6 +25,12 @@
  * }
  */
 
+import {
+  ensureGitHubApiOk,
+  normalizeGitHubRepoAllowlist,
+  resolveGitHubAuthContext,
+} from "../manus-intelligent-repair/repair-utils.ts";
+
 type FailureType = "format" | "lint" | "test" | "security" | "build";
 
 interface FixRequest {
@@ -49,6 +55,39 @@ interface FixResult {
     skippedCount: number;
     errorCount: number;
   };
+}
+
+async function parseFixRequest(req: Request): Promise<
+  | { ok: true; body: FixRequest }
+  | { ok: false; status: number; error: string }
+> {
+  const rawBody = await req.text();
+  if (!rawBody.trim()) {
+    return { ok: false, status: 400, error: "Request body must be valid JSON" };
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody) as Partial<FixRequest> | null;
+    const body = parsed && typeof parsed === "object"
+      ? {
+        repository: parsed.repository ?? "",
+        branch: parsed.branch ?? "",
+        path: parsed.path ?? "",
+        failures: Array.isArray(parsed.failures) ? parsed.failures : [],
+        ...(typeof parsed.commitSha === "string"
+          ? { commitSha: parsed.commitSha }
+          : {}),
+      }
+      : {
+        repository: "",
+        branch: "",
+        path: "",
+        failures: [],
+      };
+    return { ok: true, body };
+  } catch {
+    return { ok: false, status: 400, error: "Request body must be valid JSON" };
+  }
 }
 
 interface FixedItem {
@@ -84,12 +123,16 @@ const DISCORD_WEBHOOK_URL = Deno.env.get("DISCORD_MANUS_WEBHOOK_URL") ??
   Deno.env.get("DISCORD_WEBHOOK_URL") ??
   Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL") ??
   Deno.env.get("DISCORD_SYSTEM_WEBHOOK");
-const GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN") ??
-  Deno.env.get("GITHUB_TOKEN");
+const MANUS_GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN");
+const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN");
 const GITHUB_API_BASE = Deno.env.get("GITHUB_API_BASE") ??
   "https://api.github.com";
 const CODE_FIXER_WORKFLOW = Deno.env.get("MANUS_CODE_FIXER_WORKFLOW") ??
   "manus-code-fixer.yml";
+const GITHUB_ALLOWED_REPOS = normalizeGitHubRepoAllowlist(
+  Deno.env.get("MANUS_ALLOWED_GITHUB_REPOS"),
+  ["cursorvers/cursorvers_line_free_dev"],
+);
 
 const log = createLogger("manus-code-fixer");
 
@@ -122,6 +165,11 @@ interface IssueResult {
   error?: string;
 }
 
+interface GitHubContext {
+  token: string;
+  repo: RepoInfo;
+}
+
 function parseRepository(repository: string): RepoInfo {
   const [owner, name] = repository.split("/");
   if (!owner || !name) {
@@ -132,14 +180,31 @@ function parseRepository(repository: string): RepoInfo {
   return { owner, name };
 }
 
+function resolveGitHubContext(
+  actionLabel: string,
+  repository: string,
+): GitHubContext {
+  const auth = resolveGitHubAuthContext(actionLabel, {
+    manusToken: MANUS_GITHUB_TOKEN,
+    githubToken: GITHUB_TOKEN,
+    repo: repository,
+    allowedRepos: GITHUB_ALLOWED_REPOS,
+  });
+  const repo = parseRepository(auth.repo);
+  return { token: auth.token, repo };
+}
+
 async function dispatchFixWorkflow(
-  repo: RepoInfo,
   request: FixRequest,
   fixTypes: FailureType[],
   files: string[],
 ): Promise<DispatchResult> {
-  if (!GITHUB_TOKEN) {
-    return { ok: false, error: "MANUS_GITHUB_TOKEN not configured" };
+  let github: GitHubContext;
+  try {
+    github = resolveGitHubContext("dispatch_fix_workflow", request.repository);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message };
   }
 
   const inputs: Record<string, string> = {
@@ -156,7 +221,24 @@ async function dispatchFixWorkflow(
   }
 
   const endpoint =
-    `${GITHUB_API_BASE}/repos/${repo.owner}/${repo.name}/actions/workflows/${CODE_FIXER_WORKFLOW}/dispatches`;
+    `${GITHUB_API_BASE}/repos/${github.repo.owner}/${github.repo.name}/actions/workflows/${CODE_FIXER_WORKFLOW}/dispatches`;
+
+  const preflightResponse = await fetch(
+    `${GITHUB_API_BASE}/repos/${github.repo.owner}/${github.repo.name}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${github.token}`,
+      },
+    },
+  );
+  try {
+    await ensureGitHubApiOk("dispatch_fix_workflow", preflightResponse);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message };
+  }
 
   log.info("Dispatching code fixer workflow", {
     repository: request.repository,
@@ -170,7 +252,7 @@ async function dispatchFixWorkflow(
     headers: {
       "Content-Type": "application/json",
       Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Authorization: `Bearer ${github.token}`,
     },
     body: JSON.stringify({
       ref: request.branch,
@@ -179,26 +261,31 @@ async function dispatchFixWorkflow(
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    return {
-      ok: false,
-      error: `Workflow dispatch failed (${response.status}): ${errorBody}`,
-    };
+    try {
+      await ensureGitHubApiOk("dispatch_fix_workflow", response);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, error: message };
+    }
   }
 
   return { ok: true };
 }
 
 async function createManualIssue(
-  repo: RepoInfo,
   request: FixRequest,
   failures: FixRequest["failures"],
 ): Promise<IssueResult> {
-  if (!GITHUB_TOKEN) {
-    return { ok: false, error: "MANUS_GITHUB_TOKEN not configured" };
+  let github: GitHubContext;
+  try {
+    github = resolveGitHubContext("create_manual_issue", request.repository);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message };
   }
 
-  const endpoint = `${GITHUB_API_BASE}/repos/${repo.owner}/${repo.name}/issues`;
+  const endpoint =
+    `${GITHUB_API_BASE}/repos/${github.repo.owner}/${github.repo.name}/issues`;
   const types = failures.map((failure) => failure.type).join(", ");
 
   const failureDetails = failures
@@ -233,7 +320,7 @@ async function createManualIssue(
     headers: {
       "Content-Type": "application/json",
       Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Authorization: `Bearer ${github.token}`,
     },
     body: JSON.stringify({
       title: `Manus Code Fixer: manual review required (${types})`,
@@ -243,11 +330,12 @@ async function createManualIssue(
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    return {
-      ok: false,
-      error: `Issue creation failed (${response.status}): ${errorBody}`,
-    };
+    try {
+      await ensureGitHubApiOk("create_manual_issue", response);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, error: message };
+    }
   }
 
   const data = await response.json() as { html_url?: string };
@@ -268,9 +356,8 @@ async function processFixes(request: FixRequest): Promise<FixResult> {
     },
   };
 
-  let repo: RepoInfo | null = null;
   try {
-    repo = parseRepository(request.repository);
+    parseRepository(request.repository);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     result.errors.push({ type: "build", error: errorMessage });
@@ -293,7 +380,6 @@ async function processFixes(request: FixRequest): Promise<FixResult> {
     const files = fixableFailures.flatMap((failure) => failure.files ?? []);
 
     const dispatchResult = await dispatchFixWorkflow(
-      repo,
       request,
       fixTypes,
       files,
@@ -324,7 +410,7 @@ async function processFixes(request: FixRequest): Promise<FixResult> {
   }
 
   if (manualFailures.length > 0) {
-    const issueResult = await createManualIssue(repo, request, manualFailures);
+    const issueResult = await createManualIssue(request, manualFailures);
 
     for (const failure of manualFailures) {
       if (issueResult.ok) {
@@ -423,7 +509,25 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const request = await req.json() as FixRequest;
+    const parsedRequest = await parseFixRequest(req);
+    if (!parsedRequest.ok) {
+      log.warn("Rejected fix request", {
+        method: req.method,
+        status: parsedRequest.status,
+        error: parsedRequest.error,
+        contentType: req.headers.get("content-type"),
+        contentLength: req.headers.get("content-length"),
+      });
+      return new Response(
+        JSON.stringify({ error: parsedRequest.error }),
+        {
+          status: parsedRequest.status,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const request = parsedRequest.body;
 
     log.info("Processing fix request", {
       repository: request.repository,

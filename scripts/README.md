@@ -52,7 +52,7 @@ jobs:
       - name: Run daily check
         env:
           N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
-          N8N_INSTANCE_URL: ${{ secrets.N8N_INSTANCE_URL }}
+          N8N_INSTANCE_URL: ${{ vars.N8N_INSTANCE_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x ./scripts/daily-check.sh

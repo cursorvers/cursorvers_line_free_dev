@@ -1,0 +1,22 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.43.1?target=deno",
+    "stripe": "https://esm.sh/stripe@14.21.0?target=deno",
+    "tweetnacl": "https://esm.sh/tweetnacl@1.0.3?target=deno",
+    "std/": "https://deno.land/std@0.210.0/",
+    "std-assert": "https://deno.land/std@0.210.0/assert/mod.ts",
+    "std-mock": "https://deno.land/std@0.210.0/testing/mock.ts"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noPropertyAccessFromIndexSignature": true
+  },
+  "tasks": {
+    "test:functions": "cd supabase/functions && deno test --allow-env --allow-net --allow-read",
+    "check:functions": "cd supabase/functions && deno check **/*.ts",
+    "lint:functions": "cd supabase/functions && deno lint",
+    "fmt:functions": "cd supabase/functions && deno fmt"
+  }
+}

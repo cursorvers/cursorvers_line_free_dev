@@ -4,9 +4,8 @@
 name: Manus Audit (Daily)
 
 on:
-  schedule:
-    # 毎日 06:00 JST (21:00 UTC 前日)
-    - cron: '0 21 * * *'
+  # Deprecated: scheduled execution is handled by `manus-audit.yml` (Unified).
+  # Keep this workflow for manual runs / debugging only.
   workflow_dispatch:
     inputs:
       test_mode:
