@@ -7,6 +7,8 @@ import {
   determineStatus,
   determineTierByAmount,
   determineTierByPaymentLink,
+  determineTierByProduct,
+  LIBRARY_MEMBER_PRODUCT_ID,
   MASTER_CLASS_MIN_AMOUNT,
   MASTER_CLASS_PAYMENT_LINK_PATTERN,
 } from "./tier-utils.ts";
@@ -99,6 +101,37 @@ Deno.test("tier-utils - determineMembershipTier", async (t) => {
   });
 });
 
+Deno.test("tier-utils - determineTierByProduct", async (t) => {
+  await t.step(
+    "returns 'library' for configured Library Member product",
+    () => {
+      assertEquals(
+        determineTierByProduct(LIBRARY_MEMBER_PRODUCT_ID, 298000),
+        "library",
+      );
+    },
+  );
+
+  await t.step("falls back to amount for unknown product", () => {
+    assertEquals(
+      determineTierByProduct("prod_unknown_master", MASTER_CLASS_MIN_AMOUNT),
+      "master",
+    );
+    assertEquals(
+      determineTierByProduct("prod_unknown_library", 298000),
+      "library",
+    );
+  });
+
+  await t.step("falls back to amount when product is null", () => {
+    assertEquals(
+      determineTierByProduct(null, MASTER_CLASS_MIN_AMOUNT),
+      "master",
+    );
+    assertEquals(determineTierByProduct(null, null), "library");
+  });
+});
+
 Deno.test("tier-utils - determineStatus", async (t) => {
   await t.step("returns 'inactive' for canceled subscription", () => {
     assertStrictEquals(determineStatus("canceled"), "inactive");
@@ -132,5 +165,10 @@ Deno.test("tier-utils - constants", async (t) => {
       "string",
     );
     assertEquals(MASTER_CLASS_PAYMENT_LINK_PATTERN.length > 0, true);
+  });
+
+  await t.step("LIBRARY_MEMBER_PRODUCT_ID is defined", () => {
+    assertEquals(typeof LIBRARY_MEMBER_PRODUCT_ID, "string");
+    assertEquals(LIBRARY_MEMBER_PRODUCT_ID.length > 0, true);
   });
 });

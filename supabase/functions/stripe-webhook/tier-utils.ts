@@ -8,6 +8,10 @@ export const MASTER_CLASS_MIN_AMOUNT = 380000;
 // Master Class の Payment Link ID パターン
 export const MASTER_CLASS_PAYMENT_LINK_PATTERN = "5kQaEXavbc9T63SfB34F201";
 
+// Library Member の Stripe Product ID
+export const LIBRARY_MEMBER_PRODUCT_ID =
+  Deno.env.get("STRIPE_LIBRARY_MEMBER_PRODUCT_ID") ?? "prod_TUm3OH7Nx19xs2";
+
 /**
  * 決済金額からメンバーシップ tier を判定
  * @param amountTotal 決済金額（最小通貨単位、円）
@@ -35,6 +39,21 @@ export function determineTierByPaymentLink(
     return "master";
   }
   return "library";
+}
+
+/**
+ * Stripe Product ID からメンバーシップ tier を判定
+ * Library Member の Product ID に一致しない場合は amount ベース判定へフォールバック
+ */
+export function determineTierByProduct(
+  productId: string | null,
+  fallbackAmount: number | null = null,
+): string {
+  if (productId && productId === LIBRARY_MEMBER_PRODUCT_ID) {
+    return "library";
+  }
+
+  return determineTierByAmount(fallbackAmount);
 }
 
 /**

@@ -3,6 +3,12 @@
  * 決済完了 → 会員作成 → Discord招待 の統合フローをテスト
  */
 import { assertEquals, assertExists } from "std-assert";
+import {
+  determineStatus,
+  determineTierByProduct,
+  LIBRARY_MEMBER_PRODUCT_ID,
+  MASTER_CLASS_MIN_AMOUNT,
+} from "./tier-utils.ts";
 
 // =======================
 // モック用の型定義
@@ -37,6 +43,7 @@ interface MockMember {
   tier: string;
   status: string;
   line_user_id: string | null;
+  discord_user_id?: string | null;
   discord_invite_sent: boolean;
   verification_code: string | null;
   verification_expires_at: string | null;
@@ -247,15 +254,11 @@ Deno.test("Payment Flow - Subscription cancellation updates member status", asyn
   });
 
   await t.step("Discord role removal should be attempted", () => {
-    const member = createMockMember(
-      {
-        discord_user_id: "123456789012345678",
-      } as MockMember & { discord_user_id: string },
-    );
+    const member = createMockMember({
+      discord_user_id: "123456789012345678",
+    });
 
-    assertExists(
-      (member as MockMember & { discord_user_id: string }).discord_user_id,
-    );
+    assertExists(member.discord_user_id);
   });
 
   await t.step("LINE notification should be sent", () => {
@@ -268,7 +271,57 @@ Deno.test("Payment Flow - Subscription cancellation updates member status", asyn
 });
 
 // =======================
-// フロー5: 孤児レコードマージ
+// フロー5: サブスクリプション作成
+// =======================
+
+Deno.test("Payment Flow - Subscription creation syncs tier and Discord access", async (t) => {
+  await t.step("library product keeps Library tier", () => {
+    const tier = determineTierByProduct(LIBRARY_MEMBER_PRODUCT_ID, 298000);
+
+    assertEquals(tier, "library");
+  });
+
+  await t.step(
+    "Discord-linked member should trigger role and client-room setup",
+    () => {
+      const member = createMockMember({
+        discord_user_id: "123456789012345678",
+        name: "Discord User",
+      });
+
+      assertExists(member.discord_user_id);
+      assertEquals(member.name, "Discord User");
+    },
+  );
+});
+
+// =======================
+// フロー6: サブスクリプション更新
+// =======================
+
+Deno.test("Payment Flow - Subscription update syncs tier and role status", async (t) => {
+  await t.step("unknown product falls back to amount-based Master tier", () => {
+    const tier = determineTierByProduct(
+      "prod_master_unknown",
+      MASTER_CLASS_MIN_AMOUNT,
+    );
+
+    assertEquals(tier, "master");
+  });
+
+  await t.step("past_due subscription still keeps Discord access path", () => {
+    const shouldGrantRole = determineStatus("past_due") === "active";
+    assertEquals(shouldGrantRole, true);
+  });
+
+  await t.step("canceled subscription removes Discord role", () => {
+    const shouldRemoveRole = determineStatus("canceled") !== "active";
+    assertEquals(shouldRemoveRole, true);
+  });
+});
+
+// =======================
+// フロー7: 孤児レコードマージ
 // =======================
 
 Deno.test("Payment Flow - Orphan LINE record merge", async (t) => {
@@ -318,7 +371,7 @@ Deno.test("Payment Flow - Orphan LINE record merge", async (t) => {
 });
 
 // =======================
-// フロー6: Tier判定
+// フロー8: Tier判定
 // =======================
 
 Deno.test("Payment Flow - Tier determination", async (t) => {

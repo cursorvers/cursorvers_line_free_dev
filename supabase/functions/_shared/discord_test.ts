@@ -1,7 +1,9 @@
 /**
  * Discord API ユーティリティ テスト
  */
-import { assertEquals } from "std-assert";
+import { assertEquals, assertExists } from "std-assert";
+import { stub } from "std-mock";
+import { createClientRoom, findExistingClientRoom } from "./discord.ts";
 
 Deno.test("discord - Rate Limit Retry Logic", async (t) => {
   await t.step("parseFloat correctly parses Retry-After header", () => {
@@ -177,4 +179,104 @@ Deno.test("discord - User ID anonymization for logging", async (t) => {
     const anonymized = shortId.slice(-4);
     assertEquals(anonymized, "123"); // slice doesn't fail on short strings
   });
+});
+
+Deno.test("discord - createClientRoom creates a private channel under the configured category", async () => {
+  const envStub = stub(Deno.env, "get", (key: string) => {
+    switch (key) {
+      case "DISCORD_BOT_TOKEN":
+        return "test-bot-token";
+      case "DISCORD_GUILD_ID":
+        return "guild_123";
+      case "DISCORD_CLIENT_ROOM_CATEGORY_ID":
+        return "category_456";
+      case "DISCORD_ADMIN_BOT_ID":
+        return "bot_789";
+      default:
+        return undefined;
+    }
+  });
+
+  let requestUrl = "";
+  let requestBody: Record<string, unknown> | null = null;
+  const fetchStub = stub(globalThis, "fetch", (input, init) => {
+    requestUrl = String(input);
+    requestBody = JSON.parse(String(init?.body));
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: "channel_123" }), { status: 200 }),
+    );
+  });
+
+  try {
+    const result = await createClientRoom("123456789012345678", "Test User");
+
+    assertEquals(result.success, true);
+    assertEquals(result.channelId, "channel_123");
+    assertEquals(
+      requestUrl,
+      "https://discord.com/api/v10/guilds/guild_123/channels",
+    );
+    assertExists(requestBody);
+    assertEquals(requestBody?.type, 0);
+    assertEquals(requestBody?.parent_id, "category_456");
+    assertEquals(requestBody?.name, "test-user");
+
+    const overwrites = requestBody?.permission_overwrites as Array<
+      Record<string, unknown>
+    >;
+    assertEquals(overwrites.length, 3);
+    assertEquals(overwrites[0]?.id, "guild_123");
+    assertEquals(overwrites[0]?.deny, "3072");
+    assertEquals(overwrites[1]?.id, "123456789012345678");
+    assertEquals(overwrites[1]?.allow, "68608");
+    assertEquals(overwrites[2]?.id, "bot_789");
+    assertEquals(overwrites[2]?.allow, "269564944");
+  } finally {
+    fetchStub.restore();
+    envStub.restore();
+  }
+});
+
+Deno.test("discord - findExistingClientRoom returns channel id when user overwrite exists", async () => {
+  const envStub = stub(Deno.env, "get", (key: string) => {
+    switch (key) {
+      case "DISCORD_BOT_TOKEN":
+        return "test-bot-token";
+      case "DISCORD_GUILD_ID":
+        return "guild_123";
+      case "DISCORD_CLIENT_ROOM_CATEGORY_ID":
+        return "category_456";
+      default:
+        return undefined;
+    }
+  });
+
+  const fetchStub = stub(globalThis, "fetch", () =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify([
+          {
+            id: "channel_other",
+            parent_id: "other_category",
+            permission_overwrites: [{ id: "123456789012345678", allow: "1" }],
+          },
+          {
+            id: "channel_123",
+            parent_id: "category_456",
+            permission_overwrites: [
+              { id: "123456789012345678", allow: "68608" },
+            ],
+          },
+        ]),
+        { status: 200 },
+      ),
+    ));
+
+  try {
+    const channelId = await findExistingClientRoom("123456789012345678");
+    assertEquals(channelId, "channel_123");
+  } finally {
+    fetchStub.restore();
+    envStub.restore();
+  }
 });

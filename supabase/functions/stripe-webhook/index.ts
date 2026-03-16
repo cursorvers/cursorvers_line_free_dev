@@ -11,13 +11,20 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { notifyDiscord } from "../_shared/alert.ts";
-import { createDiscordInvite, removeDiscordRole } from "../_shared/discord.ts";
+import {
+  addDiscordRole,
+  createClientRoom,
+  createDiscordInvite,
+  findExistingClientRoom,
+  removeDiscordRole,
+} from "../_shared/discord.ts";
 import { sendPaidMemberWelcomeEmail } from "../_shared/email.ts";
 import { createSheetsClientFromEnv } from "../_shared/google-sheets.ts";
 import { pushLineMessage } from "../_shared/line-messaging.ts";
 import { extractErrorMessage } from "../_shared/error-utils.ts";
 import { createLogger } from "../_shared/logger.ts";
 import {
+  maskDiscordUserId,
   maskEmail,
   maskLineUserId,
   maskVerificationCode,
@@ -26,7 +33,11 @@ import {
   generateVerificationCode,
   getCodeExpiryDate,
 } from "../_shared/verification-code.ts";
-import { determineMembershipTier, determineStatus } from "./tier-utils.ts";
+import {
+  determineMembershipTier,
+  determineStatus,
+  determineTierByProduct,
+} from "./tier-utils.ts";
 import {
   savePaymentFromCharge,
   savePaymentFromCheckout,
@@ -39,6 +50,7 @@ const RATE_LIMIT = {
   WINDOW_SECONDS: 60,
   ACTION: "stripe_webhook",
 } as const;
+const pendingClientRoomEnsures = new Map<string, Promise<void>>();
 
 // Google Sheets 連携（任意）
 const MEMBERS_SHEET_ID = Deno.env.get("MEMBERS_SHEET_ID") ?? "";
@@ -247,6 +259,143 @@ async function sendDiscordInviteViaLine(
     });
     return false;
   }
+}
+
+function resolveDiscordRoomUsername(
+  name: string | null | undefined,
+  email: string | null | undefined,
+  discordUserId: string,
+): string {
+  const trimmedName = name?.trim();
+  if (trimmedName) {
+    return trimmedName;
+  }
+
+  const emailLocalPart = email?.split("@")[0]?.trim();
+  if (emailLocalPart) {
+    return emailLocalPart;
+  }
+
+  return `client-${discordUserId.slice(-4)}`;
+}
+
+async function ensureDiscordClientRoom(
+  discordUserId: string,
+  username: string,
+): Promise<void> {
+  const existingChannelId = await findExistingClientRoom(discordUserId);
+  if (existingChannelId) {
+    log.info("Discord client room already exists", {
+      discordUserId: maskDiscordUserId(discordUserId),
+      channelId: existingChannelId,
+    });
+    return;
+  }
+
+  const roomResult = await createClientRoom(discordUserId, username);
+  if (roomResult.success) {
+    log.info("Discord client room ensured", {
+      discordUserId: maskDiscordUserId(discordUserId),
+      channelId: roomResult.channelId,
+    });
+  } else {
+    log.warn("Failed to ensure Discord client room", {
+      discordUserId: maskDiscordUserId(discordUserId),
+      error: roomResult.error,
+    });
+  }
+}
+
+function queueDiscordClientRoomEnsure(
+  discordUserId: string,
+  username: string,
+): void {
+  if (pendingClientRoomEnsures.has(discordUserId)) {
+    log.debug("Discord client room ensure already pending", {
+      discordUserId: maskDiscordUserId(discordUserId),
+    });
+    return;
+  }
+
+  const pendingJob = ensureDiscordClientRoom(discordUserId, username)
+    .catch((err) => {
+      log.warn("Discord client room creation failed unexpectedly", {
+        discordUserId: maskDiscordUserId(discordUserId),
+        error: extractErrorMessage(err),
+      });
+    })
+    .finally(() => {
+      pendingClientRoomEnsures.delete(discordUserId);
+    });
+
+  pendingClientRoomEnsures.set(discordUserId, pendingJob);
+}
+
+function grantDiscordMembershipAccess(
+  discordUserId: string | null | undefined,
+  name: string | null | undefined,
+  email: string | null | undefined,
+): void {
+  if (!discordUserId) {
+    return;
+  }
+
+  void addDiscordRole(discordUserId).then((result) => {
+    if (result.success) {
+      log.info("Discord role added for member access", {
+        discordUserId: maskDiscordUserId(discordUserId),
+      });
+    } else {
+      log.warn("Failed to add Discord role for member access", {
+        discordUserId: maskDiscordUserId(discordUserId),
+        error: result.error,
+      });
+    }
+  }).catch((err) => {
+    log.warn("Discord role grant failed unexpectedly", {
+      discordUserId: maskDiscordUserId(discordUserId),
+      error: extractErrorMessage(err),
+    });
+  });
+
+  const username = resolveDiscordRoomUsername(name, email, discordUserId);
+  queueDiscordClientRoomEnsure(discordUserId, username);
+}
+
+function determineTierFromSubscription(
+  subscription: Stripe.Subscription,
+): string {
+  const primaryItem = subscription.items.data[0];
+  const price = primaryItem?.price;
+  const product = price?.product;
+  const productId = typeof product === "string"
+    ? product
+    : (product as { id?: string } | null)?.id ?? null;
+  const amount = price?.unit_amount ?? primaryItem?.plan?.amount ?? null;
+
+  return determineTierByProduct(productId, amount);
+}
+
+async function getCustomerEmailFromSubscription(
+  subscription: Stripe.Subscription,
+): Promise<string | null> {
+  if (typeof subscription.customer !== "string") {
+    return null;
+  }
+
+  try {
+    const customer = await stripe.customers.retrieve(subscription.customer);
+    if (customer && !customer.deleted) {
+      return customer.email || null;
+    }
+  } catch (err) {
+    log.error("Failed to retrieve customer", {
+      customerId: subscription.customer,
+      errorMessage: extractErrorMessage(err),
+    });
+  }
+
+  return null;
 }
 
 function getClientIP(req: Request): string {
@@ -696,7 +845,7 @@ Deno.serve(async (req) => {
             // upsert後のレコードを取得
             const { data: memberData } = await supabase
               .from("members")
-              .select("id, line_user_id")
+              .select("id, line_user_id, discord_user_id, name")
               .eq("email", customerEmail)
               .maybeSingle();
 
@@ -729,6 +878,12 @@ Deno.serve(async (req) => {
               lineUserId ?? "",
               new Date().toISOString(),
             ]);
+
+            grantDiscordMembershipAccess(
+              memberData?.discord_user_id,
+              memberData?.name ?? customerName,
+              customerEmail,
+            );
 
             // discord_invite_sent 状況を確認
             const { data: currentMember } = await supabase
@@ -820,33 +975,93 @@ Deno.serve(async (req) => {
         break;
       }
 
-      case "customer.subscription.updated": {
+      case "customer.subscription.created": {
         const subscription = event.data.object as Stripe.Subscription;
-        let customerEmail: string | null = null;
-
-        // Customerオブジェクトからemailを取得
-        if (typeof subscription.customer === "string") {
-          try {
-            const customer = await stripe.customers.retrieve(
-              subscription.customer,
-            );
-            if (customer && !customer.deleted) {
-              customerEmail = customer.email || null;
-            }
-          } catch (err) {
-            log.error("Failed to retrieve customer", {
-              customerId: subscription.customer,
-              errorMessage: extractErrorMessage(err),
-            });
-          }
-        }
+        const customerEmail = await getCustomerEmailFromSubscription(
+          subscription,
+        );
 
         if (customerEmail) {
+          const membershipTier = determineTierFromSubscription(subscription);
+          const memberStatus = determineStatus(subscription.status);
+          const { data: memberData } = await supabase
+            .from("members")
+            .select("discord_user_id, name")
+            .eq("email", customerEmail)
+            .maybeSingle();
+
+          if (!memberData) {
+            log.warn("Member not found for subscription creation", {
+              email: maskEmail(customerEmail),
+              subscriptionId: subscription.id,
+            });
+            break;
+          }
+
           const { error } = await supabase
             .from("members")
             .update({
+              tier: membershipTier,
               stripe_subscription_status: subscription.status,
-              status: determineStatus(subscription.status),
+              status: memberStatus,
+              period_end: subscription.current_period_end
+                ? new Date(subscription.current_period_end * 1000).toISOString()
+                : null,
+              stripe_subscription_id: subscription.id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("email", customerEmail);
+
+          if (error) {
+            log.error("DB Update Error", { errorMessage: error.message });
+            await notifyDiscord({
+              title: "MANUS ALERT: Stripe subscription create failed",
+              message: error.message,
+              severity: "error",
+              context: {
+                email: maskEmail(customerEmail),
+                subscriptionId: subscription.id,
+                membershipTier,
+              },
+            });
+          } else {
+            log.info("Subscription created", {
+              subscriptionId: subscription.id,
+              email: maskEmail(customerEmail),
+              membershipTier,
+            });
+
+            grantDiscordMembershipAccess(
+              memberData.discord_user_id,
+              memberData.name,
+              customerEmail,
+            );
+          }
+        }
+        break;
+      }
+
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customerEmail = await getCustomerEmailFromSubscription(
+          subscription,
+        );
+
+        if (customerEmail) {
+          const membershipTier = determineTierFromSubscription(subscription);
+          const memberStatus = determineStatus(subscription.status);
+          const { data: memberData } = await supabase
+            .from("members")
+            .select("discord_user_id, name")
+            .eq("email", customerEmail)
+            .maybeSingle();
+
+          const { error } = await supabase
+            .from("members")
+            .update({
+              tier: membershipTier,
+              stripe_subscription_status: subscription.status,
+              status: memberStatus,
               period_end: subscription.current_period_end
                 ? new Date(subscription.current_period_end * 1000).toISOString()
                 : null,
@@ -869,7 +1084,38 @@ Deno.serve(async (req) => {
           } else {
             log.info("Subscription updated", {
               subscriptionId: subscription.id,
+              email: maskEmail(customerEmail),
+              membershipTier,
+              memberStatus,
             });
+
+            if (memberStatus === "active") {
+              grantDiscordMembershipAccess(
+                memberData?.discord_user_id,
+                memberData?.name,
+                customerEmail,
+              );
+            } else if (memberData?.discord_user_id) {
+              const roleResult = await removeDiscordRole(
+                memberData.discord_user_id,
+              );
+              if (roleResult.success) {
+                log.info("Discord role removed on subscription update", {
+                  discordUserId: maskDiscordUserId(memberData.discord_user_id),
+                  subscriptionId: subscription.id,
+                });
+              } else {
+                log.warn(
+                  "Failed to remove Discord role on subscription update",
+                  {
+                    discordUserId: maskDiscordUserId(
+                      memberData.discord_user_id,
+                    ),
+                    error: roleResult.error,
+                  },
+                );
+              }
+            }
           }
         }
         break;

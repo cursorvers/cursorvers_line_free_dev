@@ -34,6 +34,11 @@ Deno.test("idempotency - Event types", async (t) => {
     const eventType = "customer.subscription.updated";
     assertEquals(eventType.includes("."), true);
   });
+
+  await t.step("customer.subscription.created is valid event type", () => {
+    const eventType = "customer.subscription.created";
+    assertEquals(eventType.includes("."), true);
+  });
 });
 
 Deno.test("idempotency - Duplicate detection", async (t) => {
