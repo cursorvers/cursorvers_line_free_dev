@@ -105,14 +105,23 @@ hash_bust_source() {
 
 redeploy_function() {
   local func_name="$1"
-  local args=(supabase functions deploy "$func_name" --project-ref "$PROJECT_REF")
+  local deploy_log="/tmp/verify-redeploy-${func_name}.log"
+  local extra_args=()
 
   if [ "${NO_VERIFY_JWT_MAP[$func_name]+x}" = "x" ]; then
-    args+=(--no-verify-jwt)
+    extra_args+=(--no-verify-jwt)
   fi
 
-  log "Re-deploying ${func_name}: ${args[*]}"
-  "${args[@]}" >&2
+  # Use deploy-edge-function.sh (handles deno.lock version mismatch)
+  local helper_script="scripts/supabase/deploy-edge-function.sh"
+  if [ -f "$helper_script" ]; then
+    log "Re-deploying ${func_name} via deploy-edge-function.sh"
+    bash "$helper_script" "$func_name" "$PROJECT_REF" "$deploy_log" "${extra_args[@]}" >&2
+  else
+    # Fallback: direct supabase CLI call
+    log "Re-deploying ${func_name} (direct CLI, no lockfile handler)"
+    supabase functions deploy "$func_name" --project-ref "$PROJECT_REF" "${extra_args[@]}" >&2
+  fi
 }
 
 cleanup_busted_files() {
