@@ -780,6 +780,93 @@ jobs:
           fi
 
       # ========================================
+      # Post-deploy HTTP Verification (ghost detection)
+      # Supabase CLI bug #3831: "No change found" can leave
+      # functions missing from runtime while reporting success.
+      # ========================================
+      - name: Verify Edge Functions are live
+        id: verify_edge_functions
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.function_name == '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/supabase/verify-edge-functions.sh
+
+          FUNCTIONS=(
+            line-daily-brief
+            stats-exporter
+            health-check
+            stripe-consistency-check
+            manus-audit-line-daily-brief
+            relay
+            manus-intelligent-repair
+            line-webhook
+            stripe-webhook
+            create-checkout-session
+            ingest-hij
+            generate-sec-brief
+            line-register
+            line-bot
+            manus-code-fixer
+            discord-bot
+          )
+
+          set +e
+          VERIFY_JSON="$(scripts/supabase/verify-edge-functions.sh "$SUPABASE_URL" "${FUNCTIONS[@]}" 2>>"$DEPLOY_LOG")"
+          VERIFY_EXIT=$?
+          set -e
+
+          printf '%s\n' "$VERIFY_JSON" | tee -a "$DEPLOY_LOG"
+
+          # Parse JSON summary
+          GHOST_RECOVERED=$(echo "$VERIFY_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['ghost_recovered'])")
+          VERIFY_FAILED=$(echo "$VERIFY_JSON" | python3 -c "import sys,json; print(','.join(json.load(sys.stdin)['failed']))")
+
+          echo "ghost_recovered=${GHOST_RECOVERED}" >> "$GITHUB_OUTPUT"
+          echo "verify_failed=${VERIFY_FAILED}" >> "$GITHUB_OUTPUT"
+          echo "VERIFY_GHOST_RECOVERED=${GHOST_RECOVERED}" >> "$GITHUB_ENV"
+
+          if [ -n "$VERIFY_FAILED" ]; then
+            echo "FAILED_FUNCTIONS=${FAILED_FUNCTIONS:-}${VERIFY_FAILED}," >> "$GITHUB_ENV"
+          fi
+
+          if [ "$VERIFY_EXIT" -ne 0 ]; then
+            echo "verify_result=failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "verify_result=success" >> "$GITHUB_OUTPUT"
+
+      - name: Verify selected Edge Function is live
+        id: verify_selected_function
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.function_name != '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_ID }}
+          SELECTED_FUNCTION: ${{ inputs.function_name }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/supabase/verify-edge-functions.sh
+
+          set +e
+          VERIFY_JSON="$(scripts/supabase/verify-edge-functions.sh "$SUPABASE_URL" "$SELECTED_FUNCTION" 2>>"$DEPLOY_LOG")"
+          VERIFY_EXIT=$?
+          set -e
+
+          printf '%s\n' "$VERIFY_JSON" | tee -a "$DEPLOY_LOG"
+
+          GHOST_RECOVERED=$(echo "$VERIFY_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['ghost_recovered'])")
+          echo "ghost_recovered=${GHOST_RECOVERED}" >> "$GITHUB_OUTPUT"
+          echo "VERIFY_GHOST_RECOVERED=${GHOST_RECOVERED}" >> "$GITHUB_ENV"
+
+          if [ "$VERIFY_EXIT" -ne 0 ]; then
+            echo "verify_result=failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "verify_result=success" >> "$GITHUB_OUTPUT"
+
+      # ========================================
       # Summary and Notification
       # ========================================
       - name: Generate deployment summary
@@ -804,10 +891,13 @@ jobs:
               FAILED_LIST="${SELECTED_FUNCTION}"
             fi
 
+            GHOST_RECOVERED="${VERIFY_GHOST_RECOVERED:-0}"
+
             echo "success_count=${SUCCESS_COUNT}" >> $GITHUB_OUTPUT
             echo "failed_count=${FAILED_COUNT}" >> $GITHUB_OUTPUT
             echo "failed_list=${FAILED_LIST}" >> $GITHUB_OUTPUT
             echo "total_count=${TOTAL_COUNT}" >> $GITHUB_OUTPUT
+            echo "ghost_recovered=${GHOST_RECOVERED}" >> $GITHUB_OUTPUT
 
             echo "=========================================="
             echo "デプロイ結果サマリー"
@@ -815,6 +905,7 @@ jobs:
             echo "選択デプロイ: ${SELECTED_FUNCTION}"
             echo "成功: ${SUCCESS_COUNT}/${TOTAL_COUNT}"
             echo "失敗: ${FAILED_COUNT}/${TOTAL_COUNT}"
+            echo "自己修復: ${GHOST_RECOVERED}"
             if [ -n "$FAILED_LIST" ]; then
               echo "失敗した関数: ${FAILED_LIST}"
             fi
@@ -844,10 +935,13 @@ jobs:
           # 末尾のカンマとスペースを削除
           FAILED_LIST="${FAILED_LIST%, }"
 
+          GHOST_RECOVERED="${VERIFY_GHOST_RECOVERED:-0}"
+
           echo "success_count=${SUCCESS_COUNT}" >> $GITHUB_OUTPUT
           echo "failed_count=${FAILED_COUNT}" >> $GITHUB_OUTPUT
           echo "failed_list=${FAILED_LIST}" >> $GITHUB_OUTPUT
           echo "total_count=${TOTAL_COUNT}" >> $GITHUB_OUTPUT
+          echo "ghost_recovered=${GHOST_RECOVERED}" >> $GITHUB_OUTPUT
 
           # サマリーをログに出力
           echo "=========================================="
@@ -855,6 +949,7 @@ jobs:
           echo "=========================================="
           echo "成功: ${SUCCESS_COUNT}/${TOTAL_COUNT}"
           echo "失敗: ${FAILED_COUNT}/${TOTAL_COUNT}"
+          echo "自己修復: ${GHOST_RECOVERED}"
           if [ -n "$FAILED_LIST" ]; then
             echo "失敗した関数: ${FAILED_LIST}"
           fi
@@ -868,6 +963,7 @@ jobs:
           FAILED_COUNT="${{ steps.summary.outputs.failed_count }}"
           FAILED_LIST="${{ steps.summary.outputs.failed_list }}"
           TOTAL_COUNT="${{ steps.summary.outputs.total_count }}"
+          GHOST_RECOVERED="${{ steps.summary.outputs.ghost_recovered }}"
           SELECTED_FUNCTION="${{ inputs.function_name }}"
 
           if [ "$FAILED_COUNT" = "0" ]; then
@@ -875,26 +971,36 @@ jobs:
             COLOR="5763719"
             TITLE="Edge Functions Deploy 成功"
             if [ -n "$SELECTED_FUNCTION" ]; then
-              DESC="${SELECTED_FUNCTION} のデプロイが正常に完了しました"
+              DESC="${SELECTED_FUNCTION} のデプロイとHTTP検証が正常に完了しました"
             else
-              DESC="全${TOTAL_COUNT}関数のデプロイが正常に完了しました"
+              DESC="全${TOTAL_COUNT}関数のデプロイとHTTP検証が正常に完了しました"
             fi
+          elif [ "$GHOST_RECOVERED" != "0" ] && [ "$FAILED_COUNT" = "0" ]; then
+            EMOJI="⚠️"
+            COLOR="16776960"
+            TITLE="Edge Functions Deploy 成功 (自己修復あり)"
+            DESC="${GHOST_RECOVERED}個のゴースト関数を自動修復しました"
           else
             EMOJI="❌"
             COLOR="15158332"
             TITLE="Edge Functions Deploy 失敗"
             if [ -n "$SELECTED_FUNCTION" ]; then
-              DESC="${SELECTED_FUNCTION} のデプロイに失敗しました"
+              DESC="${SELECTED_FUNCTION} のデプロイまたはHTTP検証に失敗しました"
             else
-              DESC="一部の関数でデプロイに失敗しました"
+              DESC="一部の関数でデプロイまたはHTTP検証に失敗しました"
             fi
           fi
 
           # 失敗した関数がある場合、fieldsに追加
+          GHOST_FIELD=""
+          if [ "$GHOST_RECOVERED" != "0" ]; then
+            GHOST_FIELD="{\"name\": \"自己修復\", \"value\": \"${GHOST_RECOVERED}\", \"inline\": true}, "
+          fi
+
           if [ -n "$FAILED_LIST" ]; then
-            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/${TOTAL_COUNT}\", \"inline\": true}, {\"name\": \"失敗\", \"value\": \"${FAILED_COUNT}/${TOTAL_COUNT}\", \"inline\": true}, {\"name\": \"失敗した関数\", \"value\": \"${FAILED_LIST}\", \"inline\": false}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
+            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/${TOTAL_COUNT}\", \"inline\": true}, {\"name\": \"失敗\", \"value\": \"${FAILED_COUNT}/${TOTAL_COUNT}\", \"inline\": true}, ${GHOST_FIELD}{\"name\": \"失敗した関数\", \"value\": \"${FAILED_LIST}\", \"inline\": false}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
           else
-            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/${TOTAL_COUNT}\", \"inline\": true}, {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
+            FIELDS="[{\"name\": \"成功\", \"value\": \"${SUCCESS_COUNT}/${TOTAL_COUNT}\", \"inline\": true}, ${GHOST_FIELD}{\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true}, {\"name\": \"Time\", \"value\": \"${TIMESTAMP}\", \"inline\": true}]"
           fi
 
           curl -X POST "$DISCORD_SYSTEM_WEBHOOK" \
@@ -919,9 +1025,13 @@ jobs:
         if: always()
         run: |
           FAILED_COUNT="${{ steps.summary.outputs.failed_count }}"
+          GHOST_RECOVERED="${{ steps.summary.outputs.ghost_recovered }}"
           if [ "$FAILED_COUNT" != "0" ]; then
-            echo "❌ ${FAILED_COUNT}個の関数でデプロイに失敗しました"
+            echo "❌ ${FAILED_COUNT}個の関数でデプロイまたはHTTP検証に失敗しました"
             echo "失敗した関数: ${{ steps.summary.outputs.failed_list }}"
             exit 1
           fi
-          echo "✅ 全関数のデプロイが成功しました"
+          if [ "$GHOST_RECOVERED" != "0" ] && [ "$GHOST_RECOVERED" != "" ]; then
+            echo "⚠️ ${GHOST_RECOVERED}個のゴースト関数を自動修復しました"
+          fi
+          echo "✅ 全関数のデプロイとHTTP検証が成功しました"
