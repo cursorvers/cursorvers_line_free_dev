@@ -1,0 +1,107 @@
+name: Edge Function Monitor
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edge-function-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    name: Verify Supabase Edge Functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+      DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Run edge function verification
+        id: verify
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_ID }}
+        run: |
+          set -uo pipefail
+          chmod +x scripts/supabase/verify-edge-functions.sh
+
+          FUNCTIONS=(
+            line-daily-brief
+            stats-exporter
+            health-check
+            stripe-consistency-check
+            manus-audit-line-daily-brief
+            relay
+            manus-intelligent-repair
+            line-webhook
+            stripe-webhook
+            create-checkout-session
+            ingest-hij
+            generate-sec-brief
+            line-register
+            line-bot
+            manus-code-fixer
+            discord-bot
+          )
+
+          set +e
+          VERIFY_JSON="$(scripts/supabase/verify-edge-functions.sh "$SUPABASE_URL" "${FUNCTIONS[@]}" 2>&1 | tee /dev/stderr)"
+          exit_code=$?
+          set -e
+
+          # Parse JSON output (last line of stdout)
+          GHOST_RECOVERED=$(echo "$VERIFY_JSON" | tail -1 | python3 -c "import sys,json; print(json.load(sys.stdin).get('ghost_recovered',0))" 2>/dev/null || echo "0")
+          FAILED=$(echo "$VERIFY_JSON" | tail -1 | python3 -c "import sys,json; print(','.join(json.load(sys.stdin).get('failed',[])))" 2>/dev/null || echo "unknown")
+
+          if [ "$exit_code" -ne 0 ]; then
+            echo "status=critical" >> "$GITHUB_OUTPUT"
+          elif [ "$GHOST_RECOVERED" != "0" ]; then
+            echo "status=recovered" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=healthy" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "ghost_recovered=${GHOST_RECOVERED}" >> "$GITHUB_OUTPUT"
+          echo "failed=${FAILED}" >> "$GITHUB_OUTPUT"
+
+      - name: Send Discord warning (ghost recovered)
+        if: ${{ steps.verify.outputs.status == 'recovered' }}
+        run: |
+          GHOST_COUNT="${{ steps.verify.outputs.ghost_recovered }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          curl -fsS -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"⚠️ Edge Functions 自動修復\", \"description\": \"${GHOST_COUNT}個のゴースト関数を定期監視で検知・自動修復しました\", \"color\": 16753920, \"url\": \"${RUN_URL}\", \"fields\": [{\"name\": \"修復数\", \"value\": \"${GHOST_COUNT}\", \"inline\": true}]}]}"
+
+      - name: Send Discord error (recovery failed)
+        if: ${{ steps.verify.outputs.status == 'critical' }}
+        run: |
+          FAILED="${{ steps.verify.outputs.failed }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          curl -fsS -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"❌ Edge Functions 監視異常\", \"description\": \"定期監視で復旧不能な関数を検知しました\", \"color\": 15158332, \"url\": \"${RUN_URL}\", \"fields\": [{\"name\": \"失敗した関数\", \"value\": \"${FAILED}\", \"inline\": false}]}]}"
+
+      - name: Fail on critical
+        if: ${{ steps.verify.outputs.status == 'critical' }}
+        run: |
+          echo "::error::Edge function monitor detected unrecoverable failure"
+          exit 1
