@@ -2,7 +2,7 @@
  * LINE Daily Brief Edge Function
  *
  * Selects one card from line_cards and broadcasts via LINE Messaging API.
- * Updated: 2026-01-22
+ * Updated: 2026-03-21 (force-redeploy: runtime NOT_FOUND recovery)
  *
  * Selection Priority:
  * 1. status = 'ready' or 'used'
