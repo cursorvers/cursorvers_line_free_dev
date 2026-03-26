@@ -83,7 +83,7 @@ jobs:
 
       - name: Upload workflow logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stripe-consistency-check-logs-${{ github.run_number }}-${{ github.run_attempt }}
           path: workflow-logs/

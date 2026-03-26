@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate secrets
         env:
@@ -51,7 +51,7 @@ jobs:
           echo "All required secrets are configured"
 
       - name: Checkout Obsidian Vault
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: mo666-med/obsidian-pro-kit-for-market-vault
           token: ${{ secrets.OBSIDIAN_VAULT_TOKEN }}

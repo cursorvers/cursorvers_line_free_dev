@@ -29,10 +29,10 @@ jobs:
     name: Generate dashboard data
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -48,7 +48,7 @@ jobs:
           npx tsx scripts/generate-dashboard-data.ts
 
       - name: Upload Dashboard Data
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dashboard-data
           path: docs/dashboard-data.json
@@ -62,19 +62,19 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Dashboard Data
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dashboard-data
           path: docs/
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: 'docs'
 
