@@ -9,6 +9,7 @@ on:
 jobs:
   generate-and-post-report:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     name: Generate and post weekly KPI report
     steps:
       - name: Checkout

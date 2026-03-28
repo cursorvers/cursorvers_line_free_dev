@@ -9,6 +9,7 @@ on:
 jobs:
   restore:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check date and enable workflow
         env:

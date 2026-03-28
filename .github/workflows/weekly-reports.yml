@@ -29,6 +29,7 @@ jobs:
       inputs.report_type == 'both' ||
       inputs.report_type == 'kpi'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     name: Generate KPI Report
 
     steps:
@@ -108,6 +109,7 @@ jobs:
       inputs.report_type == 'both' ||
       inputs.report_type == 'agent'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     name: Generate Agent Report
 
     steps:

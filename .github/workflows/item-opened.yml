@@ -10,6 +10,7 @@ jobs:
   auto-label-issue:
     if: github.event_name == 'issues'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       issues: write
       contents: read
@@ -65,6 +66,7 @@ jobs:
   auto-review-pr:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       pull-requests: write
       contents: read
