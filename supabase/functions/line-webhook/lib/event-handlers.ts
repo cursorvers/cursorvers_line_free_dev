@@ -49,6 +49,23 @@ export async function handleFollowEvent(
     });
   });
 
+  // LINE Harness CRM に友だち登録を転送（非同期・失敗しても続行）
+  const harnessKey = Deno.env.get("LINE_HARNESS_API_KEY");
+  if (harnessKey) {
+    fetch("https://line-harness.masa-stage1.workers.dev/api/friends/sync", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${harnessKey}`,
+      },
+      body: JSON.stringify({ lineUserId, channelId: "2008398653" }),
+    }).catch((err) => {
+      log.warn("LINE Harness forwarding failed", {
+        error: extractErrorMessage(err),
+      });
+    });
+  }
+
   // 有料決済済み（認証コード保留中）かどうかを確認
   const { data: pendingPaidMember } = await supabase
     .from("members")
