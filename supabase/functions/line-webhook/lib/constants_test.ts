@@ -12,7 +12,10 @@ import type { DiagnosisKeyword } from "./constants.ts";
 
 Deno.test("constants - DISCORD_INVITE_URL", async (t) => {
   await t.step("is a valid Discord invite URL", () => {
-    assertEquals(DISCORD_INVITE_URL.startsWith("https://discord.gg/"), true);
+    assertEquals(
+      DISCORD_INVITE_URL.startsWith("https://discord.com/invite/"),
+      true,
+    );
   });
 
   await t.step("is not empty", () => {
@@ -21,15 +24,11 @@ Deno.test("constants - DISCORD_INVITE_URL", async (t) => {
 });
 
 Deno.test("constants - CONTACT_FORM_URL", async (t) => {
-  await t.step("is a valid Google Apps Script URL", () => {
+  await t.step("is the Cursorvers contact URL", () => {
     assertEquals(
-      CONTACT_FORM_URL.startsWith("https://script.google.com/macros/"),
-      true,
+      CONTACT_FORM_URL,
+      "https://cursorvers.com/contact?openExternalBrowser=1",
     );
-  });
-
-  await t.step("ends with /exec", () => {
-    assertEquals(CONTACT_FORM_URL.endsWith("/exec"), true);
   });
 });
 

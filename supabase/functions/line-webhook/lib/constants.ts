@@ -4,11 +4,11 @@
 
 // Discord コミュニティリンク
 export const DISCORD_INVITE_URL = Deno.env.get("DISCORD_INVITE_URL") ??
-  "https://discord.gg/TkmmX5Z4vx";
+  "https://discord.com/invite/TkmmX5Z4vx";
 
 // お問い合わせフォーム
 export const CONTACT_FORM_URL = Deno.env.get("CONTACT_FORM_URL") ??
-  "https://script.google.com/macros/s/AKfycbwDP0d67qtifyms2h67LawjNWJi_Lh44faPC7Z4axfS_Gdmjzcd50rcl_kmTYBTysKirQ/exec";
+  "https://cursorvers.com/contact?openExternalBrowser=1";
 
 // サービス詳細LP（GitHub Pages）
 export const SERVICES_LP_URL = Deno.env.get("SERVICES_LP_URL") ??

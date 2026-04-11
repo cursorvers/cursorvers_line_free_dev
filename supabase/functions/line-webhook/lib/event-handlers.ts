@@ -22,6 +22,8 @@ import { notifyLineEvent } from "../../_shared/n8n-notify.ts";
 import { extractErrorMessage } from "../../_shared/error-utils.ts";
 
 const log = createLogger("event-handlers");
+const FOLLOW_EVENT_DEDUP_TTL_MS = 5 * 60 * 1000;
+const recentFollowEvents = new Map<string, number>();
 
 // Supabase client
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -32,6 +34,18 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
+function isDuplicateFollowEvent(lineUserId: string, now = Date.now()): boolean {
+  for (const [userId, expiresAt] of recentFollowEvents) {
+    if (expiresAt <= now) recentFollowEvents.delete(userId);
+  }
+
+  const expiresAt = recentFollowEvents.get(lineUserId);
+  if (expiresAt && expiresAt > now) return true;
+
+  recentFollowEvents.set(lineUserId, now + FOLLOW_EVENT_DEDUP_TTL_MS);
+  return false;
+}
+
 // =======================
 // Follow イベントハンドラー
 // =======================
@@ -41,6 +55,13 @@ export async function handleFollowEvent(
   replyToken?: string,
 ): Promise<void> {
   log.info("Follow event", { userId: anonymizeUserId(lineUserId) });
+
+  if (isDuplicateFollowEvent(lineUserId)) {
+    log.info("Duplicate follow event skipped", {
+      userId: anonymizeUserId(lineUserId),
+    });
+    return;
+  }
 
   // n8n経由でDiscord通知（非同期・失敗しても続行）
   notifyLineEvent("follow", lineUserId).catch((err) => {
