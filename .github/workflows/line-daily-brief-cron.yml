@@ -1,14 +1,12 @@
 # .github/workflows/line-daily-brief-cron.yml
-# 週2回 LINE Daily Brief を配信するワークフロー（月曜=Belief, 木曜=note記事）
+# 隔週金曜 LINE Daily Brief を配信するワークフロー（source_type=auto, Edge Function側で自動判定）
 
 name: LINE Daily Brief
 
 on:
   schedule:
-    # 月曜 JST 07:00 (UTC 22:00 日曜) — Obsidian Beliefカード
-    - cron: '0 22 * * 0'
-    # 木曜 JST 07:00 (UTC 22:00 水曜) — note記事ガバナンスカード
-    - cron: '0 22 * * 3'
+    # 金曜 JST 12:00 (UTC 03:00) — 毎週発火、ジョブ内で偶数ISOweekのみ実行
+    - cron: '0 3 * * 5'
   workflow_dispatch:
     inputs:
       source_type:
@@ -36,31 +34,35 @@ jobs:
           mkdir -p workflow-logs
           echo "LOG_FILE=workflow-logs/line-daily-brief-$(date -u +%Y%m%d_%H%M%S).log" >> $GITHUB_ENV
 
-      - name: Determine source type
+      - name: Determine source type and biweekly gate
         id: source
         run: |
-          # Manual input takes priority
+          # Manual input takes priority (skip biweekly gate)
           MANUAL_SOURCE="${{ github.event.inputs.source_type }}"
           if [ -n "$MANUAL_SOURCE" ]; then
             echo "type=$MANUAL_SOURCE" >> "$GITHUB_OUTPUT"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "📋 Manual source_type: $MANUAL_SOURCE"
             exit 0
           fi
 
-          # Schedule-based: Sunday 22:00 UTC (Mon JST) = belief, Wed 22:00 UTC (Thu JST) = note
-          DOW=$(date -u +%u)  # 1=Mon ... 7=Sun
-          if [ "$DOW" = "7" ]; then
-            echo "type=belief" >> "$GITHUB_OUTPUT"
-            echo "📋 Schedule source_type: belief (Monday JST)"
-          elif [ "$DOW" = "3" ]; then
-            echo "type=note" >> "$GITHUB_OUTPUT"
-            echo "📋 Schedule source_type: note (Thursday JST)"
+          # Biweekly gate: run on even ISO weeks only (Friday JST 12:00 = UTC 03:00)
+          DOW=$(date -u +%u)  # 1=Mon ... 7=Sun (Friday=5)
+          ISO_WEEK=$(date -u +%V | sed 's/^0*//')  # strip leading zero
+          if [ "$DOW" = "5" ] && [ $(( ISO_WEEK % 2 )) -eq 0 ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "📋 Biweekly Friday: ISO week $ISO_WEEK (even) → run"
           else
-            echo "type=" >> "$GITHUB_OUTPUT"
-            echo "📋 No specific source_type (auto)"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "📋 Biweekly Friday: ISO week $ISO_WEEK (odd) → skip"
           fi
 
+          # source_type = auto (Edge Function decides)
+          echo "type=" >> "$GITHUB_OUTPUT"
+          echo "📋 source_type: auto"
+
       - name: Trigger line-daily-brief Edge Function
+        if: steps.source.outputs.should_run == 'true'
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
