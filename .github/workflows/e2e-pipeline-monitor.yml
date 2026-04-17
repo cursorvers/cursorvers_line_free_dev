@@ -27,6 +27,12 @@ jobs:
         run: |
           echo "Checking Discord Sync workflow in Obsidian repo..."
 
+          if [ -z "$GH_TOKEN" ]; then
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            echo "message=Discord sync check skipped (OBSIDIAN_VAULT_TOKEN not set)" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           # 最新のワークフロー実行を取得
           RESULT=$(gh run list \
             --repo mo666-med/obsidian-pro-kit-for-market-vault \
@@ -36,8 +42,8 @@ jobs:
             2>/dev/null || echo '[]')
 
           if [ "$RESULT" = "[]" ] || [ -z "$RESULT" ]; then
-            echo "status=unknown" >> $GITHUB_OUTPUT
-            echo "message=Workflow not found or no access" >> $GITHUB_OUTPUT
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            echo "message=Discord sync check skipped (workflow not found or no access)" >> $GITHUB_OUTPUT
           else
             STATUS=$(echo "$RESULT" | jq -r '.[0].conclusion // "running"')
             CREATED=$(echo "$RESULT" | jq -r '.[0].createdAt // ""')
@@ -154,7 +160,7 @@ jobs:
           ERRORS=0
 
           # Discord Sync
-          if [ "${{ steps.discord_sync.outputs.status }}" = "success" ]; then
+          if [ "${{ steps.discord_sync.outputs.status }}" = "success" ] || [ "${{ steps.discord_sync.outputs.status }}" = "skipped" ]; then
             HEALTHY=$((HEALTHY + 1))
           elif [ "${{ steps.discord_sync.outputs.status }}" = "failure" ]; then
             ERRORS=$((ERRORS + 1))
