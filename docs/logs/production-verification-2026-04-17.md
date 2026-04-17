@@ -35,11 +35,20 @@ Discord `system-monitor` に継続表示されていた Stripe webhook missing s
 - `401` / `403` は healthy 扱いしない。
 - 外部 Obsidian repo の Discord Sync チェックがトークン未設定またはアクセス不可の場合は `skipped` として中立扱いにし、不要な warning 通知を止めた。
 
+### Alert Notification Routing
+
+- GitHub Secrets に `DISCORD_SYSTEM_WEBHOOK` が存在することを確認。
+- Supabase 本番 Secrets にも `DISCORD_SYSTEM_WEBHOOK` が存在することを確認。
+- 直近の `Deploy Supabase Edge Functions` で `DISCORD_SYSTEM_WEBHOOK` への Discord POST が成功していることを確認。
+- 旧 `DISCORD_ADMIN_WEBHOOK_URL` だけを参照していた GitHub Actions workflow を、`DISCORD_SYSTEM_WEBHOOK` 優先、旧名フォールバックに修正。
+- `Stripe webhook missing signature` は通知しないのが正常動作。署名なしPOSTは HTTP 400 で拒否し、Discord通知は `STRIPE_WEBHOOK_ALERT_ON_MISSING_SIGNATURE=true` の明示設定時のみ送る。
+
 ## Verification Evidence
 
 - CI Tests: https://github.com/cursorvers/cursorvers_line_free_dev/actions/runs/24553140335
 - Deploy Supabase Edge Functions: https://github.com/cursorvers/cursorvers_line_free_dev/actions/runs/24553140337
 - E2E Pipeline Monitor (post-fix healthy): https://github.com/cursorvers/cursorvers_line_free_dev/actions/runs/24553250317
+- E2E Pipeline Monitor (post-alert-routing healthy): https://github.com/cursorvers/cursorvers_line_free_dev/actions/runs/24553941995
 - Stripe webhook production health:
   - Endpoint: `https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/stripe-webhook`
   - Result: HTTP 200
@@ -48,6 +57,7 @@ Discord `system-monitor` に継続表示されていた Stripe webhook missing s
 
 - `b00965b` - `fix: harden line daily health monitoring`
 - `7e0540a` - `fix: suppress expected e2e sync skips`
+- `1e6fce0` - `fix: prefer system webhook for alerts`
 
 ## Notes
 
