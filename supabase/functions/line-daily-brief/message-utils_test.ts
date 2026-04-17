@@ -6,7 +6,9 @@ import {
   CardTheme,
   formatMessage,
   generateBodyPreview,
+  getBroadcastFailureStatus,
   getThemeEmoji,
+  isLineDailyBriefHealthRequest,
   isLineMonthlyLimitError,
   isValidMessageLength,
   LineCard,
@@ -204,6 +206,55 @@ Deno.test("message-utils - isLineMonthlyLimitError", async (t) => {
       ),
       false,
     );
+  });
+});
+
+Deno.test("message-utils - isLineDailyBriefHealthRequest", async (t) => {
+  const url = new URL("https://example.com/functions/v1/line-daily-brief");
+
+  await t.step("does not treat plain GET as health", () => {
+    assertEquals(isLineDailyBriefHealthRequest("GET", url, null), false);
+  });
+
+  await t.step("treats mode=health GET as health", () => {
+    const healthUrl = new URL(`${url.href}?mode=health`);
+    assertEquals(isLineDailyBriefHealthRequest("GET", healthUrl, null), true);
+  });
+
+  await t.step("treats mode=health POST as health", () => {
+    const healthUrl = new URL(`${url.href}?mode=health`);
+    assertEquals(isLineDailyBriefHealthRequest("POST", healthUrl, {}), true);
+  });
+
+  await t.step("treats legacy POST health body as health", () => {
+    assertEquals(
+      isLineDailyBriefHealthRequest("POST", url, { type: "health" }),
+      true,
+    );
+    assertEquals(
+      isLineDailyBriefHealthRequest("POST", url, { mode: "health" }),
+      true,
+    );
+  });
+
+  await t.step("does not treat normal POST as health", () => {
+    assertEquals(isLineDailyBriefHealthRequest("POST", url, {}), false);
+  });
+});
+
+Deno.test("message-utils - getBroadcastFailureStatus", async (t) => {
+  await t.step("returns non-fatal status for quota exceeded", () => {
+    assertEquals(getBroadcastFailureStatus(true), {
+      httpStatus: 200,
+      status: "quota_exceeded",
+    });
+  });
+
+  await t.step("returns fatal status for normal broadcast failures", () => {
+    assertEquals(getBroadcastFailureStatus(false), {
+      httpStatus: 500,
+      status: "broadcast_failed",
+    });
   });
 });
 

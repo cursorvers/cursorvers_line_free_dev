@@ -84,31 +84,29 @@ jobs:
         id: line_brief
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "Checking LINE Daily Brief function health..."
 
-          # ヘルスチェックエンドポイントを呼び出し
+          # 副作用なしのヘルスチェックのみを呼び出す（カード選択・LINE配信は行わない）
           HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" \
             --max-time 10 \
-            -X POST "${SUPABASE_URL}/functions/v1/line-daily-brief" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            -H "Content-Type: application/json" \
-            -d '{"type": "health"}' \
+            -X GET "${SUPABASE_URL}/functions/v1/line-daily-brief?mode=health" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             2>/dev/null || echo "000")
 
-          if [ "$HTTP_CODE" = "200" ]; then
+          if [ "$HTTP_CODE" = "200" ] && jq -e '.health == true and .cardSent == false' /tmp/health.json >/dev/null 2>&1; then
             echo "status=healthy" >> $GITHUB_OUTPUT
             echo "message=LINE Daily Brief function is healthy" >> $GITHUB_OUTPUT
           elif [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
-            echo "status=auth_required" >> $GITHUB_OUTPUT
-            echo "message=Auth required (expected for protected endpoint)" >> $GITHUB_OUTPUT
+            echo "status=error" >> $GITHUB_OUTPUT
+            echo "message=Health auth failed (HTTP $HTTP_CODE)" >> $GITHUB_OUTPUT
           elif [ "$HTTP_CODE" = "000" ]; then
             echo "status=timeout" >> $GITHUB_OUTPUT
             echo "message=Connection timeout" >> $GITHUB_OUTPUT
           else
             echo "status=error" >> $GITHUB_OUTPUT
-            echo "message=HTTP $HTTP_CODE" >> $GITHUB_OUTPUT
+            echo "message=HTTP $HTTP_CODE or invalid health response" >> $GITHUB_OUTPUT
           fi
 
       - name: Check Card Inventory
@@ -176,7 +174,7 @@ jobs:
           fi
 
           # LINE Brief Function
-          if [ "${{ steps.line_brief.outputs.status }}" = "healthy" ] || [ "${{ steps.line_brief.outputs.status }}" = "auth_required" ]; then
+          if [ "${{ steps.line_brief.outputs.status }}" = "healthy" ]; then
             HEALTHY=$((HEALTHY + 1))
           else
             ERRORS=$((ERRORS + 1))

@@ -55,14 +55,32 @@ services:
     enabled: true
     notes: "Edge Function稼働確認のみ、MCPログ取得はスキップ"
 
+  line_daily_brief:
+    name: "LINE Daily Brief"
+    endpoint: "https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/line-daily-brief?mode=health"
+    method: "GET"
+    auth_source: "github_secrets"
+    auth_name: "SUPABASE_SERVICE_ROLE_KEY"
+    expected_status: [200]
+    enabled: true
+    notes: "副作用なしhealthのみ監査対象。配信POSTは監査で実行しない"
+
+  stripe_webhook:
+    name: "Stripe Webhook"
+    endpoint: "https://haaxgwyimoqzzxzdaeep.supabase.co/functions/v1/stripe-webhook"
+    method: "GET"
+    expected_status: [200]
+    enabled: true
+    notes: "GET healthは200。署名なしPOSTは400が正常な防御応答"
+
   # Discord Webhook
   discord:
     name: "Discord Webhook"
-    # GitHub Secrets: DISCORD_ADMIN_WEBHOOK_URL
+    # GitHub Secrets: DISCORD_SYSTEM_WEBHOOK
     webhook_source: "github_secrets"
-    webhook_name: "DISCORD_ADMIN_WEBHOOK_URL"
+    webhook_name: "DISCORD_SYSTEM_WEBHOOK"
     enabled: true
-    notes: "2025-12-16に接続テスト成功"
+    notes: "system alert 専用。#system-monitor (channel ID 1443582135322804285)"
 
   # GitHub Repositories
   github:
@@ -95,8 +113,8 @@ reporting:
   # Discord報告
   discord:
     enabled: true
-    webhook_name: "DISCORD_ADMIN_WEBHOOK_URL"
-    channel: "system-alerts"
+    webhook_name: "DISCORD_SYSTEM_WEBHOOK"
+    channel: "system-monitor"
   
   # GitHub ログ保存
   github:
@@ -123,6 +141,30 @@ expected_responses:
     is_normal: true
     description: "Manus環境変数にSUPABASE_ACCESS_TOKEN未設定のため、MCPログ取得はスキップ"
 
+  discord_status_no_auth:
+    status: 401
+    message: "Unauthorized"
+    is_normal: true
+    description: "discord-status は x-admin-secret なしアクセスを拒否するのが正常"
+
+  line_daily_brief_health:
+    status: 200
+    message: "healthy"
+    is_normal: true
+    description: "LINE Daily Brief の副作用なしhealthは200が正常"
+
+  stripe_webhook_health:
+    status: 200
+    message: "stripe-webhook is running"
+    is_normal: true
+    description: "Stripe webhook のGET healthは200が正常"
+
+  stripe_webhook_missing_signature:
+    status: 400
+    message: "Missing signature"
+    is_normal: true
+    description: "Stripe-SignatureなしのPOSTは400で拒否するのが正常。Discord通知は明示opt-inのみ"
+
 # ===========================================
 # 除外項目（監査対象外）
 # ===========================================
@@ -145,6 +187,11 @@ exclusions:
 # ===========================================
 
 changelog:
+  - date: "2026-04-17"
+    changes:
+      - "LINE Daily Brief の副作用なしhealth契約を監査対象に追加"
+      - "Stripe webhook のGET healthと署名なしPOST防御応答を正常応答として定義"
+
   - date: "2026-01-03"
     changes:
       - "役割分担を明確化: GitHub Actions=監査, Manus=自動修復のみ"

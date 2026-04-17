@@ -93,3 +93,21 @@ export function isLineMonthlyLimitError(
 ): boolean {
   return status === 429 && responseBody.toLowerCase().includes("monthly limit");
 }
+
+export function isLineDailyBriefHealthRequest(
+  _method: string,
+  url: URL,
+  body: Record<string, unknown> | null | undefined,
+): boolean {
+  if (url.searchParams.get("mode") === "health") return true;
+  return body?.["type"] === "health" || body?.["mode"] === "health";
+}
+
+export function getBroadcastFailureStatus(quotaExceeded?: boolean): {
+  httpStatus: number;
+  status: "quota_exceeded" | "broadcast_failed";
+} {
+  return quotaExceeded
+    ? { httpStatus: 200, status: "quota_exceeded" }
+    : { httpStatus: 500, status: "broadcast_failed" };
+}

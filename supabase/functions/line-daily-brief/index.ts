@@ -19,7 +19,11 @@
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "../_shared/logger.ts";
-import { isLineMonthlyLimitError } from "./message-utils.ts";
+import {
+  getBroadcastFailureStatus,
+  isLineDailyBriefHealthRequest,
+  isLineMonthlyLimitError,
+} from "./message-utils.ts";
 
 const log = createLogger("line-daily-brief");
 
@@ -607,8 +611,12 @@ async function updateCardAfterDelivery(
 /**
  * Main handler
  */
-Deno.serve(async (req) => {
-  if (req.method !== "POST") {
+export async function handleLineDailyBriefRequest(
+  req: Request,
+): Promise<Response> {
+  const method = req.method.toUpperCase();
+
+  if (method !== "POST" && method !== "GET") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
       headers: { "Content-Type": "application/json" },
@@ -619,6 +627,39 @@ Deno.serve(async (req) => {
     log.error("Authentication failed");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  let body: Record<string, unknown> | null = null;
+  if (method === "POST") {
+    try {
+      body = await req.json() as Record<string, unknown>;
+    } catch {
+      body = null;
+    }
+  }
+
+  const url = new URL(req.url);
+  if (isLineDailyBriefHealthRequest(method, url, body)) {
+    log.info("Line daily brief health check");
+    return new Response(
+      JSON.stringify({
+        success: true,
+        status: "healthy",
+        health: true,
+        cardSent: false,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  if (method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -639,14 +680,13 @@ Deno.serve(async (req) => {
   try {
     // Parse optional source_type from request body
     let forcedSourceType: SourceType | undefined;
-    try {
-      const body = await req.json();
-      if (body.source_type && ["belief", "note"].includes(body.source_type)) {
-        forcedSourceType = body.source_type as SourceType;
-        log.info("Request specifies source_type", { forcedSourceType });
-      }
-    } catch {
-      // No body or invalid JSON — use default behavior
+    const requestedSourceType = body?.["source_type"];
+    if (
+      typeof requestedSourceType === "string" &&
+      ["belief", "note"].includes(requestedSourceType)
+    ) {
+      forcedSourceType = requestedSourceType as SourceType;
+      log.info("Request specifies source_type", { forcedSourceType });
     }
 
     log.info("Step 1: Selecting card", {
@@ -694,20 +734,19 @@ Deno.serve(async (req) => {
         log.warn("Failed to record broadcast history", { error: err.message });
       });
 
-      const responseStatus = broadcastResult.quotaExceeded ? 200 : 500;
-      const status = broadcastResult.quotaExceeded
-        ? "quota_exceeded"
-        : "broadcast_failed";
+      const failure = getBroadcastFailureStatus(
+        broadcastResult.quotaExceeded,
+      );
 
       return new Response(
         JSON.stringify({
           success: false,
-          status,
+          status: failure.status,
           error: broadcastResult.error,
           cardSent: false,
         }),
         {
-          status: responseStatus,
+          status: failure.httpStatus,
           headers: { "Content-Type": "application/json" },
         },
       );
@@ -757,4 +796,8 @@ Deno.serve(async (req) => {
       },
     );
   }
-});
+}
+
+if (import.meta.main) {
+  Deno.serve(handleLineDailyBriefRequest);
+}
