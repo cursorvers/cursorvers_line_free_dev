@@ -229,7 +229,7 @@ jobs:
           SUCCESS: ${{ steps.result.outputs.success }}
           MESSAGE: ${{ steps.result.outputs.message }}
           ISSUE_TYPE: ${{ inputs.issue_type }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           MANUS_URL="${MANUS_TASK_URL:-}"

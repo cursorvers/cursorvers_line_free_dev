@@ -215,7 +215,7 @@ jobs:
       - name: Notify on Issues
         if: steps.report.outputs.overall != 'healthy'
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
         run: |
           if [ -n "$DISCORD_WEBHOOK_URL" ]; then
             TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")

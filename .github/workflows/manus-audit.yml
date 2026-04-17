@@ -362,7 +362,7 @@ jobs:
         # for "audit execution failed" situations (non-200 or missing response).
         if: env.AUDIT_FAILED == 'true' && env.AUDIT_HTTP_CODE != '200'
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
           AUTO_FIX_APPLIED: ${{ steps.auto_fix.outputs.auto_fix_applied }}
           MANUS_TASK_URL: ${{ steps.auto_fix.outputs.manus_task_url }}
         run: |

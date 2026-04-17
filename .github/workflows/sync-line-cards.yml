@@ -105,7 +105,7 @@ jobs:
       - name: Notify on success
         if: success() && steps.sync.outputs.mode == 'live' && steps.sync.outputs.cards_inserted != '0'
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
         run: |
           if [ -n "$DISCORD_WEBHOOK_URL" ]; then
             TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
@@ -117,7 +117,7 @@ jobs:
       - name: Notify on failure
         if: failure()
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
         run: |
           if [ -n "$DISCORD_WEBHOOK_URL" ]; then
             TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
