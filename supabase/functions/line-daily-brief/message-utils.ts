@@ -86,3 +86,10 @@ export function generateBodyPreview(body: string, maxLength = 50): string {
 export function isValidMessageLength(message: string): boolean {
   return message.length <= 5000; // LINE text message limit
 }
+
+export function isLineMonthlyLimitError(
+  status: number | null | undefined,
+  responseBody: string,
+): boolean {
+  return status === 429 && responseBody.toLowerCase().includes("monthly limit");
+}

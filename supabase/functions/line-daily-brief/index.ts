@@ -19,6 +19,7 @@
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { createLogger } from "../_shared/logger.ts";
+import { isLineMonthlyLimitError } from "./message-utils.ts";
 
 const log = createLogger("line-daily-brief");
 
@@ -52,6 +53,7 @@ interface BroadcastResult {
   requestId?: string | null;
   responseStatus?: number | null;
   error?: string;
+  quotaExceeded?: boolean;
 }
 
 const REQUIRED_ENV_VARS = [
@@ -434,6 +436,7 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
   let lastError = "";
   let lastStatus: number | null = null;
   let lastRequestId: string | null = null;
+  let quotaExceeded = false;
 
   while (attempt < maxAttempts) {
     attempt += 1;
@@ -467,7 +470,9 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
     lastStatus = response.status;
     lastRequestId = response.headers.get("X-Line-Request-Id");
     const retryAfter = response.headers.get("Retry-After");
-    const shouldRetry = response.status === 429 || response.status >= 500;
+    quotaExceeded = isLineMonthlyLimitError(response.status, errorBody);
+    const shouldRetry = !quotaExceeded &&
+      (response.status === 429 || response.status >= 500);
 
     const logContext = {
       attempt,
@@ -475,7 +480,9 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
       errorBody,
       retryAfter,
     };
-    if (shouldRetry) {
+    if (quotaExceeded) {
+      log.warn("LINE monthly broadcast quota exceeded", logContext);
+    } else if (shouldRetry) {
       log.warn("Broadcast failed, will retry", logContext);
     } else {
       log.error("Broadcast failed", logContext);
@@ -496,6 +503,7 @@ async function broadcastMessage(text: string): Promise<BroadcastResult> {
     requestId: lastRequestId,
     responseStatus: lastStatus,
     error: lastError || "Unknown LINE broadcast error",
+    quotaExceeded,
   };
 }
 
@@ -651,6 +659,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
+          status: "no_card",
           message: "No card to send",
           cardSent: false,
         }),
@@ -685,13 +694,20 @@ Deno.serve(async (req) => {
         log.warn("Failed to record broadcast history", { error: err.message });
       });
 
+      const responseStatus = broadcastResult.quotaExceeded ? 200 : 500;
+      const status = broadcastResult.quotaExceeded
+        ? "quota_exceeded"
+        : "broadcast_failed";
+
       return new Response(
         JSON.stringify({
           success: false,
+          status,
           error: broadcastResult.error,
+          cardSent: false,
         }),
         {
-          status: 500,
+          status: responseStatus,
           headers: { "Content-Type": "application/json" },
         },
       );
@@ -713,6 +729,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
+        status: "success",
         message: "Daily brief sent successfully",
         cardSent: true,
         cardId: card.id,

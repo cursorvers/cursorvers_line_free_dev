@@ -27,6 +27,10 @@ import {
   handleSubscriptionDeleted,
   handleSubscriptionUpdated,
 } from "./event-handlers.ts";
+import {
+  isHealthProbeMethod,
+  shouldNotifyMissingSignature,
+} from "./request-guards.ts";
 
 const log = createLogger("stripe-webhook");
 
@@ -39,13 +43,6 @@ const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 Deno.serve(async (req) => {
   try {
-    const signature = req.headers.get("Stripe-Signature");
-    const smokeTest = req.headers.get("x-smoke-test") === "true";
-    const smokeMode = Deno.env.get("STRIPE_WEBHOOK_SMOKE_MODE") === "true";
-    const body = await req.text();
-    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const requestId = crypto.randomUUID();
     const clientIP = getClientIP(req);
 
@@ -54,6 +51,22 @@ Deno.serve(async (req) => {
       clientIP,
       method: req.method,
     });
+
+    if (isHealthProbeMethod(req.method)) {
+      return new Response("OK - stripe-webhook is running", { status: 200 });
+    }
+
+    if (req.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    const signature = req.headers.get("Stripe-Signature");
+    const smokeTest = req.headers.get("x-smoke-test") === "true";
+    const smokeMode = Deno.env.get("STRIPE_WEBHOOK_SMOKE_MODE") === "true";
+    const body = await req.text();
+    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     // 環境変数の検証
     if (!webhookSecret) {
@@ -69,11 +82,17 @@ Deno.serve(async (req) => {
     // 署名ヘッダーの検証
     if (!signature) {
       log.warn("Missing Stripe-Signature header", { requestId, clientIP });
-      await notifyDiscord({
-        title: "MANUS ALERT: Stripe webhook missing signature",
-        message: "Missing Stripe-Signature header",
-        severity: "warning",
-      });
+      if (
+        shouldNotifyMissingSignature(
+          Deno.env.get("STRIPE_WEBHOOK_ALERT_ON_MISSING_SIGNATURE"),
+        )
+      ) {
+        await notifyDiscord({
+          title: "MANUS ALERT: Stripe webhook missing signature",
+          message: "Missing Stripe-Signature header",
+          severity: "warning",
+        });
+      }
       return new Response("Missing signature", { status: 400 });
     }
 

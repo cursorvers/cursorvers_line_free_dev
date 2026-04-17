@@ -7,6 +7,7 @@ import {
   formatMessage,
   generateBodyPreview,
   getThemeEmoji,
+  isLineMonthlyLimitError,
   isValidMessageLength,
   LineCard,
   MAX_MESSAGE_LENGTH,
@@ -174,6 +175,35 @@ Deno.test("message-utils - isValidMessageLength", async (t) => {
 
   await t.step("handles empty string", () => {
     assertEquals(isValidMessageLength(""), true);
+  });
+});
+
+Deno.test("message-utils - isLineMonthlyLimitError", async (t) => {
+  await t.step("detects LINE monthly limit response", () => {
+    assertEquals(
+      isLineMonthlyLimitError(
+        429,
+        '{"message":"You have reached your monthly limit."}',
+      ),
+      true,
+    );
+  });
+
+  await t.step("does not treat every 429 as monthly limit", () => {
+    assertEquals(
+      isLineMonthlyLimitError(429, '{"message":"Too many requests"}'),
+      false,
+    );
+  });
+
+  await t.step("requires 429 status", () => {
+    assertEquals(
+      isLineMonthlyLimitError(
+        500,
+        '{"message":"You have reached your monthly limit."}',
+      ),
+      false,
+    );
   });
 });
 

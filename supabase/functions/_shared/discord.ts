@@ -269,10 +269,9 @@ export async function removeDiscordRole(
 export async function findExistingClientRoom(
   discordUserId: string,
 ): Promise<string | null> {
-  const botToken = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
-  const guildId = Deno.env.get("DISCORD_GUILD_ID") ?? "";
-  const categoryId = Deno.env.get("DISCORD_CLIENT_ROOM_CATEGORY_ID") ??
-    "1463892771608723518";
+  const botToken = DISCORD_BOT_TOKEN;
+  const guildId = DISCORD_GUILD_ID;
+  const categoryId = DISCORD_CLIENT_ROOM_CATEGORY_ID;
 
   if (!botToken || !guildId) {
     log.warn("Discord credentials not configured for client room lookup");
@@ -327,12 +326,10 @@ export async function createClientRoom(
   discordUserId: string,
   username: string,
 ): Promise<{ success: boolean; channelId?: string; error?: string }> {
-  const botToken = Deno.env.get("DISCORD_BOT_TOKEN") ?? "";
-  const guildId = Deno.env.get("DISCORD_GUILD_ID") ?? "";
-  const categoryId = Deno.env.get("DISCORD_CLIENT_ROOM_CATEGORY_ID") ??
-    "1463892771608723518";
-  const adminBotId = Deno.env.get("DISCORD_ADMIN_BOT_ID") ??
-    "1447704583374639165";
+  const botToken = DISCORD_BOT_TOKEN;
+  const guildId = DISCORD_GUILD_ID;
+  const categoryId = DISCORD_CLIENT_ROOM_CATEGORY_ID;
+  const adminBotId = DISCORD_ADMIN_BOT_ID;
 
   if (!botToken || !guildId) {
     log.warn("Discord credentials not configured for client room creation");
@@ -385,6 +382,13 @@ export async function createClientRoom(
     }
 
     const channel = await response.json() as { id?: string };
+    if (!channel.id) {
+      log.error("Discord client room creation response missing channel id", {
+        discordUserId: maskDiscordUserId(discordUserId),
+      });
+      return { success: false, error: "Missing Discord channel id" };
+    }
+
     log.info("Discord client room created", {
       discordUserId: maskDiscordUserId(discordUserId),
       channelId: channel.id,

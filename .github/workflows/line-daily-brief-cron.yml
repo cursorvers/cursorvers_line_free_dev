@@ -91,15 +91,24 @@ jobs:
           echo "HTTP Code: $HTTP_CODE"
 
           if [ "$HTTP_CODE" -ne 200 ]; then
+            if echo "$RESP_BODY" | grep -Eiq 'LINE API error 429|monthly limit'; then
+              echo "⚠️ LINE月間送信上限に到達しているため、今回の配信はスキップ扱いにします"
+              exit 0
+            fi
             echo "❌ Edge Function returned $HTTP_CODE"
             exit 1
           fi
 
-          # no_card の場合もエラーにしない
-          STATUS=$(echo "$RESP_BODY" | jq -r '.status // empty')
+          # no_card / quota_exceeded の場合もエラーにしない
+          STATUS=$(echo "$RESP_BODY" | jq -r '.status // empty' 2>/dev/null || true)
+          CARD_SENT=$(echo "$RESP_BODY" | jq -r '.cardSent // empty' 2>/dev/null || true)
           if [ "$STATUS" = "no_card" ]; then
             echo "📭 配信可能なカードがありませんでした（正常終了）"
+          elif [ "$STATUS" = "quota_exceeded" ]; then
+            echo "⚠️ LINE月間送信上限に到達しているため、今回の配信はスキップ扱いにします"
           elif [ "$STATUS" = "success" ]; then
+            echo "✅ LINE Daily Brief 配信成功"
+          elif [ "$CARD_SENT" = "true" ]; then
             echo "✅ LINE Daily Brief 配信成功"
           else
             echo "⚠️ 予期しないステータス: $STATUS"

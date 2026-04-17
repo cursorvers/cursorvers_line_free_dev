@@ -413,10 +413,8 @@ async function grantDiscordMembershipAccess(
       return;
     }
 
-    const roomResult = await createClientRoom(
-      discordUserId,
-      name ?? email.split("@")[0],
-    );
+    const roomName = name ?? email.split("@")[0] ?? email;
+    const roomResult = await createClientRoom(discordUserId, roomName);
     if (roomResult.success) {
       log.info("Client room created", {
         email: maskEmail(email),
