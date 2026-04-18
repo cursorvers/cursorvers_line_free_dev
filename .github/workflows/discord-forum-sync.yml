@@ -107,13 +107,16 @@ jobs:
       - name: Notify on failure
         if: failure()
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            curl -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d '{"content": "⚠️ **Discord Forum Sync ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::error::DISCORD_SYSTEM_WEBHOOK not set. Forum sync failure notification cannot be delivered."
+            exit 1
           fi
+
+          curl -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{"content": "⚠️ **Discord Forum Sync ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
 
       - name: Upload workflow logs
         if: always()

@@ -215,10 +215,14 @@ jobs:
       - name: Notify on Issues
         if: steps.report.outputs.overall != 'healthy'
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::error::DISCORD_SYSTEM_WEBHOOK not set. E2E monitor notification cannot be delivered."
+            exit 1
+          fi
+
+          TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
 
             if [ "${{ steps.report.outputs.overall }}" = "error" ]; then
               COLOR=15158332  # Red
@@ -228,7 +232,7 @@ jobs:
               TITLE="E2E Pipeline Monitor: Warnings"
             fi
 
-            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+            curl -s -X POST "$DISCORD_SYSTEM_WEBHOOK" \
               -H "Content-Type: application/json" \
               -d "{
                 \"embeds\": [{
@@ -244,7 +248,6 @@ jobs:
                   \"footer\": {\"text\": \"E2E Pipeline Monitor | ${TIMESTAMP}\"}
                 }]
               }"
-          fi
 
       - name: Summary
         run: |

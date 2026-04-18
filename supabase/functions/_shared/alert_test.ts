@@ -13,12 +13,10 @@ import {
 // 環境変数未設定時のテスト
 // ========================================
 
-Deno.test("notifyDiscord skips notification when DISCORD_ALERT_WEBHOOK is not set", async () => {
-  const originalAlertWebhook = Deno.env.get("DISCORD_ALERT_WEBHOOK");
+Deno.test("notifyDiscord skips notification when DISCORD_SYSTEM_WEBHOOK is not set", async () => {
   const originalSystemWebhook = Deno.env.get("DISCORD_SYSTEM_WEBHOOK");
 
   try {
-    Deno.env.delete("DISCORD_ALERT_WEBHOOK");
     Deno.env.delete("DISCORD_SYSTEM_WEBHOOK");
 
     const result = await notifyDiscord({
@@ -31,9 +29,6 @@ Deno.test("notifyDiscord skips notification when DISCORD_ALERT_WEBHOOK is not se
     assertEquals(result.attempts, 0);
     assertEquals(result.error, "Webhook not configured");
   } finally {
-    if (originalAlertWebhook) {
-      Deno.env.set("DISCORD_ALERT_WEBHOOK", originalAlertWebhook);
-    }
     if (originalSystemWebhook) {
       Deno.env.set("DISCORD_SYSTEM_WEBHOOK", originalSystemWebhook);
     }

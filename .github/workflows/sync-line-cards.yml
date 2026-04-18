@@ -105,23 +105,29 @@ jobs:
       - name: Notify on success
         if: success() && steps.sync.outputs.mode == 'live' && steps.sync.outputs.cards_inserted != '0'
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
-            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d "{\"embeds\": [{\"title\": \"LINEカード同期完了\", \"color\": 5763719, \"fields\": [{\"name\": \"新規追加\", \"value\": \"${{ steps.sync.outputs.cards_inserted }}枚\", \"inline\": true}, {\"name\": \"重複スキップ\", \"value\": \"${{ steps.sync.outputs.cards_skipped }}枚\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}], \"footer\": {\"text\": \"Obsidian Vault Sync\"}}]}"
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::notice::DISCORD_SYSTEM_WEBHOOK not set; skipping LINE card sync success notification."
+            exit 0
           fi
+
+          TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
+          curl -s -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"LINEカード同期完了\", \"color\": 5763719, \"fields\": [{\"name\": \"新規追加\", \"value\": \"${{ steps.sync.outputs.cards_inserted }}枚\", \"inline\": true}, {\"name\": \"重複スキップ\", \"value\": \"${{ steps.sync.outputs.cards_skipped }}枚\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}], \"footer\": {\"text\": \"Obsidian Vault Sync\"}}]}"
 
       - name: Notify on failure
         if: failure()
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
-            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d "{\"embeds\": [{\"title\": \"LINEカード同期失敗\", \"description\": \"Obsidian Vault同期でエラーが発生しました\", \"color\": 15158332, \"fields\": [{\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"ログ\", \"value\": \"[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}], \"footer\": {\"text\": \"Obsidian Vault Sync\"}}]}"
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::error::DISCORD_SYSTEM_WEBHOOK not set. LINE card sync failure notification cannot be delivered."
+            exit 1
           fi
+
+          TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
+          curl -s -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"LINEカード同期失敗\", \"description\": \"Obsidian Vault同期でエラーが発生しました\", \"color\": 15158332, \"fields\": [{\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"ログ\", \"value\": \"[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}], \"footer\": {\"text\": \"Obsidian Vault Sync\"}}]}"

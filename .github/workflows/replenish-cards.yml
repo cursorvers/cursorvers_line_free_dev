@@ -82,14 +82,17 @@ jobs:
       - name: Notify Discord on success
         if: success() && inputs.dry_run != 'true'
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
-            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d "{\"embeds\": [{\"title\": \"✅ AI カード自動補充完了\", \"color\": 5763719, \"fields\": [{\"name\": \"テーマ\", \"value\": \"${{ inputs.themes || 'tax,career,general' }}\", \"inline\": true}, {\"name\": \"生成数/テーマ\", \"value\": \"${{ inputs.count || '20' }}\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}], \"footer\": {\"text\": \"AI Card Generator\"}}]}"
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::notice::DISCORD_SYSTEM_WEBHOOK not set; skipping card replenishment success notification."
+            exit 0
           fi
+
+          TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
+          curl -s -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"✅ AI カード自動補充完了\", \"color\": 5763719, \"fields\": [{\"name\": \"テーマ\", \"value\": \"${{ inputs.themes || 'tax,career,general' }}\", \"inline\": true}, {\"name\": \"生成数/テーマ\", \"value\": \"${{ inputs.count || '20' }}\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}], \"footer\": {\"text\": \"AI Card Generator\"}}]}"
 
       # ========================================
       # 失敗時: Manus分析 → GitHub Issue作成
@@ -186,17 +189,20 @@ jobs:
       - name: Notify Discord on failure
         if: always() && steps.generate.outcome == 'failure'
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
-            MANUS_URL="${{ steps.manus.outputs.task_url }}"
-            MANUS_INFO=""
-            if [ -n "$MANUS_URL" ]; then
-              MANUS_INFO=", {\"name\": \"Manus分析\", \"value\": \"[View](${MANUS_URL})\", \"inline\": true}"
-            fi
-
-            curl -s -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d "{\"embeds\": [{\"title\": \"❌ AI カード自動補充失敗（3回リトライ後）\", \"color\": 15158332, \"description\": \"GitHub Issue を作成しました。Manus が原因分析中です。\", \"fields\": [{\"name\": \"テーマ\", \"value\": \"${{ inputs.themes || 'tax,career,general' }}\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"ログ\", \"value\": \"[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}${MANUS_INFO}], \"footer\": {\"text\": \"AI Card Generator\"}}]}"
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::error::DISCORD_SYSTEM_WEBHOOK not set. Card replenishment failure notification cannot be delivered."
+            exit 1
           fi
+
+          TIMESTAMP=$(TZ=Asia/Tokyo date +"%Y-%m-%d %H:%M JST")
+          MANUS_URL="${{ steps.manus.outputs.task_url }}"
+          MANUS_INFO=""
+          if [ -n "$MANUS_URL" ]; then
+            MANUS_INFO=", {\"name\": \"Manus分析\", \"value\": \"[View](${MANUS_URL})\", \"inline\": true}"
+          fi
+
+          curl -s -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"❌ AI カード自動補充失敗（3回リトライ後）\", \"color\": 15158332, \"description\": \"GitHub Issue を作成しました。Manus が原因分析中です。\", \"fields\": [{\"name\": \"テーマ\", \"value\": \"${{ inputs.themes || 'tax,career,general' }}\", \"inline\": true}, {\"name\": \"日時\", \"value\": \"${TIMESTAMP}\", \"inline\": true}, {\"name\": \"ログ\", \"value\": \"[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\", \"inline\": true}${MANUS_INFO}], \"footer\": {\"text\": \"AI Card Generator\"}}]}"

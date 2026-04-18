@@ -5,8 +5,7 @@
 
 // 環境変数は実行時に読み込む（テスト対応）
 function getDiscordWebhook(): string | undefined {
-  return Deno.env.get("DISCORD_ALERT_WEBHOOK") ??
-    Deno.env.get("DISCORD_SYSTEM_WEBHOOK");
+  return Deno.env.get("DISCORD_SYSTEM_WEBHOOK");
 }
 
 export interface NotifyOptions {
