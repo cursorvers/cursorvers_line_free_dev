@@ -1,8 +1,11 @@
 /**
  * notification.ts ユニットテスト
  */
-import { assertEquals } from "std-assert";
-import { buildNotificationMessage } from "./notification.ts";
+import { assertEquals, assertRejects } from "std-assert";
+import {
+  buildNotificationMessage,
+  sendDiscordNotification,
+} from "./notification.ts";
 import type { AuditResult } from "./types.ts";
 
 // テスト用のベースとなるAuditResult
@@ -306,5 +309,67 @@ Deno.test("notification - buildNotificationMessage", async (t) => {
     });
     const message = buildNotificationMessage(result, "manus");
     assertEquals(message.includes("LINE登録システム"), true);
+  });
+});
+
+Deno.test("notification - sendDiscordNotification delivery guarantees", async (t) => {
+  await t.step("throws when required delivery has no webhook", async () => {
+    await assertRejects(
+      () =>
+        sendDiscordNotification(createBaseResult(), {
+          force: true,
+          audience: "maintenance",
+          requireDelivery: true,
+        }),
+      Error,
+      "Discord webhook URL not configured",
+    );
+  });
+
+  await t.step("throws when required delivery receives non-2xx", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (() =>
+      Promise.resolve(new Response("gone", { status: 404 }))) as typeof fetch;
+    try {
+      await assertRejects(
+        () =>
+          sendDiscordNotification(createBaseResult(), {
+            force: true,
+            webhookUrl: "https://discord.example.invalid/webhook",
+            audience: "maintenance",
+            requireDelivery: true,
+          }),
+        Error,
+        "Discord webhook returned HTTP 404",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  await t.step("posts to configured webhook when required", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; body: string }> = [];
+    globalThis.fetch = ((input: URL | RequestInfo, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        body: String(init?.body ?? ""),
+      });
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }) as typeof fetch;
+    try {
+      await sendDiscordNotification(createBaseResult(), {
+        force: true,
+        webhookUrl: "https://discord.example.invalid/webhook",
+        audience: "maintenance",
+        requireDelivery: true,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    assertEquals(calls.length, 1);
+    assertEquals(calls[0]?.url, "https://discord.example.invalid/webhook");
+    assertEquals(calls[0]?.body.includes("Manus監査レポート"), true);
   });
 });

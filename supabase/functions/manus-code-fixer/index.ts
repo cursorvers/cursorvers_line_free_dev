@@ -106,7 +106,10 @@ interface ErrorItem {
   error: string;
 }
 
-const REQUIRED_ENV_VARS = ["MANUS_FIXER_API_KEY"] as const;
+const REQUIRED_ENV_VARS = [
+  "MANUS_FIXER_API_KEY",
+  "DISCORD_SYSTEM_WEBHOOK",
+] as const;
 
 const getEnv = (name: (typeof REQUIRED_ENV_VARS)[number]): string => {
   const value = Deno.env.get(name);
@@ -119,10 +122,7 @@ const getEnv = (name: (typeof REQUIRED_ENV_VARS)[number]): string => {
 import { createLogger } from "../_shared/logger.ts";
 
 const MANUS_FIXER_API_KEY = getEnv("MANUS_FIXER_API_KEY");
-const DISCORD_WEBHOOK_URL = Deno.env.get("DISCORD_MANUS_WEBHOOK_URL") ??
-  Deno.env.get("DISCORD_WEBHOOK_URL") ??
-  Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL") ??
-  Deno.env.get("DISCORD_SYSTEM_WEBHOOK");
+const DISCORD_WEBHOOK_URL = getEnv("DISCORD_SYSTEM_WEBHOOK");
 const MANUS_GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN");
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN");
 const GITHUB_API_BASE = Deno.env.get("GITHUB_API_BASE") ??

@@ -211,9 +211,15 @@ export async function sendDiscordNotification(
     force?: boolean;
     webhookUrl?: string | undefined;
     audience?: NotificationAudience;
+    requireDelivery?: boolean;
   },
 ): Promise<void> {
-  const { force = false, webhookUrl, audience = "admin" } = options;
+  const {
+    force = false,
+    webhookUrl,
+    audience = "admin",
+    requireDelivery = false,
+  } = options;
 
   if (
     !force &&
@@ -226,23 +232,33 @@ export async function sendDiscordNotification(
   }
 
   if (!webhookUrl) {
-    log.warn("Discord webhook URL not configured, skipping notification");
+    const message = "Discord webhook URL not configured";
+    if (requireDelivery) {
+      throw new Error(message);
+    }
+    log.warn(`${message}, skipping notification`);
     return;
   }
 
   const message = buildNotificationMessage(result, audience);
 
   try {
-    await fetch(webhookUrl, {
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: message }),
     });
+    if (!response.ok) {
+      throw new Error(`Discord webhook returned HTTP ${response.status}`);
+    }
     log.info("Discord notification sent", { audience });
   } catch (error) {
     log.error("Failed to send Discord notification", {
       error: error instanceof Error ? error.message : String(error),
     });
+    if (requireDelivery) {
+      throw error;
+    }
   }
 }
 

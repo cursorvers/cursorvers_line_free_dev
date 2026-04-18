@@ -2,7 +2,7 @@
 
 医療AI教育プラットフォーム「Cursorvers」のLINE Bot + Stripe決済 + Discord連携システム
 
-[![CI Tests](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/test-line-webhook.yml/badge.svg)](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/test-line-webhook.yml)
+[![CI Tests](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/ci-tests.yml/badge.svg)](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/ci-tests.yml)
 [![Deploy](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/deploy-supabase.yml/badge.svg)](https://github.com/mo666-med/cursorvers_line_free_dev/actions/workflows/deploy-supabase.yml)
 
 ## 概要
@@ -100,7 +100,7 @@ supabase functions deploy line-webhook --project-ref haaxgwyimoqzzxzdaeep
 ```
 .
 ├── .github/workflows/           # GitHub Actions
-│   ├── test-line-webhook.yml    # CI/CD + Auto-Fix
+│   ├── ci-tests.yml             # CI/CD
 │   ├── deploy-supabase.yml      # Edge Functions デプロイ
 │   ├── manus-audit-daily.yml    # 日次監査
 │   ├── manus-progress.yml       # Manus進捗ハンドラ
@@ -164,9 +164,8 @@ supabase functions deploy line-webhook --project-ref haaxgwyimoqzzxzdaeep
 
 | ワークフロー | トリガー | 説明 |
 |-------------|---------|------|
-| `test-line-webhook.yml` | push/PR | テスト + Auto-Fix |
+| `ci-tests.yml` | push/PR | テスト・Lint・型チェック |
 | `deploy-supabase.yml` | push to main | Edge Functionsデプロイ |
-| `ci-tests.yml` | PR | 型チェック・Lint |
 
 ### 監査・自動化
 
@@ -212,7 +211,7 @@ MANUS_API_KEY=...
 ```bash
 SUPABASE_ACCESS_TOKEN=...
 SUPABASE_PROJECT_ID=haaxgwyimoqzzxzdaeep
-DISCORD_ADMIN_WEBHOOK_URL=...
+DISCORD_SYSTEM_WEBHOOK=...
 ```
 
 ---

@@ -49,7 +49,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
   "";
 const MANUS_REPAIR_API_KEY = Deno.env.get("MANUS_REPAIR_API_KEY");
-const DISCORD_ADMIN_WEBHOOK_URL = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
+const DISCORD_SYSTEM_WEBHOOK = Deno.env.get("DISCORD_SYSTEM_WEBHOOK");
 const MANUS_GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN");
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN");
 const GITHUB_REPO = Deno.env.get("GITHUB_REPO") ??
@@ -938,10 +938,10 @@ async function sendNotification(
   }
 
   // Discord通知（タイムアウト5秒、失敗しても続行）
-  if (channels.includes("discord") && DISCORD_ADMIN_WEBHOOK_URL) {
+  if (channels.includes("discord") && DISCORD_SYSTEM_WEBHOOK) {
     try {
       await fetchWithTimeout(
-        DISCORD_ADMIN_WEBHOOK_URL,
+        DISCORD_SYSTEM_WEBHOOK,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

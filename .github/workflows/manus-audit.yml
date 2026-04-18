@@ -362,7 +362,7 @@ jobs:
         # for "audit execution failed" situations (non-200 or missing response).
         if: env.AUDIT_FAILED == 'true' && env.AUDIT_HTTP_CODE != '200'
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
           AUTO_FIX_APPLIED: ${{ steps.auto_fix.outputs.auto_fix_applied }}
           MANUS_TASK_URL: ${{ steps.auto_fix.outputs.manus_task_url }}
         run: |
@@ -379,11 +379,14 @@ jobs:
             MODE_NAME="月次"
           fi
 
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            curl -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d '{"content": "🚨 **Manus'"$MODE_NAME"'監査が失敗しました**\n対応: '"$AUTO_FIX_STATUS"'\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          if [ -z "${DISCORD_SYSTEM_WEBHOOK:-}" ]; then
+            echo "::error::DISCORD_SYSTEM_WEBHOOK not set. Audit failure notification cannot be delivered."
+            exit 1
           fi
+          curl --fail --show-error --silent -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{"content": "🚨 **Manus'"$MODE_NAME"'監査が失敗しました**\n対応: '"$AUTO_FIX_STATUS"'\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
+            --output /dev/null
 
       - name: Finalize audit status
         if: always()
