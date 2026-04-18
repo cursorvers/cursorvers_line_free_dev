@@ -6,18 +6,14 @@ name: LINE Daily Brief
 on:
   schedule:
     # 金曜 JST 12:00 (UTC 03:00) — 毎週発火、ジョブ内で偶数ISOweekのみ実行
-    - cron: '0 3 * * 5'
+    - cron: "0 3 * * 5"
   workflow_dispatch:
     inputs:
       source_type:
-        description: 'Card source type (belief or note). Leave empty for auto.'
+        description: "Card source type (belief or note). Leave empty for auto."
         required: false
-        default: ''
-        type: choice
-        options:
-          - ''
-          - belief
-          - note
+        default: ""
+        type: string
 
 concurrency:
   group: line-daily-brief
@@ -117,13 +113,16 @@ jobs:
       - name: Notify on failure
         if: failure()
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            curl -X POST "$DISCORD_WEBHOOK_URL" \
-              -H "Content-Type: application/json" \
-              -d '{"content": "⚠️ **LINE Daily Brief ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::error::DISCORD_SYSTEM_WEBHOOK not set. Daily brief failure notification cannot be delivered."
+            exit 1
           fi
+
+          curl -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{"content": "⚠️ **LINE Daily Brief ワークフローが失敗しました**\nhttps://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
 
       - name: Upload workflow logs
         if: always()

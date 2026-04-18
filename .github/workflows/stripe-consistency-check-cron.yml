@@ -50,14 +50,20 @@ jobs:
 
       - name: Notify Discord on failure
         if: failure()
+        env:
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}" ]; then
-            curl -X POST "${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "embeds": [{
-                  "title": "❌ Stripe Consistency Check Failed",
-                  "description": "Stripeイベントとmembers更新の整合性チェックが失敗しました。",
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::error::DISCORD_SYSTEM_WEBHOOK not set. Stripe consistency failure notification cannot be delivered."
+            exit 1
+          fi
+
+          curl -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "❌ Stripe Consistency Check Failed",
+                "description": "Stripeイベントとmembers更新の整合性チェックが失敗しました。",
                   "color": 15158332,
                   "fields": [
                     {
@@ -79,7 +85,6 @@ jobs:
                   "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
                 }]
               }'
-          fi
 
       - name: Upload workflow logs
         if: always()

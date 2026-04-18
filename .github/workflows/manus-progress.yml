@@ -295,11 +295,11 @@ jobs:
       - name: Notify Discord
         if: always()
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "Discord webhook not configured, skipping notification"
-            exit 0
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::error::DISCORD_SYSTEM_WEBHOOK not set. Progress notification cannot be delivered."
+            exit 1
           fi
 
           STATUS="${{ steps.parse.outputs.status }}"
@@ -321,7 +321,7 @@ jobs:
               ;;
           esac
 
-          curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+          curl --fail --show-error --silent -X POST "$DISCORD_SYSTEM_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d "{
               \"content\": \"$EMOJI **Manus Progress**: $EVENT_TYPE\\nTask: \`$TASK_ID\`\\nStatus: \`$STATUS\`\"

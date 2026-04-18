@@ -7,17 +7,45 @@ on:
   push:
     branches: [main]
     paths:
-      - 'supabase/functions/**/*.ts'
-      - 'supabase/functions/deno.json'
-      - 'scripts/**/*.ts'
-      - '.github/workflows/ci-tests.yml'
+      - "supabase/functions/**/*.ts"
+      - "supabase/functions/deno.json"
+      - "scripts/**/*.ts"
+      - ".github/workflows/manus-audit.yml"
+      - ".github/workflows/auto-repair-line.yml"
+      - ".github/workflows/manus-progress.yml"
+      - ".github/workflows/manus-code-fixer.yml"
+      - ".github/workflows/edge-function-monitor.yml"
+      - ".github/workflows/e2e-pipeline-monitor.yml"
+      - ".github/workflows/discord-forum-sync.yml"
+      - ".github/workflows/replenish-cards.yml"
+      - ".github/workflows/stripe-consistency-check-cron.yml"
+      - ".github/workflows/metrics-export.yml"
+      - ".github/workflows/line-daily-brief-cron.yml"
+      - ".github/workflows/stats-exporter-cron.yml"
+      - ".github/workflows/sec-brief-cron.yml"
+      - ".github/workflows/sync-line-cards.yml"
+      - ".github/workflows/ci-tests.yml"
   pull_request:
     branches: [main]
     paths:
-      - 'supabase/functions/**/*.ts'
-      - 'supabase/functions/deno.json'
-      - 'scripts/**/*.ts'
-      - '.github/workflows/ci-tests.yml'
+      - "supabase/functions/**/*.ts"
+      - "supabase/functions/deno.json"
+      - "scripts/**/*.ts"
+      - ".github/workflows/manus-audit.yml"
+      - ".github/workflows/auto-repair-line.yml"
+      - ".github/workflows/manus-progress.yml"
+      - ".github/workflows/manus-code-fixer.yml"
+      - ".github/workflows/edge-function-monitor.yml"
+      - ".github/workflows/e2e-pipeline-monitor.yml"
+      - ".github/workflows/discord-forum-sync.yml"
+      - ".github/workflows/replenish-cards.yml"
+      - ".github/workflows/stripe-consistency-check-cron.yml"
+      - ".github/workflows/metrics-export.yml"
+      - ".github/workflows/line-daily-brief-cron.yml"
+      - ".github/workflows/stats-exporter-cron.yml"
+      - ".github/workflows/sec-brief-cron.yml"
+      - ".github/workflows/sync-line-cards.yml"
+      - ".github/workflows/ci-tests.yml"
   workflow_dispatch:
 
 # 並列実行を制限

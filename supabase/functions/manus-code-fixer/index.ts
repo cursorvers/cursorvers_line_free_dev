@@ -122,7 +122,7 @@ const getEnv = (name: (typeof REQUIRED_ENV_VARS)[number]): string => {
 import { createLogger } from "../_shared/logger.ts";
 
 const MANUS_FIXER_API_KEY = getEnv("MANUS_FIXER_API_KEY");
-const DISCORD_WEBHOOK_URL = getEnv("DISCORD_SYSTEM_WEBHOOK");
+const DISCORD_SYSTEM_WEBHOOK = getEnv("DISCORD_SYSTEM_WEBHOOK");
 const MANUS_GITHUB_TOKEN = Deno.env.get("MANUS_GITHUB_TOKEN");
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN");
 const GITHUB_API_BASE = Deno.env.get("GITHUB_API_BASE") ??
@@ -438,7 +438,7 @@ async function sendDiscordNotification(
   request: FixRequest,
   result: FixResult,
 ): Promise<void> {
-  if (!DISCORD_WEBHOOK_URL) {
+  if (!DISCORD_SYSTEM_WEBHOOK) {
     log.warn("Discord webhook URL not configured, skipping notification");
     return;
   }
@@ -480,7 +480,7 @@ async function sendDiscordNotification(
   }
 
   try {
-    await fetch(DISCORD_WEBHOOK_URL, {
+    await fetch(DISCORD_SYSTEM_WEBHOOK, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: message.trim() }),

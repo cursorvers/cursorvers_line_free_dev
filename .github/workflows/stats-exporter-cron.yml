@@ -3,8 +3,8 @@ name: Stats Exporter to Google Sheets
 on:
   schedule:
     # 12時間ごとに実行（00:00 JST と 12:00 JST）
-    - cron: '0 15,3 * * *'  # 00:00 JST (15:00 UTC) と 12:00 JST (03:00 UTC)
-  workflow_dispatch:  # 手動実行も可能
+    - cron: "0 15,3 * * *" # 00:00 JST (15:00 UTC) と 12:00 JST (03:00 UTC)
+  workflow_dispatch: # 手動実行も可能
 
 jobs:
   export-stats:
@@ -21,19 +21,19 @@ jobs:
         run: |
           exec > >(tee -a "$LOG_FILE") 2>&1
           echo "📊 Exporting stats to Google Sheets..."
-          
+
           # stats-exporter Supabase Functionを呼び出し
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "${{ vars.SUPABASE_URL }}/functions/v1/stats-exporter?mode=full" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json")
-          
+
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
-          
+
           echo "HTTP Status: $HTTP_CODE"
           echo "Response: $BODY"
-          
+
           if [ "$HTTP_CODE" -eq 200 ]; then
             echo "✅ Stats exported successfully"
           else
@@ -43,15 +43,21 @@ jobs:
 
       - name: Notify Discord on failure
         if: failure()
+        env:
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}" ]; then
-            curl -X POST "${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "embeds": [{
-                  "title": "❌ Stats Exporter Failed",
-                  "description": "Google Sheetsへの統計情報エクスポートが失敗しました。",
-                  "color": 15158332,
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::error::DISCORD_SYSTEM_WEBHOOK not set. Stats exporter failure notification cannot be delivered."
+            exit 1
+          fi
+
+          curl -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "❌ Stats Exporter Failed",
+                "description": "Google Sheetsへの統計情報エクスポートが失敗しました。",
+                "color": 15158332,
                   "fields": [
                     {
                       "name": "Repository",
@@ -72,16 +78,21 @@ jobs:
                   "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
                 }]
               }'
-          fi
 
       - name: Notify Discord on success
         if: success()
+        env:
+          DISCORD_SYSTEM_WEBHOOK: ${{ secrets.DISCORD_SYSTEM_WEBHOOK }}
         run: |
-          if [ -n "${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}" ]; then
-            curl -X POST "${{ secrets.DISCORD_SYSTEM_WEBHOOK || secrets.DISCORD_ADMIN_WEBHOOK_URL }}" \
-              -H "Content-Type: application/json" \
-              -d '{
-                "embeds": [{
+          if [ -z "$DISCORD_SYSTEM_WEBHOOK" ]; then
+            echo "::notice::DISCORD_SYSTEM_WEBHOOK not set; skipping stats exporter success notification."
+            exit 0
+          fi
+
+          curl -X POST "$DISCORD_SYSTEM_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
                   "title": "✅ Stats Exported",
                   "description": "Google Sheetsへの統計情報エクスポートが完了しました。",
                   "color": 3066993,
@@ -100,7 +111,6 @@ jobs:
                   "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"
                 }]
               }'
-          fi
 
       - name: Upload workflow logs
         if: always()
