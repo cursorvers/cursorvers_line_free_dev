@@ -13,7 +13,7 @@
 | Plane | 置き場所 | 用途 | 例 |
 |---|---|---|---|
 | GitHub Org/Repo/Environment Secrets | GitHub Actions | 監査、デプロイ、workflow 実行 | `MANUS_GITHUB_TOKEN`, `MANUS_AUDIT_API_KEY`, `SUPABASE_ACCESS_TOKEN` |
-| Platform Runtime Secrets | Supabase / Cloudflare / Vercel | 本番実行時の `Deno.env.get(...)` / runtime env | `SUPABASE_SERVICE_ROLE_KEY`, `LINE_CHANNEL_ACCESS_TOKEN`, `MANUS_API_KEY` |
+| Platform Runtime Secrets | Supabase / Cloudflare / Vercel | 本番実行時の `Deno.env.get(...)` / runtime env | `SUPABASE_SERVICE_ROLE_KEY`, `LINE_CHANNEL_ACCESS_TOKEN`, `MANUS_API_KEY`, `DISCORD_ADMIN_SECRET` |
 | Local bootstrap | shell env / repo外 env file | one-shot import only | `export MANUS_GITHUB_TOKEN=...` |
 
 ---
@@ -23,7 +23,7 @@
 ### 1. Discord Webhook関連
 
 #### `DISCORD_ADMIN_WEBHOOK_URL`
-- **用途**: システム監査、エラー通知、日次レポート送信
+- **用途**: 管理者向けの個別通知。Manus/system alert には使わない
 - **設定値**: Discord Webhookから取得（形式: `https://discord.com/api/webhooks/{webhook_id}/{token}`）
 - **使用箇所**:
   - `.github/workflows/manus-audit-daily.yml`
@@ -32,11 +32,13 @@
   - `.github/workflows/replenish-cards.yml`
   - その他多数のワークフロー
 
-#### `DISCORD_SYSTEM_WEBHOOK` (オプション)
-- **用途**: システム点検スクリプト（`scripts/daily-check.sh`）での通知
-- **設定値**: `DISCORD_ADMIN_WEBHOOK_URL`と同じ値を推奨
+#### `DISCORD_SYSTEM_WEBHOOK` (必須)
+- **用途**: system alert / Manus監査 / 自動修繕 / code-fixer 専用通知。`scripts/daily-check.sh` / `scripts/daily-check-improved.sh` / health-check 等でも使用
+- **設定値**: `#system-monitor` (channel ID `1443582135322804285`) の専用 Discord Webhook
+- **禁止事項**: `DISCORD_ADMIN_WEBHOOK_URL` と同じ値を使わないこと。system alert は専用 webhook に分離すること。
 - **使用箇所**:
   - `scripts/daily-check.sh`
+  - `scripts/daily-check-improved.sh`
   - Supabase Edge Functions（health-check等）
 
 ---
@@ -125,8 +127,21 @@
 - `LINE_CHANNEL_SECRET`
 - `MANUS_API_KEY`
 - `DISCORD_SYSTEM_WEBHOOK`
+- `DISCORD_ADMIN_SECRET`
+- `DISCORD_STATUS_ALLOWED_CHANNEL_IDS`
 
 必要に応じて GitHub Actions から deploy 時に同期してよいですが、実行時の正本は Supabase 側です。
+
+### Discord admin/debug policy
+
+- `DISCORD_ADMIN_SECRET`
+  - `discord-status`, `discord-relay` の admin/debug endpoint 用
+  - `x-admin-secret` でのみ送ること
+  - `SUPABASE_SERVICE_ROLE_KEY` や generic `apikey` を代用しないこと
+- `DISCORD_STATUS_ALLOWED_CHANNEL_IDS`
+  - `discord-status /send-message` の許可 channel の CSV
+  - 未設定時は `#system-monitor` (channel ID `1443582135322804285`) のみ許可
+  - `discord-status /create-webhook` は policy で禁止
 
 ## 🔧 設定方法
 
@@ -171,6 +186,8 @@ Supabase runtime へは:
 supabase secrets set LINE_CHANNEL_ACCESS_TOKEN=... --project-ref haaxgwyimoqzzxzdaeep
 supabase secrets set MANUS_API_KEY=... --project-ref haaxgwyimoqzzxzdaeep
 supabase secrets set DISCORD_SYSTEM_WEBHOOK=... --project-ref haaxgwyimoqzzxzdaeep
+supabase secrets set DISCORD_ADMIN_SECRET=... --project-ref haaxgwyimoqzzxzdaeep
+supabase secrets set DISCORD_STATUS_ALLOWED_CHANNEL_IDS=1443582135322804285 --project-ref haaxgwyimoqzzxzdaeep
 ```
 
 ---
@@ -209,7 +226,7 @@ gh run list --workflow=manus-audit-daily.yml --limit 1
 ## 📝 トラブルシューティング
 
 ### Discord通知が届かない
-- `DISCORD_ADMIN_WEBHOOK_URL`が正しく設定されているか確認
+- `DISCORD_SYSTEM_WEBHOOK`が正しく設定されているか確認
 - Webhook URLの有効性をテスト:
   ```bash
   curl -X POST "https://discord.com/api/webhooks/..." \

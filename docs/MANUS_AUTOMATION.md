@@ -203,7 +203,7 @@ git push origin main
 | Secret名 | 説明 | 取得方法 |
 |---------|------|---------|
 | `MANUS_GITHUB_TOKEN` | GitHub自動プッシュ用 | [GitHub Settings](https://github.com/settings/tokens) |
-| `DISCORD_ADMIN_WEBHOOK_URL` | Discord通知用 | Discord Server Settings |
+| `DISCORD_SYSTEM_WEBHOOK` | Manus/system alert Discord通知用 | Discord Server Settings |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI 用 | Supabase Dashboard / CLI |
 | `SUPABASE_PROJECT_ID` | 対象 project ref | Supabase Dashboard |
 | `MANUS_AUDIT_API_KEY` | 監査 Edge Function 認証 | repo / env policy |
@@ -237,7 +237,7 @@ git push origin main
 
 ### Discord通知が届かない
 
-1. `DISCORD_ADMIN_WEBHOOK_URL`が設定されているか確認
+1. `DISCORD_SYSTEM_WEBHOOK`が設定されているか確認
 2. Webhook URLが有効か確認（Discord Server Settings）
 3. ワークフローログでエラーを確認
 

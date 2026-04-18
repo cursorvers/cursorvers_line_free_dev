@@ -52,8 +52,7 @@ const log = createLogger("manus-audit");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const MANUS_AUDIT_API_KEY = Deno.env.get("MANUS_AUDIT_API_KEY");
-const DISCORD_ADMIN_WEBHOOK_URL = Deno.env.get("DISCORD_ADMIN_WEBHOOK_URL");
-const DISCORD_MAINT_WEBHOOK_URL = Deno.env.get("DISCORD_MAINT_WEBHOOK_URL");
+const DISCORD_SYSTEM_WEBHOOK = Deno.env.get("DISCORD_SYSTEM_WEBHOOK");
 const MANUS_WEBHOOK_URL = Deno.env.get("MANUS_WEBHOOK_URL");
 const LANDING_PAGE_URL = Deno.env.get("LANDING_PAGE_URL") ?? "";
 // LINE_CHANNEL_ACCESS_TOKEN は checkLineBotHealth() 内で直接取得
@@ -272,14 +271,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Send notifications ONLY when remediation was triggered
-    // 修繕が実行された場合のみ通知（異常検出のみでは通知しない）
-    const shouldNotify = result.remediation?.triggered === true;
+    // report mode is an explicit maintenance-log request; other modes notify
+    // only when remediation actually ran.
+    const shouldNotify = isReportMode || result.remediation?.triggered === true;
 
     if (shouldNotify) {
-      log.info("Sending notification - remediation was triggered", {
+      log.info("Sending audit notification", {
         errorCount: result.summary.errorCount,
         warningCount: result.summary.warningCount,
+        isReportMode,
         remediationTriggered: result.remediation?.triggered,
       });
 
@@ -291,14 +291,15 @@ Deno.serve(async (req) => {
           }),
           sendDiscordNotification(result, {
             force: true,
-            webhookUrl: DISCORD_MAINT_WEBHOOK_URL,
+            webhookUrl: DISCORD_SYSTEM_WEBHOOK,
             audience: "maintenance",
+            requireDelivery: true,
           }),
         ]);
       } else {
         await sendDiscordNotification(result, {
           force: true,
-          webhookUrl: DISCORD_ADMIN_WEBHOOK_URL,
+          webhookUrl: DISCORD_SYSTEM_WEBHOOK,
           audience: "admin",
         });
       }
